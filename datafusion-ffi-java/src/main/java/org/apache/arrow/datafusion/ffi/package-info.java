@@ -7,25 +7,24 @@
  * <p>Main classes:
  *
  * <ul>
- *   <li>{@link org.apache.arrow.datafusion.ffi.FfiSessionContext} - The main entry point for
- *       creating sessions and executing queries
- *   <li>{@link org.apache.arrow.datafusion.ffi.FfiDataFrame} - Represents a DataFusion DataFrame
- *   <li>{@link org.apache.arrow.datafusion.ffi.FfiRecordBatchStream} - Stream of Arrow record
- *       batches
+ *   <li>{@link org.apache.arrow.datafusion.ffi.SessionContext} - The main entry point for creating
+ *       sessions and executing queries
+ *   <li>{@link org.apache.arrow.datafusion.ffi.DataFrame} - Represents a DataFusion DataFrame
+ *   <li>{@link org.apache.arrow.datafusion.ffi.RecordBatchStream} - Stream of Arrow record batches
  * </ul>
  *
  * <p>Example usage:
  *
  * <pre>{@code
  * try (BufferAllocator allocator = new RootAllocator();
- *      FfiSessionContext ctx = new FfiSessionContext()) {
+ *      SessionContext ctx = new SessionContext()) {
  *     // Register data
  *     VectorSchemaRoot data = createData(allocator);
  *     ctx.registerTable("test", data, allocator);
  *
  *     // Execute query
- *     try (FfiDataFrame df = ctx.sql("SELECT * FROM test");
- *          FfiRecordBatchStream stream = df.executeStream(allocator)) {
+ *     try (DataFrame df = ctx.sql("SELECT * FROM test");
+ *          RecordBatchStream stream = df.executeStream(allocator)) {
  *         VectorSchemaRoot root = stream.getVectorSchemaRoot();
  *         while (stream.loadNextBatch()) {
  *             // Process data

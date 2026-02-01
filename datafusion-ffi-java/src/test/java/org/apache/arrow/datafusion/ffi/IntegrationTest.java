@@ -14,11 +14,11 @@ import org.apache.arrow.vector.types.pojo.Schema;
 import org.junit.jupiter.api.Test;
 
 /** Integration tests for the DataFusion FFI Java bindings. */
-public class FfiIntegrationTest {
+public class IntegrationTest {
 
   @Test
   void testContextCreation() {
-    try (FfiSessionContext ctx = new FfiSessionContext()) {
+    try (SessionContext ctx = new SessionContext()) {
       assertNotNull(ctx);
     }
   }
@@ -26,11 +26,11 @@ public class FfiIntegrationTest {
   @Test
   void testSimpleSqlQuery() {
     try (BufferAllocator allocator = new RootAllocator();
-        FfiSessionContext ctx = new FfiSessionContext()) {
+        SessionContext ctx = new SessionContext()) {
 
       // Execute a simple SQL query that doesn't require any tables
-      try (FfiDataFrame df = ctx.sql("SELECT 1 as x, 2 as y");
-          FfiRecordBatchStream stream = df.executeStream(allocator)) {
+      try (DataFrame df = ctx.sql("SELECT 1 as x, 2 as y");
+          RecordBatchStream stream = df.executeStream(allocator)) {
 
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         org.apache.arrow.vector.types.pojo.Schema schema = root.getSchema();
@@ -55,15 +55,15 @@ public class FfiIntegrationTest {
   @Test
   void testRegisterAndQueryTable() {
     try (BufferAllocator allocator = new RootAllocator();
-        FfiSessionContext ctx = new FfiSessionContext()) {
+        SessionContext ctx = new SessionContext()) {
 
       // Create test data: x=[1,2,3], y=[10,20,30]
       VectorSchemaRoot testData = createTestData(allocator);
       ctx.registerTable("test", testData, allocator);
 
       // Query the registered table
-      try (FfiDataFrame df = ctx.sql("SELECT x, y FROM test WHERE x > 1");
-          FfiRecordBatchStream stream = df.executeStream(allocator)) {
+      try (DataFrame df = ctx.sql("SELECT x, y FROM test WHERE x > 1");
+          RecordBatchStream stream = df.executeStream(allocator)) {
 
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
 
@@ -89,15 +89,15 @@ public class FfiIntegrationTest {
   @Test
   void testAggregateQuery() {
     try (BufferAllocator allocator = new RootAllocator();
-        FfiSessionContext ctx = new FfiSessionContext()) {
+        SessionContext ctx = new SessionContext()) {
 
       // Create test data
       VectorSchemaRoot testData = createTestData(allocator);
       ctx.registerTable("test", testData, allocator);
 
       // Execute aggregate query
-      try (FfiDataFrame df = ctx.sql("SELECT SUM(y) as total FROM test");
-          FfiRecordBatchStream stream = df.executeStream(allocator)) {
+      try (DataFrame df = ctx.sql("SELECT SUM(y) as total FROM test");
+          RecordBatchStream stream = df.executeStream(allocator)) {
 
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
 
@@ -116,7 +116,7 @@ public class FfiIntegrationTest {
 
   @Test
   void testInvalidSqlThrowsException() {
-    try (FfiSessionContext ctx = new FfiSessionContext()) {
+    try (SessionContext ctx = new SessionContext()) {
       assertThrows(RuntimeException.class, () -> ctx.sql("SELECT * FROM nonexistent_table"));
     }
   }
@@ -124,15 +124,15 @@ public class FfiIntegrationTest {
   @Test
   void testMultipleQueries() {
     try (BufferAllocator allocator = new RootAllocator();
-        FfiSessionContext ctx = new FfiSessionContext()) {
+        SessionContext ctx = new SessionContext()) {
 
       VectorSchemaRoot testData = createTestData(allocator);
       ctx.registerTable("test", testData, allocator);
 
       // Execute multiple queries on the same context
       for (int i = 0; i < 3; i++) {
-        try (FfiDataFrame df = ctx.sql("SELECT COUNT(*) as cnt FROM test");
-            FfiRecordBatchStream stream = df.executeStream(allocator)) {
+        try (DataFrame df = ctx.sql("SELECT COUNT(*) as cnt FROM test");
+            RecordBatchStream stream = df.executeStream(allocator)) {
 
           assertTrue(stream.loadNextBatch());
           BigIntVector countValues = (BigIntVector) stream.getVectorSchemaRoot().getVector("cnt");

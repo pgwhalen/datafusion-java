@@ -17,15 +17,15 @@ import org.slf4j.LoggerFactory;
  * <p>This class wraps a native DataFusion SessionContext and provides methods for registering
  * tables and executing SQL queries.
  */
-public class FfiSessionContext implements AutoCloseable {
-  private static final Logger logger = LoggerFactory.getLogger(FfiSessionContext.class);
+public class SessionContext implements AutoCloseable {
+  private static final Logger logger = LoggerFactory.getLogger(SessionContext.class);
 
   private final MemorySegment runtime;
   private final MemorySegment context;
   private volatile boolean closed = false;
 
   /** Creates a new session context with a new Tokio runtime. */
-  public FfiSessionContext() {
+  public SessionContext() {
     try {
       runtime = (MemorySegment) DataFusionBindings.RUNTIME_CREATE.invokeExact();
       if (runtime.equals(MemorySegment.NULL)) {
@@ -36,7 +36,7 @@ public class FfiSessionContext implements AutoCloseable {
         DataFusionBindings.RUNTIME_DESTROY.invokeExact(runtime);
         throw new RuntimeException("Failed to create SessionContext");
       }
-      logger.debug("Created FfiSessionContext: runtime={}, context={}", runtime, context);
+      logger.debug("Created SessionContext: runtime={}, context={}", runtime, context);
     } catch (RuntimeException e) {
       throw e;
     } catch (Throwable e) {
@@ -100,10 +100,10 @@ public class FfiSessionContext implements AutoCloseable {
    * Executes a SQL query and returns a DataFrame.
    *
    * @param query The SQL query to execute
-   * @return A FfiDataFrame representing the query result
+   * @return A DataFrame representing the query result
    * @throws RuntimeException if query execution fails
    */
-  public FfiDataFrame sql(String query) {
+  public DataFrame sql(String query) {
     checkNotClosed();
 
     try (Arena arena = Arena.ofConfined()) {
@@ -127,7 +127,7 @@ public class FfiSessionContext implements AutoCloseable {
       }
 
       logger.debug("Executed SQL query, got DataFrame: {}", dataframe);
-      return new FfiDataFrame(runtime, dataframe);
+      return new DataFrame(runtime, dataframe);
     } catch (RuntimeException e) {
       throw e;
     } catch (Throwable e) {
@@ -157,9 +157,9 @@ public class FfiSessionContext implements AutoCloseable {
       try {
         DataFusionBindings.CONTEXT_DESTROY.invokeExact(context);
         DataFusionBindings.RUNTIME_DESTROY.invokeExact(runtime);
-        logger.debug("Closed FfiSessionContext");
+        logger.debug("Closed SessionContext");
       } catch (Throwable e) {
-        logger.error("Error closing FfiSessionContext", e);
+        logger.error("Error closing SessionContext", e);
       }
     }
   }

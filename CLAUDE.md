@@ -36,9 +36,9 @@ The new FFM-based bindings (`datafusion-ffi-java`) were created to:
 | `datafusion-ffi-java/` | Java module using FFM API to call native functions |
 | `NativeLoader.java` | Loads native library via `SymbolLookup` |
 | `DataFusionBindings.java` | Method handles for all native functions |
-| `FfiSessionContext.java` | Main entry point - create sessions, register tables, execute SQL |
-| `FfiDataFrame.java` | Query result wrapper |
-| `FfiRecordBatchStream.java` | Zero-copy Arrow data streaming |
+| `SessionContext.java` | Main entry point - create sessions, register tables, execute SQL |
+| `DataFrame.java` | Query result wrapper |
+| `RecordBatchStream.java` | Zero-copy Arrow data streaming |
 
 ## Important: Legacy Code Policy
 
@@ -187,4 +187,4 @@ When making changes, ensure:
 - [ ] `./gradlew :datafusion-ffi-java:compileJava` succeeds
 - [ ] `./gradlew :datafusion-ffi-java:test` passes all tests
 - [ ] `./gradlew :datafusion-ffi-java:spotlessCheck` passes (or run `spotlessApply`)
-- [ ] New functionality has corresponding tests in `FfiIntegrationTest.java`
+- [ ] New functionality has corresponding tests in `IntegrationTest.java`

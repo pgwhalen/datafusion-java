@@ -19,8 +19,8 @@ import org.slf4j.LoggerFactory;
  * <p>This class provides zero-copy access to Arrow data returned from DataFusion through the Arrow
  * C Data Interface.
  */
-public class FfiRecordBatchStream implements AutoCloseable {
-  private static final Logger logger = LoggerFactory.getLogger(FfiRecordBatchStream.class);
+public class RecordBatchStream implements AutoCloseable {
+  private static final Logger logger = LoggerFactory.getLogger(RecordBatchStream.class);
 
   // Size of FFI_ArrowSchema and FFI_ArrowArray structures
   // These are C structs with specific layouts
@@ -35,7 +35,7 @@ public class FfiRecordBatchStream implements AutoCloseable {
   private boolean initialized = false;
   private volatile boolean closed = false;
 
-  FfiRecordBatchStream(MemorySegment runtime, MemorySegment stream, BufferAllocator allocator) {
+  RecordBatchStream(MemorySegment runtime, MemorySegment stream, BufferAllocator allocator) {
     this.runtime = runtime;
     this.stream = stream;
     this.allocator = allocator;
@@ -154,9 +154,9 @@ public class FfiRecordBatchStream implements AutoCloseable {
         if (initialized && vectorSchemaRoot != null) {
           vectorSchemaRoot.close();
         }
-        logger.debug("Closed FfiRecordBatchStream");
+        logger.debug("Closed RecordBatchStream");
       } catch (Throwable e) {
-        logger.error("Error closing FfiRecordBatchStream", e);
+        logger.error("Error closing RecordBatchStream", e);
       }
     }
   }
