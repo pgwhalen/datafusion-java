@@ -2,6 +2,8 @@ package org.apache.arrow.datafusion.ffi;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.util.ArrayList;
+import java.util.List;
 import org.apache.arrow.c.ArrowArray;
 import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
@@ -24,16 +26,25 @@ public class SessionContext implements AutoCloseable {
   private final MemorySegment context;
   private volatile boolean closed = false;
 
+  // Shared arena for catalog providers (needs to live as long as the context)
+  private final Arena catalogArena;
+  // Keep references to prevent GC
+  private final List<CatalogProviderHandle> catalogHandles = new ArrayList<>();
+  private BufferAllocator catalogAllocator;
+
   /** Creates a new session context with a new Tokio runtime. */
   public SessionContext() {
+    this.catalogArena = Arena.ofShared();
     try {
       runtime = (MemorySegment) DataFusionBindings.RUNTIME_CREATE.invokeExact();
       if (runtime.equals(MemorySegment.NULL)) {
+        catalogArena.close();
         throw new DataFusionException("Failed to create Tokio runtime");
       }
       context = (MemorySegment) DataFusionBindings.CONTEXT_CREATE.invokeExact();
       if (context.equals(MemorySegment.NULL)) {
         DataFusionBindings.RUNTIME_DESTROY.invokeExact(runtime);
+        catalogArena.close();
         throw new DataFusionException("Failed to create SessionContext");
       }
       logger.debug("Created SessionContext: runtime={}, context={}", runtime, context);
@@ -130,6 +141,54 @@ public class SessionContext implements AutoCloseable {
   }
 
   /**
+   * Registers a catalog provider with the session context.
+   *
+   * <p>The catalog can be accessed in SQL queries using the catalog name. For example, if you
+   * register a catalog named "my_catalog" with a schema "my_schema" containing a table "my_table",
+   * you can query it with:
+   *
+   * <pre>{@code
+   * SELECT * FROM my_catalog.my_schema.my_table
+   * }</pre>
+   *
+   * @param name The catalog name
+   * @param catalog The catalog provider implementation
+   * @param allocator The buffer allocator to use for Arrow data transfers
+   * @throws DataFusionException if registration fails
+   */
+  public void registerCatalog(String name, CatalogProvider catalog, BufferAllocator allocator) {
+    checkNotClosed();
+
+    // Store allocator for use in callbacks
+    if (this.catalogAllocator == null) {
+      this.catalogAllocator = allocator;
+    }
+
+    try (Arena arena = Arena.ofConfined()) {
+      // Create a handle for the catalog (uses the shared catalog arena)
+      CatalogProviderHandle handle = new CatalogProviderHandle(catalog, allocator, catalogArena);
+      catalogHandles.add(handle);
+
+      MemorySegment errorOut = NativeUtil.allocateErrorOut(arena);
+      MemorySegment nameSegment = arena.allocateUtf8String(name);
+      MemorySegment callbacks = handle.getCallbackStruct();
+
+      int result =
+          (int)
+              DataFusionBindings.CONTEXT_REGISTER_CATALOG.invokeExact(
+                  context, nameSegment, callbacks, errorOut);
+
+      NativeUtil.checkResult(result, errorOut, "Register catalog '" + name + "'");
+
+      logger.debug("Registered catalog '{}'", name);
+    } catch (DataFusionException e) {
+      throw e;
+    } catch (Throwable e) {
+      throw new DataFusionException("Failed to register catalog", e);
+    }
+  }
+
+  /**
    * Gets the native runtime pointer for use by other FFI classes.
    *
    * @return The runtime memory segment
@@ -149,8 +208,22 @@ public class SessionContext implements AutoCloseable {
     if (!closed) {
       closed = true;
       try {
+        // Close catalog handles first
+        for (CatalogProviderHandle handle : catalogHandles) {
+          try {
+            handle.close();
+          } catch (Exception e) {
+            logger.warn("Error closing catalog handle", e);
+          }
+        }
+        catalogHandles.clear();
+
         DataFusionBindings.CONTEXT_DESTROY.invokeExact(context);
         DataFusionBindings.RUNTIME_DESTROY.invokeExact(runtime);
+
+        // Close the catalog arena after context is destroyed
+        catalogArena.close();
+
         logger.debug("Closed SessionContext");
       } catch (Throwable e) {
         logger.error("Error closing SessionContext", e);

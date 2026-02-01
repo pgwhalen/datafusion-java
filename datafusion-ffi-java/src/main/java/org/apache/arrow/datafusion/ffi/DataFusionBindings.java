@@ -94,7 +94,55 @@ public final class DataFusionBindings {
   public static final MethodHandle FREE_STRING =
       downcall("datafusion_free_string", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
 
+  public static final MethodHandle FREE_STRING_ARRAY =
+      downcall(
+          "datafusion_free_string_array",
+          FunctionDescriptor.ofVoid(
+              ValueLayout.ADDRESS, // strings
+              ValueLayout.JAVA_LONG // len
+              ));
+
+  // Catalog registration functions
+  public static final MethodHandle CONTEXT_REGISTER_CATALOG =
+      downcall(
+          "datafusion_context_register_catalog",
+          FunctionDescriptor.of(
+              ValueLayout.JAVA_INT,
+              ValueLayout.ADDRESS, // ctx
+              ValueLayout.ADDRESS, // name
+              ValueLayout.ADDRESS, // callbacks
+              ValueLayout.ADDRESS // error_out
+              ));
+
+  // Callback allocation functions
+  public static final MethodHandle ALLOC_CATALOG_PROVIDER_CALLBACKS =
+      downcall(
+          "datafusion_alloc_catalog_provider_callbacks",
+          FunctionDescriptor.of(ValueLayout.ADDRESS));
+
+  public static final MethodHandle ALLOC_SCHEMA_PROVIDER_CALLBACKS =
+      downcall(
+          "datafusion_alloc_schema_provider_callbacks", FunctionDescriptor.of(ValueLayout.ADDRESS));
+
+  public static final MethodHandle ALLOC_TABLE_PROVIDER_CALLBACKS =
+      downcall(
+          "datafusion_alloc_table_provider_callbacks", FunctionDescriptor.of(ValueLayout.ADDRESS));
+
+  public static final MethodHandle ALLOC_EXECUTION_PLAN_CALLBACKS =
+      downcall(
+          "datafusion_alloc_execution_plan_callbacks", FunctionDescriptor.of(ValueLayout.ADDRESS));
+
+  public static final MethodHandle ALLOC_RECORD_BATCH_READER_CALLBACKS =
+      downcall(
+          "datafusion_alloc_record_batch_reader_callbacks",
+          FunctionDescriptor.of(ValueLayout.ADDRESS));
+
   private DataFusionBindings() {}
+
+  /** Get the native linker for creating upcall stubs. */
+  public static Linker getLinker() {
+    return LINKER;
+  }
 
   private static MethodHandle downcall(String name, FunctionDescriptor descriptor) {
     MemorySegment symbol =

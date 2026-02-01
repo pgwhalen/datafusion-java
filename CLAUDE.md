@@ -40,6 +40,133 @@ The new FFM-based bindings (`datafusion-ffi-java`) were created to:
 | `DataFrame.java` | Query result wrapper |
 | `RecordBatchStream.java` | Zero-copy Arrow data streaming |
 
+## Custom TableProvider/CatalogProvider Architecture
+
+The FFM bindings support bidirectional FFI: Java can call into DataFusion, and DataFusion can call back into Java-implemented providers. This enables registering custom catalogs, schemas, and tables implemented in Java.
+
+### Design Goals
+
+1. **Enable Java-implemented data sources** - Allow Java code to implement `TableProvider`, `SchemaProvider`, and `CatalogProvider` that DataFusion can query via SQL
+2. **Use FFI callbacks (upcalls)** - Java creates function pointers using `Linker.upcallStub()` that Rust stores and invokes
+3. **Mirror DataFusion's trait hierarchy** - Java interfaces match Rust traits: `CatalogProvider` → `SchemaProvider` → `TableProvider` → `ExecutionPlan`
+4. **Hide FFI complexity** - Internal `*Handle` classes manage upcall stubs; public API is clean interfaces
+
+### Callback Architecture
+
+```
+Java Side                                   Rust Side
+─────────────────────────────────────────────────────────────────
+User implements:                           Rust wrapper structs:
+  CatalogProvider interface      ──────►   JavaBackedCatalogProvider
+  SchemaProvider interface       ──────►   JavaBackedSchemaProvider
+  TableProvider interface        ──────►   JavaBackedTableProvider
+  ExecutionPlan interface        ──────►   JavaBackedExecutionPlan
+
+*Handle classes create upcall stubs        Wrapper implements DataFusion traits
+that Rust can call back into Java          by invoking Java callbacks
+```
+
+### Key Interfaces
+
+| Interface | Purpose |
+|-----------|---------|
+| `CatalogProvider` | Returns schema names and `SchemaProvider` instances |
+| `SchemaProvider` | Returns table names and `TableProvider` instances |
+| `TableProvider` | Returns schema and creates `ExecutionPlan` for scans |
+| `ExecutionPlan` | Returns schema, partitioning, and `RecordBatchReader` |
+| `RecordBatchReader` | Iterates Arrow record batches (also implemented by `RecordBatchStream`) |
+
+### Example Usage
+
+```java
+// Implement the interfaces
+class MyTableProvider implements TableProvider {
+    @Override public Schema schema() { return mySchema; }
+    @Override public ExecutionPlan scan(int[] projection, Long limit) {
+        return new MyExecutionPlan(data);
+    }
+}
+
+// Register with SessionContext
+SchemaProvider mySchema = new SimpleSchemaProvider(Map.of("my_table", myTableProvider));
+CatalogProvider myCatalog = new SimpleCatalogProvider(Map.of("my_schema", mySchema));
+ctx.registerCatalog("my_catalog", myCatalog, allocator);
+
+// Query via SQL
+DataFrame df = ctx.sql("SELECT * FROM my_catalog.my_schema.my_table");
+```
+
+### Implementation Gotchas
+
+When working with the callback architecture, be aware of these issues discovered during implementation:
+
+#### 1. Arrow C Data Interface Ownership Transfer
+
+When transferring Arrow schemas/arrays across FFI, the **destination owns the release callback**. After copying FFI structs, clear the release callback in the source to prevent double-free:
+
+```java
+// Copy schema to destination
+destSchema.copyFrom(srcSchema);
+// Clear release in source - dest now owns it
+srcSchema.set(ValueLayout.ADDRESS, 64, MemorySegment.NULL);  // offset 64 = release callback
+```
+
+#### 2. Arena Lifetime for Catalogs
+
+Catalogs must outlive queries. Use `Arena.ofShared()` (not `ofConfined()`) so callbacks can be invoked from any thread:
+
+```java
+// In SessionContext.registerCatalog()
+Arena catalogArena = Arena.ofShared();  // Lives until catalog is unregistered
+catalogArenas.put(name, catalogArena);  // Store to prevent GC
+```
+
+#### 3. DataFusion 45 API: PlanProperties
+
+DataFusion 45 removed `ExecutionMode`. Use `EmissionType` and `Boundedness` instead:
+
+```rust
+use datafusion::physical_plan::execution_plan::{Boundedness, EmissionType};
+
+let properties = PlanProperties::new(
+    EquivalenceProperties::new(schema),
+    Partitioning::UnknownPartitioning(1),
+    EmissionType::Incremental,
+    Boundedness::Bounded,
+);
+```
+
+#### 4. RecordBatchReader Must Be Closed
+
+The `release` callback in `RecordBatchReaderHandle` must close the reader to prevent memory leaks:
+
+```java
+void release(MemorySegment javaObject) {
+    try { reader.close(); } catch (Exception e) { /* ignore */ }
+}
+```
+
+#### 5. Handle References Prevent GC
+
+Store `*Handle` objects in the parent to prevent garbage collection of upcall stubs while Rust holds pointers:
+
+```java
+// In SessionContext
+private final Map<String, CatalogProviderHandle> catalogHandles = new HashMap<>();
+```
+
+#### 6. Debug Implementations Required
+
+Rust wrapper structs implementing DataFusion traits need `Debug`. Since they contain raw pointers, implement manually:
+
+```rust
+impl std::fmt::Debug for JavaBackedTableProvider {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("JavaBackedTableProvider").finish()
+    }
+}
+```
+
 ## Important: Legacy Code Policy
 
 ### DO NOT modify or depend on:

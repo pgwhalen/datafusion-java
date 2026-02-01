@@ -21,7 +21,7 @@ import org.slf4j.LoggerFactory;
  * <p>This class provides zero-copy access to Arrow data returned from DataFusion through the Arrow
  * C Data Interface. Implements DictionaryProvider to allow decoding of dictionary-encoded columns.
  */
-public class RecordBatchStream implements AutoCloseable, DictionaryProvider {
+public class RecordBatchStream implements RecordBatchReader, DictionaryProvider {
   private static final Logger logger = LoggerFactory.getLogger(RecordBatchStream.class);
 
   // Size of FFI_ArrowSchema and FFI_ArrowArray structures
