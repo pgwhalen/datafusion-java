@@ -7,6 +7,7 @@ import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
+import org.apache.arrow.vector.dictionary.DictionaryProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,6 +53,20 @@ public class SessionContext implements AutoCloseable {
    * @throws DataFusionException if registration fails
    */
   public void registerTable(String name, VectorSchemaRoot root, BufferAllocator allocator) {
+    registerTable(name, root, null, allocator);
+  }
+
+  /**
+   * Registers a VectorSchemaRoot as a table in the session context with dictionary support.
+   *
+   * @param name The table name
+   * @param root The VectorSchemaRoot containing the data
+   * @param provider The DictionaryProvider for dictionary-encoded columns (may be null)
+   * @param allocator The buffer allocator
+   * @throws DataFusionException if registration fails
+   */
+  public void registerTable(
+      String name, VectorSchemaRoot root, DictionaryProvider provider, BufferAllocator allocator) {
     checkNotClosed();
 
     try (Arena arena = Arena.ofConfined();
@@ -59,7 +74,7 @@ public class SessionContext implements AutoCloseable {
         ArrowArray ffiArray = ArrowArray.allocateNew(allocator)) {
 
       // Export the VectorSchemaRoot to Arrow C Data Interface
-      Data.exportVectorSchemaRoot(allocator, root, null, ffiArray, ffiSchema);
+      Data.exportVectorSchemaRoot(allocator, root, provider, ffiArray, ffiSchema);
 
       MemorySegment errorOut = NativeUtil.allocateErrorOut(arena);
 

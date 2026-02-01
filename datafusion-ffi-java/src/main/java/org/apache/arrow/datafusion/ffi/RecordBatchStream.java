@@ -2,12 +2,15 @@ package org.apache.arrow.datafusion.ffi;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.util.Set;
 import org.apache.arrow.c.ArrowArray;
 import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.CDataDictionaryProvider;
 import org.apache.arrow.c.Data;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
+import org.apache.arrow.vector.dictionary.Dictionary;
+import org.apache.arrow.vector.dictionary.DictionaryProvider;
 import org.apache.arrow.vector.types.pojo.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,9 +19,9 @@ import org.slf4j.LoggerFactory;
  * A stream of record batches from a DataFusion query execution.
  *
  * <p>This class provides zero-copy access to Arrow data returned from DataFusion through the Arrow
- * C Data Interface.
+ * C Data Interface. Implements DictionaryProvider to allow decoding of dictionary-encoded columns.
  */
-public class RecordBatchStream implements AutoCloseable {
+public class RecordBatchStream implements AutoCloseable, DictionaryProvider {
   private static final Logger logger = LoggerFactory.getLogger(RecordBatchStream.class);
 
   // Size of FFI_ArrowSchema and FFI_ArrowArray structures
@@ -123,6 +126,27 @@ public class RecordBatchStream implements AutoCloseable {
     if (closed) {
       throw new IllegalStateException("RecordBatchStream has been closed");
     }
+  }
+
+  /**
+   * Looks up a dictionary by its ID.
+   *
+   * @param id The dictionary ID
+   * @return The Dictionary, or null if not found
+   */
+  @Override
+  public Dictionary lookup(long id) {
+    return dictionaryProvider.lookup(id);
+  }
+
+  /**
+   * Gets the set of all dictionary IDs in this provider.
+   *
+   * @return Set of dictionary IDs
+   */
+  @Override
+  public Set<Long> getDictionaryIds() {
+    return dictionaryProvider.getDictionaryIds();
   }
 
   @Override
