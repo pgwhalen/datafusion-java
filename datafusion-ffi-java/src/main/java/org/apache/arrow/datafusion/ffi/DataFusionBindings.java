@@ -94,6 +94,67 @@ public final class DataFusionBindings {
   public static final MethodHandle FREE_STRING =
       downcall("datafusion_free_string", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
 
+  // Zero-copy verification functions (for testing)
+  public static final MethodHandle GET_FFI_BUFFER_ADDRESSES =
+      downcall(
+          "datafusion_get_ffi_buffer_addresses",
+          FunctionDescriptor.of(
+              ValueLayout.JAVA_INT,
+              ValueLayout.ADDRESS, // array
+              ValueLayout.ADDRESS, // addresses_out
+              ValueLayout.JAVA_INT, // max_addresses
+              ValueLayout.ADDRESS, // actual_count_out
+              ValueLayout.ADDRESS // error_out
+              ));
+
+  public static final MethodHandle GET_CHILD_BUFFER_ADDRESSES =
+      downcall(
+          "datafusion_get_child_buffer_addresses",
+          FunctionDescriptor.of(
+              ValueLayout.JAVA_INT,
+              ValueLayout.ADDRESS, // array
+              ValueLayout.JAVA_INT, // child_index
+              ValueLayout.ADDRESS, // addresses_out
+              ValueLayout.JAVA_INT, // max_addresses
+              ValueLayout.ADDRESS, // actual_count_out
+              ValueLayout.ADDRESS // error_out
+              ));
+
+  public static final MethodHandle IMPORT_AND_GET_BUFFER_ADDRESSES =
+      downcall(
+          "datafusion_import_and_get_buffer_addresses",
+          FunctionDescriptor.of(
+              ValueLayout.JAVA_INT,
+              ValueLayout.ADDRESS, // schema
+              ValueLayout.ADDRESS, // array
+              ValueLayout.JAVA_INT, // child_index
+              ValueLayout.ADDRESS, // addresses_out
+              ValueLayout.JAVA_INT, // max_addresses
+              ValueLayout.ADDRESS, // actual_count_out
+              ValueLayout.ADDRESS // error_out
+              ));
+
+  public static final MethodHandle CREATE_TEST_DATA_WITH_ADDRESSES =
+      downcall(
+          "datafusion_create_test_data_with_addresses",
+          FunctionDescriptor.of(
+              ValueLayout.JAVA_INT,
+              ValueLayout.ADDRESS, // array_out
+              ValueLayout.ADDRESS, // schema_out
+              ValueLayout.ADDRESS, // data_buffer_address_out
+              ValueLayout.ADDRESS // error_out
+              ));
+
+  public static final MethodHandle GET_FFI_N_CHILDREN =
+      downcall(
+          "datafusion_get_ffi_n_children",
+          FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
+
+  public static final MethodHandle GET_FFI_N_BUFFERS =
+      downcall(
+          "datafusion_get_ffi_n_buffers",
+          FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
+
   private DataFusionBindings() {}
 
   private static MethodHandle downcall(String name, FunctionDescriptor descriptor) {
