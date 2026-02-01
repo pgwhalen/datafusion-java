@@ -2,7 +2,6 @@ package org.apache.arrow.datafusion.ffi;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
 import org.apache.arrow.c.ArrowArray;
 import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
@@ -29,18 +28,18 @@ public class SessionContext implements AutoCloseable {
     try {
       runtime = (MemorySegment) DataFusionBindings.RUNTIME_CREATE.invokeExact();
       if (runtime.equals(MemorySegment.NULL)) {
-        throw new RuntimeException("Failed to create Tokio runtime");
+        throw new DataFusionException("Failed to create Tokio runtime");
       }
       context = (MemorySegment) DataFusionBindings.CONTEXT_CREATE.invokeExact();
       if (context.equals(MemorySegment.NULL)) {
         DataFusionBindings.RUNTIME_DESTROY.invokeExact(runtime);
-        throw new RuntimeException("Failed to create SessionContext");
+        throw new DataFusionException("Failed to create SessionContext");
       }
       logger.debug("Created SessionContext: runtime={}, context={}", runtime, context);
-    } catch (RuntimeException e) {
+    } catch (DataFusionException e) {
       throw e;
     } catch (Throwable e) {
-      throw new RuntimeException("Failed to create SessionContext", e);
+      throw new DataFusionException("Failed to create SessionContext", e);
     }
   }
 
@@ -50,7 +49,7 @@ public class SessionContext implements AutoCloseable {
    * @param name The table name
    * @param root The VectorSchemaRoot containing the data
    * @param allocator The buffer allocator
-   * @throws RuntimeException if registration fails
+   * @throws DataFusionException if registration fails
    */
   public void registerTable(String name, VectorSchemaRoot root, BufferAllocator allocator) {
     checkNotClosed();
@@ -62,9 +61,7 @@ public class SessionContext implements AutoCloseable {
       // Export the VectorSchemaRoot to Arrow C Data Interface
       Data.exportVectorSchemaRoot(allocator, root, null, ffiArray, ffiSchema);
 
-      // Allocate error output pointer
-      MemorySegment errorOut = arena.allocate(ValueLayout.ADDRESS);
-      errorOut.set(ValueLayout.ADDRESS, 0, MemorySegment.NULL);
+      MemorySegment errorOut = NativeUtil.allocateErrorOut(arena);
 
       // Create null-terminated string for table name
       MemorySegment nameSegment = arena.allocateUtf8String(name);
@@ -78,21 +75,13 @@ public class SessionContext implements AutoCloseable {
               DataFusionBindings.CONTEXT_REGISTER_RECORD_BATCH.invokeExact(
                   context, nameSegment, schemaAddr, arrayAddr, errorOut);
 
-      if (result != 0) {
-        MemorySegment errorPtr = errorOut.get(ValueLayout.ADDRESS, 0);
-        if (!errorPtr.equals(MemorySegment.NULL)) {
-          String errorMessage = errorPtr.reinterpret(1024).getUtf8String(0);
-          DataFusionBindings.FREE_STRING.invokeExact(errorPtr);
-          throw new RuntimeException("Failed to register table: " + errorMessage);
-        }
-        throw new RuntimeException("Failed to register table: unknown error");
-      }
+      NativeUtil.checkResult(result, errorOut, "Register table '" + name + "'");
 
       logger.debug("Registered table '{}' with {} rows", name, root.getRowCount());
-    } catch (RuntimeException e) {
+    } catch (DataFusionException e) {
       throw e;
     } catch (Throwable e) {
-      throw new RuntimeException("Failed to register table", e);
+      throw new DataFusionException("Failed to register table", e);
     }
   }
 
@@ -101,37 +90,27 @@ public class SessionContext implements AutoCloseable {
    *
    * @param query The SQL query to execute
    * @return A DataFrame representing the query result
-   * @throws RuntimeException if query execution fails
+   * @throws DataFusionException if query execution fails
    */
   public DataFrame sql(String query) {
     checkNotClosed();
 
     try (Arena arena = Arena.ofConfined()) {
-      MemorySegment errorOut = arena.allocate(ValueLayout.ADDRESS);
-      errorOut.set(ValueLayout.ADDRESS, 0, MemorySegment.NULL);
-
+      MemorySegment errorOut = NativeUtil.allocateErrorOut(arena);
       MemorySegment querySegment = arena.allocateUtf8String(query);
 
       MemorySegment dataframe =
           (MemorySegment)
               DataFusionBindings.CONTEXT_SQL.invokeExact(runtime, context, querySegment, errorOut);
 
-      if (dataframe.equals(MemorySegment.NULL)) {
-        MemorySegment errorPtr = errorOut.get(ValueLayout.ADDRESS, 0);
-        if (!errorPtr.equals(MemorySegment.NULL)) {
-          String errorMessage = errorPtr.reinterpret(1024).getUtf8String(0);
-          DataFusionBindings.FREE_STRING.invokeExact(errorPtr);
-          throw new RuntimeException("SQL execution failed: " + errorMessage);
-        }
-        throw new RuntimeException("SQL execution failed: unknown error");
-      }
+      NativeUtil.checkPointer(dataframe, errorOut, "SQL execution");
 
       logger.debug("Executed SQL query, got DataFrame: {}", dataframe);
       return new DataFrame(runtime, dataframe);
-    } catch (RuntimeException e) {
+    } catch (DataFusionException e) {
       throw e;
     } catch (Throwable e) {
-      throw new RuntimeException("Failed to execute SQL", e);
+      throw new DataFusionException("Failed to execute SQL", e);
     }
   }
 

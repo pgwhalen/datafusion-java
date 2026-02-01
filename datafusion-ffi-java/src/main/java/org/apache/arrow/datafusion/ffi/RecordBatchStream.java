@@ -2,7 +2,6 @@ package org.apache.arrow.datafusion.ffi;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
 import org.apache.arrow.c.ArrowArray;
 import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.CDataDictionaryProvider;
@@ -56,7 +55,7 @@ public class RecordBatchStream implements AutoCloseable {
    * Loads the next batch of data into the VectorSchemaRoot.
    *
    * @return true if a batch was loaded, false if the stream is exhausted
-   * @throws RuntimeException if loading fails
+   * @throws DataFusionException if loading fails
    */
   public boolean loadNextBatch() {
     checkNotClosed();
@@ -66,23 +65,14 @@ public class RecordBatchStream implements AutoCloseable {
       // Allocate space for FFI structs
       MemorySegment arrayOut = arena.allocate(ARROW_ARRAY_SIZE);
       MemorySegment schemaOut = arena.allocate(ARROW_SCHEMA_SIZE);
-      MemorySegment errorOut = arena.allocate(ValueLayout.ADDRESS);
-      errorOut.set(ValueLayout.ADDRESS, 0, MemorySegment.NULL);
+      MemorySegment errorOut = NativeUtil.allocateErrorOut(arena);
 
       int result =
           (int)
               DataFusionBindings.STREAM_NEXT.invokeExact(
                   runtime, stream, arrayOut, schemaOut, errorOut);
 
-      if (result < 0) {
-        MemorySegment errorPtr = errorOut.get(ValueLayout.ADDRESS, 0);
-        if (!errorPtr.equals(MemorySegment.NULL)) {
-          String errorMessage = errorPtr.reinterpret(1024).getUtf8String(0);
-          DataFusionBindings.FREE_STRING.invokeExact(errorPtr);
-          throw new RuntimeException("Stream next failed: " + errorMessage);
-        }
-        throw new RuntimeException("Stream next failed: unknown error");
-      }
+      NativeUtil.checkStreamResult(result, errorOut, "Stream next");
 
       if (result == 0) {
         // End of stream
@@ -96,10 +86,10 @@ public class RecordBatchStream implements AutoCloseable {
 
       logger.debug("Loaded batch with {} rows", vectorSchemaRoot.getRowCount());
       return true;
-    } catch (RuntimeException e) {
+    } catch (DataFusionException e) {
       throw e;
     } catch (Throwable e) {
-      throw new RuntimeException("Failed to load next batch", e);
+      throw new DataFusionException("Failed to load next batch", e);
     }
   }
 
@@ -114,27 +104,18 @@ public class RecordBatchStream implements AutoCloseable {
   private Schema getSchema() {
     try (Arena arena = Arena.ofConfined()) {
       MemorySegment schemaOut = arena.allocate(ARROW_SCHEMA_SIZE);
-      MemorySegment errorOut = arena.allocate(ValueLayout.ADDRESS);
-      errorOut.set(ValueLayout.ADDRESS, 0, MemorySegment.NULL);
+      MemorySegment errorOut = NativeUtil.allocateErrorOut(arena);
 
       int result = (int) DataFusionBindings.STREAM_SCHEMA.invokeExact(stream, schemaOut, errorOut);
 
-      if (result != 0) {
-        MemorySegment errorPtr = errorOut.get(ValueLayout.ADDRESS, 0);
-        if (!errorPtr.equals(MemorySegment.NULL)) {
-          String errorMessage = errorPtr.reinterpret(1024).getUtf8String(0);
-          DataFusionBindings.FREE_STRING.invokeExact(errorPtr);
-          throw new RuntimeException("Get schema failed: " + errorMessage);
-        }
-        throw new RuntimeException("Get schema failed: unknown error");
-      }
+      NativeUtil.checkResult(result, errorOut, "Get schema");
 
       ArrowSchema arrowSchema = ArrowSchema.wrap(schemaOut.address());
       return Data.importSchema(allocator, arrowSchema, dictionaryProvider);
-    } catch (RuntimeException e) {
+    } catch (DataFusionException e) {
       throw e;
     } catch (Throwable e) {
-      throw new RuntimeException("Failed to get schema", e);
+      throw new DataFusionException("Failed to get schema", e);
     }
   }
 

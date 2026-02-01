@@ -2,7 +2,6 @@ package org.apache.arrow.datafusion.ffi;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
 import org.apache.arrow.memory.BufferAllocator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,35 +29,26 @@ public class DataFrame implements AutoCloseable {
    *
    * @param allocator The buffer allocator for Arrow data
    * @return A RecordBatchStream for iterating over results
-   * @throws RuntimeException if execution fails
+   * @throws DataFusionException if execution fails
    */
   public RecordBatchStream executeStream(BufferAllocator allocator) {
     checkNotClosed();
 
     try (Arena arena = Arena.ofConfined()) {
-      MemorySegment errorOut = arena.allocate(ValueLayout.ADDRESS);
-      errorOut.set(ValueLayout.ADDRESS, 0, MemorySegment.NULL);
+      MemorySegment errorOut = NativeUtil.allocateErrorOut(arena);
 
       MemorySegment stream =
           (MemorySegment)
               DataFusionBindings.DATAFRAME_EXECUTE_STREAM.invokeExact(runtime, dataframe, errorOut);
 
-      if (stream.equals(MemorySegment.NULL)) {
-        MemorySegment errorPtr = errorOut.get(ValueLayout.ADDRESS, 0);
-        if (!errorPtr.equals(MemorySegment.NULL)) {
-          String errorMessage = errorPtr.reinterpret(1024).getUtf8String(0);
-          DataFusionBindings.FREE_STRING.invokeExact(errorPtr);
-          throw new RuntimeException("Execute stream failed: " + errorMessage);
-        }
-        throw new RuntimeException("Execute stream failed: unknown error");
-      }
+      NativeUtil.checkPointer(stream, errorOut, "Execute stream");
 
       logger.debug("Created RecordBatchStream: {}", stream);
       return new RecordBatchStream(runtime, stream, allocator);
-    } catch (RuntimeException e) {
+    } catch (DataFusionException e) {
       throw e;
     } catch (Throwable e) {
-      throw new RuntimeException("Failed to execute stream", e);
+      throw new DataFusionException("Failed to execute stream", e);
     }
   }
 
