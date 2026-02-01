@@ -1,0 +1,47 @@
+plugins {
+    id 'java'
+    id 'application'
+}
+
+group = 'io.github.datafusion-contrib'
+version = '0.1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.compilerArgs += ['--enable-preview']
+}
+
+application {
+    mainClass = 'org.apache.arrow.datafusion.panama.DataFusionHelloWorld'
+}
+
+dependencies {
+    // Arrow Java dependencies for reading results
+    implementation 'org.apache.arrow:arrow-vector:18.1.0'
+    implementation 'org.apache.arrow:arrow-memory-core:18.1.0'
+    implementation 'org.apache.arrow:arrow-memory-unsafe:18.1.0'
+    implementation 'org.apache.arrow:arrow-c-data:18.1.0'
+}
+
+// Note: Java bindings created manually instead of using jextract
+
+run {
+    // Add the native library path
+    systemProperty 'java.library.path', '../datafusion-panama-ffi/target/release'
+    
+    // Enable preview features for Panama FFM and Arrow memory access
+    jvmArgs += [
+        '--enable-preview', 
+        '--enable-native-access=ALL-UNNAMED',
+        '--add-opens=java.base/java.nio=org.apache.arrow.memory.core,ALL-UNNAMED'
+    ]
+}

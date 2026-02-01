@@ -5,4 +5,4 @@ plugins {
 
 rootProject.name = 'datafusion-java'
 
-include 'datafusion-java', 'datafusion-examples'
+include 'datafusion-java', 'datafusion-examples', 'datafusion-panama-java', 'java-ffi-bindings'

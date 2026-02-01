@@ -65,3 +65,11 @@ gradle-app.setting
 out/
 bin/
 .vscode/
+
+# Build artifacts and generated files
+*.dylib
+*.so
+*.dll
+datafusion-ffi-wrapper/
+datafusion-panama-ffi/
+java-ffi-bindings/
