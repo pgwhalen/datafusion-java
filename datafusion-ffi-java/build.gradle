@@ -1,0 +1,73 @@
+plugins {
+    id 'java-library'
+    id 'datafusion.java-conventions'
+    id 'com.diffplug.spotless'
+    id 'com.google.osdetector'
+}
+
+// FFM requires Java 21+ with preview features
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.compilerArgs += ['--enable-preview']
+    // No down-compilation - FFM needs Java 21+
+    options.release.set(21)
+}
+
+dependencies {
+    api 'org.slf4j:slf4j-api:2.0.16'
+    api 'org.apache.arrow:arrow-vector:18.1.0'
+    implementation 'org.apache.arrow:arrow-c-data:18.1.0'
+    runtimeOnly 'org.apache.arrow:arrow-memory-unsafe:18.0.0'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+    testRuntimeOnly 'ch.qos.logback:logback-classic:1.5.12'
+}
+
+spotless {
+    java {
+        googleJavaFormat()
+    }
+}
+
+def cargoBinary = "${System.getProperty('user.home')}/.cargo/bin/cargo"
+
+def extensionMapping = [
+    "osx"    : "dylib",
+    "linux"  : "so",
+    "windows": "dll"
+]
+
+tasks.register('cargoDevBuild', Exec) {
+    workingDir "$rootDir/datafusion-ffi-native"
+    executable cargoBinary
+    args 'build'
+}
+
+tasks.register('cargoReleaseBuild', Exec) {
+    workingDir "$rootDir/datafusion-ffi-native"
+    executable cargoBinary
+    args 'build', '--release'
+}
+
+tasks.register('copyDevLibrary', Sync) {
+    def extension = extensionMapping[osdetector.os]
+    from "${rootDir}/datafusion-ffi-native/target/debug/libdatafusion_ffi_native.$extension"
+    into layout.buildDirectory.dir("ffi_libs/dev")
+    dependsOn cargoDevBuild
+}
+
+test {
+    dependsOn copyDevLibrary
+    def libPath = layout.buildDirectory.dir("ffi_libs/dev").get().asFile.path
+    jvmArgs += [
+        '--enable-preview',
+        "--enable-native-access=ALL-UNNAMED",
+        "-Djava.library.path=$libPath",
+        '--add-opens=java.base/java.nio=ALL-UNNAMED'
+    ]
+    useJUnitPlatform()
+}

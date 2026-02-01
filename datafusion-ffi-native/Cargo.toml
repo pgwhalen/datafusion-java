@@ -1,0 +1,23 @@
+[package]
+name = "datafusion_ffi_native"
+version = "0.1.0"
+homepage = "https://github.com/apache/datafusion"
+repository = "https://github.com/apache/datafusion"
+authors = ["Apache Arrow <dev@arrow.apache.org>"]
+description = "C-FFI bindings for DataFusion to support Java FFM API"
+readme = "README.md"
+license = "Apache-2.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+datafusion = "45"
+arrow = { version = "54", features = ["ffi"] }
+tokio = { version = "1", features = ["rt-multi-thread"] }
+futures = "0.3"
+
+[profile.release]
+lto = true
+strip = true

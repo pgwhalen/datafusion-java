@@ -54,6 +54,13 @@ gradle-app.setting
 
 # End of https://www.toptal.com/developers/gitignore/api/java,gradle
 
+### Rust ###
+# Rust build output
+**/target/
+
+# Cargo.lock for library crates (not committed per Rust convention)
+datafusion-ffi-native/Cargo.lock
+
 # IntelliJ
 *.ipr
 *.iws
