@@ -167,8 +167,7 @@ final class RecordBatchReaderHandle implements AutoCloseable {
       return 1; // Batch available
 
     } catch (Exception e) {
-      new ErrorOut(errorOut).set(e.getMessage(), arena);
-      return -1;
+      return ErrorOut.fromException(errorOut, e, arena);
     }
   }
 

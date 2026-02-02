@@ -34,4 +34,25 @@ record ErrorOut(MemorySegment segment) {
       // Best effort error reporting
     }
   }
+
+  /**
+   * Sets the error from an exception and returns an error code.
+   *
+   * <p>This is a convenience method for the common callback error handling pattern:
+   *
+   * <pre>{@code
+   * } catch (Exception e) {
+   *   return ErrorOut.fromException(errorOut, e, arena);
+   * }
+   * }</pre>
+   *
+   * @param errorOut the error output segment
+   * @param e the exception to report
+   * @param arena the arena to allocate the error string in
+   * @return -1 (the standard error return code)
+   */
+  public static int fromException(MemorySegment errorOut, Exception e, Arena arena) {
+    new ErrorOut(errorOut).set(e.getMessage(), arena);
+    return -1;
+  }
 }

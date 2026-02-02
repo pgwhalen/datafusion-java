@@ -115,9 +115,13 @@ new LongOut(lenOut).set(len);
 
 **ErrorOut** - for returning error messages from callbacks:
 ```java
-// Before: manual null check, allocate string, set pointer
-// After:
+// For setting an error without returning:
 new ErrorOut(errorOut).set(e.getMessage(), arena);
+
+// For the common catch-and-return pattern in callbacks (preferred):
+} catch (Exception e) {
+  return ErrorOut.fromException(errorOut, e, arena);
+}
 ```
 
 ## Upcall Stub Pattern (Java Callbacks)
@@ -163,8 +167,7 @@ final class SomeHandle implements AutoCloseable {
             // ... implementation
             return 0;
         } catch (Exception e) {
-            new ErrorOut(errorOut).set(e.getMessage(), arena);
-            return -1;
+            return ErrorOut.fromException(errorOut, e, arena);
         }
     }
 }

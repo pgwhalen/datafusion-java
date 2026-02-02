@@ -188,8 +188,7 @@ final class TableProviderHandle implements AutoCloseable {
 
       return 0;
     } catch (Exception e) {
-      new ErrorOut(errorOut).set(e.getMessage(), arena);
-      return -1;
+      return ErrorOut.fromException(errorOut, e, arena);
     }
   }
 
@@ -233,8 +232,7 @@ final class TableProviderHandle implements AutoCloseable {
 
       return 0;
     } catch (Exception e) {
-      new ErrorOut(errorOut).set(e.getMessage(), arena);
-      return -1;
+      return ErrorOut.fromException(errorOut, e, arena);
     }
   }
 
