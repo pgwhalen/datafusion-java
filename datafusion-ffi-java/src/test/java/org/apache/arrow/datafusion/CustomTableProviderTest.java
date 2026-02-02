@@ -268,7 +268,7 @@ public class CustomTableProviderTest {
 
     @Override
     public ExecutionPlan scan(int[] projection, Long limit) {
-      return new SimpleExecutionPlan(schema, data, allocator);
+      return new SimpleExecutionPlan(schema, data);
     }
   }
 
@@ -276,13 +276,11 @@ public class CustomTableProviderTest {
   static class SimpleExecutionPlan implements ExecutionPlan {
     private final Schema schema;
     private final VectorSchemaRoot data;
-    private final BufferAllocator allocator;
 
-    SimpleExecutionPlan(Schema schema, VectorSchemaRoot data, BufferAllocator allocator) {
-      this.schema = schema;
-      this.data = data;
-      this.allocator = allocator;
-    }
+      SimpleExecutionPlan(Schema schema, VectorSchemaRoot data) {
+        this.schema = schema;
+        this.data = data;
+      }
 
     @Override
     public Schema schema() {
