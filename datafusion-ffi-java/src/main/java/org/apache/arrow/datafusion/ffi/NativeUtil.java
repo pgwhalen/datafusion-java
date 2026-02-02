@@ -6,18 +6,21 @@ import java.lang.invoke.MethodHandle;
 /**
  * Utility class for handling errors from native DataFusion functions.
  *
- * <p>This class provides methods for allocating error output pointers, extracting error messages,
- * and checking results from native function calls. It handles the memory management required for
- * error strings allocated by the native code.
- *
- * <p>Typical usage:
+ * <p>This class provides high-level methods for calling native functions with automatic error
+ * handling. The preferred API uses functional interfaces to encapsulate the native call:
  *
  * <pre>{@code
- * try (Arena arena = Arena.ofConfined()) {
- *   MemorySegment errorOut = NativeUtil.allocateErrorOut(arena);
- *   int result = (int) SomeBinding.NATIVE_FUNCTION.invokeExact(arg1, arg2, errorOut);
- *   NativeUtil.checkResult(result, errorOut, "operation name");
- * }
+ * // For void operations (int result code, 0 = success):
+ * NativeUtil.call(arena, "Register table", errorOut ->
+ *     (int) DataFusionBindings.REGISTER.invokeExact(ctx, name, errorOut));
+ *
+ * // For pointer-returning operations:
+ * MemorySegment df = NativeUtil.callForPointer(arena, "Execute SQL", errorOut ->
+ *     (MemorySegment) DataFusionBindings.SQL.invokeExact(ctx, query, errorOut));
+ *
+ * // For stream operations (returns result: positive=data, 0=end, negative=error):
+ * int result = NativeUtil.callForStreamResult(arena, "Stream next", errorOut ->
+ *     (int) DataFusionBindings.STREAM_NEXT.invokeExact(stream, errorOut));
  * }</pre>
  */
 public final class NativeUtil {
@@ -33,6 +36,130 @@ public final class NativeUtil {
       downcall("datafusion_free_string", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
 
   private NativeUtil() {}
+
+  // ========================================================================
+  // Functional interfaces for native calls
+  // ========================================================================
+
+  /**
+   * A native function call that returns an int result code.
+   *
+   * <p>Used with {@link #call} and {@link #callForStreamResult}.
+   */
+  @FunctionalInterface
+  public interface NativeIntCall {
+    /**
+     * Invokes the native function.
+     *
+     * @param errorOut the error output segment to pass to the native function
+     * @return the int result code
+     * @throws Throwable if the invocation fails
+     */
+    int invoke(MemorySegment errorOut) throws Throwable;
+  }
+
+  /**
+   * A native function call that returns a pointer.
+   *
+   * <p>Used with {@link #callForPointer}.
+   */
+  @FunctionalInterface
+  public interface NativePointerCall {
+    /**
+     * Invokes the native function.
+     *
+     * @param errorOut the error output segment to pass to the native function
+     * @return the pointer result
+     * @throws Throwable if the invocation fails
+     */
+    MemorySegment invoke(MemorySegment errorOut) throws Throwable;
+  }
+
+  // ========================================================================
+  // High-level call methods with automatic error handling
+  // ========================================================================
+
+  /**
+   * Calls a native function that returns an int result code (0 = success).
+   *
+   * <p>This method allocates an error output segment, invokes the native function, and checks the
+   * result. If the result is non-zero, it extracts the error message and throws an exception.
+   *
+   * @param arena the arena to allocate the error output from
+   * @param operation a description of the operation for error messages
+   * @param call the native function to invoke
+   * @throws NativeErrorException if the native function returns a non-zero result
+   * @throws DataFusionException if the invocation fails unexpectedly
+   */
+  public static void call(Arena arena, String operation, NativeIntCall call) {
+    MemorySegment errorOut = allocateErrorOut(arena);
+    try {
+      int result = call.invoke(errorOut);
+      checkResult(result, errorOut, operation);
+    } catch (NativeErrorException e) {
+      throw e;
+    } catch (Throwable e) {
+      throw new DataFusionException("Failed to " + operation, e);
+    }
+  }
+
+  /**
+   * Calls a native function that returns a pointer (non-null = success).
+   *
+   * <p>This method allocates an error output segment, invokes the native function, and checks the
+   * result. If the pointer is null, it extracts the error message and throws an exception.
+   *
+   * @param arena the arena to allocate the error output from
+   * @param operation a description of the operation for error messages
+   * @param call the native function to invoke
+   * @return the non-null pointer returned by the native function
+   * @throws NativeErrorException if the native function returns a null pointer
+   * @throws DataFusionException if the invocation fails unexpectedly
+   */
+  public static MemorySegment callForPointer(
+      Arena arena, String operation, NativePointerCall call) {
+    MemorySegment errorOut = allocateErrorOut(arena);
+    try {
+      MemorySegment pointer = call.invoke(errorOut);
+      checkPointer(pointer, errorOut, operation);
+      return pointer;
+    } catch (NativeErrorException e) {
+      throw e;
+    } catch (Throwable e) {
+      throw new DataFusionException("Failed to " + operation, e);
+    }
+  }
+
+  /**
+   * Calls a native streaming function and returns the result after error checking.
+   *
+   * <p>This method allocates an error output segment, invokes the native function, and checks for
+   * errors. Stream functions return: positive = data available, 0 = end of stream, negative =
+   * error. If negative, it extracts the error message and throws an exception.
+   *
+   * @param arena the arena to allocate the error output from
+   * @param operation a description of the operation for error messages
+   * @param call the native function to invoke
+   * @return the result code (guaranteed to be >= 0)
+   * @throws NativeErrorException if the native function returns a negative result
+   * @throws DataFusionException if the invocation fails unexpectedly
+   */
+  public static int callForStreamResult(Arena arena, String operation, NativeIntCall call) {
+    MemorySegment errorOut = allocateErrorOut(arena);
+    try {
+      int result = call.invoke(errorOut);
+      checkStreamResult(result, errorOut, operation);
+      return result;
+    } catch (NativeErrorException e) {
+      throw e;
+    } catch (Throwable e) {
+      throw new DataFusionException("Failed to " + operation, e);
+    }
+  }
+
+  // ========================================================================
+  // Lower-level utilities (for cases where the high-level API doesn't fit)
+  // ========================================================================
 
   /**
    * Allocates and initializes an error output pointer.
@@ -74,9 +201,7 @@ public final class NativeUtil {
       }
 
       // Reinterpret with the exact size needed (length + 1 for null terminator)
-      String message = errorPtr.reinterpret(len + 1).getUtf8String(0);
-
-      return message;
+      return errorPtr.reinterpret(len + 1).getUtf8String(0);
     } catch (Throwable e) {
       // If we fail to read the message, return a fallback
       return "(failed to read error message: " + e.getMessage() + ")";
@@ -127,8 +252,8 @@ public final class NativeUtil {
   /**
    * Checks a stream result code and throws an exception if it indicates an error.
    *
-   * <p>Use this for streaming functions that return: - positive value: data available - 0: end of
-   * stream - negative value: error
+   * <p>Use this for streaming functions that return: positive value = data available, 0 = end of
+   * stream, negative value = error.
    *
    * @param result The result code from the native function
    * @param errorOut The error output pointer from the native function call

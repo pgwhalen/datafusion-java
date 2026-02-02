@@ -32,16 +32,99 @@ final class TableProviderHandle implements AutoCloseable {
   private static final long OFFSET_SCAN_FN = 24;
   private static final long OFFSET_RELEASE_FN = 32;
 
+  // Static FunctionDescriptors - define the FFI signatures once at class load
+  private static final FunctionDescriptor SCHEMA_DESC =
+      FunctionDescriptor.of(
+          ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS);
+
+  private static final FunctionDescriptor TABLE_TYPE_DESC =
+      FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS);
+
+  private static final FunctionDescriptor SCAN_DESC =
+      FunctionDescriptor.of(
+          ValueLayout.JAVA_INT,
+          ValueLayout.ADDRESS,
+          ValueLayout.ADDRESS,
+          ValueLayout.JAVA_LONG,
+          ValueLayout.JAVA_LONG,
+          ValueLayout.ADDRESS,
+          ValueLayout.ADDRESS);
+
+  private static final FunctionDescriptor RELEASE_DESC =
+      FunctionDescriptor.ofVoid(ValueLayout.ADDRESS);
+
+  // Static MethodHandles - looked up once at class load
+  private static final MethodHandle SCHEMA_MH = initSchemaMethodHandle();
+  private static final MethodHandle TABLE_TYPE_MH = initTableTypeMethodHandle();
+  private static final MethodHandle SCAN_MH = initScanMethodHandle();
+  private static final MethodHandle RELEASE_MH = initReleaseMethodHandle();
+
+  private static MethodHandle initSchemaMethodHandle() {
+    try {
+      return MethodHandles.lookup()
+          .findVirtual(
+              TableProviderHandle.class,
+              "getSchema",
+              MethodType.methodType(
+                  int.class, MemorySegment.class, MemorySegment.class, MemorySegment.class));
+    } catch (NoSuchMethodException | IllegalAccessException e) {
+      throw new ExceptionInInitializerError(e);
+    }
+  }
+
+  private static MethodHandle initTableTypeMethodHandle() {
+    try {
+      return MethodHandles.lookup()
+          .findVirtual(
+              TableProviderHandle.class,
+              "getTableType",
+              MethodType.methodType(int.class, MemorySegment.class));
+    } catch (NoSuchMethodException | IllegalAccessException e) {
+      throw new ExceptionInInitializerError(e);
+    }
+  }
+
+  private static MethodHandle initScanMethodHandle() {
+    try {
+      return MethodHandles.lookup()
+          .findVirtual(
+              TableProviderHandle.class,
+              "scan",
+              MethodType.methodType(
+                  int.class,
+                  MemorySegment.class,
+                  MemorySegment.class,
+                  long.class,
+                  long.class,
+                  MemorySegment.class,
+                  MemorySegment.class));
+    } catch (NoSuchMethodException | IllegalAccessException e) {
+      throw new ExceptionInInitializerError(e);
+    }
+  }
+
+  private static MethodHandle initReleaseMethodHandle() {
+    try {
+      return MethodHandles.lookup()
+          .findVirtual(
+              TableProviderHandle.class,
+              "release",
+              MethodType.methodType(void.class, MemorySegment.class));
+    } catch (NoSuchMethodException | IllegalAccessException e) {
+      throw new ExceptionInInitializerError(e);
+    }
+  }
+
   private final Arena arena;
   private final TableProvider provider;
   private final BufferAllocator allocator;
   private final MemorySegment callbackStruct;
 
   // Keep references to upcall stubs to prevent GC
-  private final MemorySegment schemaStub;
-  private final MemorySegment tableTypeStub;
-  private final MemorySegment scanStub;
-  private final MemorySegment releaseStub;
+  private final UpcallStub schemaStub;
+  private final UpcallStub tableTypeStub;
+  private final UpcallStub scanStub;
+  private final UpcallStub releaseStub;
 
   TableProviderHandle(TableProvider provider, BufferAllocator allocator, Arena arena) {
     this.arena = arena;
@@ -57,66 +140,19 @@ final class TableProviderHandle implements AutoCloseable {
         throw new DataFusionException("Failed to allocate TableProvider callbacks");
       }
 
-      // Create upcall stubs for the callback functions
-      MethodHandles.Lookup lookup = MethodHandles.lookup();
-      Linker linker = DataFusionBindings.getLinker();
-
-      // schema_fn: (java_object, schema_out, error_out) -> i32
-      MethodHandle schemaHandle =
-          lookup.bind(
-              this,
-              "getSchema",
-              MethodType.methodType(
-                  int.class, MemorySegment.class, MemorySegment.class, MemorySegment.class));
-      FunctionDescriptor schemaDesc =
-          FunctionDescriptor.of(
-              ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS);
-      this.schemaStub = linker.upcallStub(schemaHandle, schemaDesc, arena);
-
-      // table_type_fn: (java_object) -> i32
-      MethodHandle tableTypeHandle =
-          lookup.bind(this, "getTableType", MethodType.methodType(int.class, MemorySegment.class));
-      FunctionDescriptor tableTypeDesc =
-          FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS);
-      this.tableTypeStub = linker.upcallStub(tableTypeHandle, tableTypeDesc, arena);
-
-      // scan_fn: (java_object, projection, projection_len, limit, plan_out, error_out) -> i32
-      MethodHandle scanHandle =
-          lookup.bind(
-              this,
-              "scan",
-              MethodType.methodType(
-                  int.class,
-                  MemorySegment.class,
-                  MemorySegment.class,
-                  long.class,
-                  long.class,
-                  MemorySegment.class,
-                  MemorySegment.class));
-      FunctionDescriptor scanDesc =
-          FunctionDescriptor.of(
-              ValueLayout.JAVA_INT,
-              ValueLayout.ADDRESS,
-              ValueLayout.ADDRESS,
-              ValueLayout.JAVA_LONG,
-              ValueLayout.JAVA_LONG,
-              ValueLayout.ADDRESS,
-              ValueLayout.ADDRESS);
-      this.scanStub = linker.upcallStub(scanHandle, scanDesc, arena);
-
-      // release_fn: (java_object) -> void
-      MethodHandle releaseHandle =
-          lookup.bind(this, "release", MethodType.methodType(void.class, MemorySegment.class));
-      FunctionDescriptor releaseDesc = FunctionDescriptor.ofVoid(ValueLayout.ADDRESS);
-      this.releaseStub = linker.upcallStub(releaseHandle, releaseDesc, arena);
+      // Create upcall stubs - only the stubs are per-instance
+      this.schemaStub = UpcallStub.create(SCHEMA_MH.bindTo(this), SCHEMA_DESC, arena);
+      this.tableTypeStub = UpcallStub.create(TABLE_TYPE_MH.bindTo(this), TABLE_TYPE_DESC, arena);
+      this.scanStub = UpcallStub.create(SCAN_MH.bindTo(this), SCAN_DESC, arena);
+      this.releaseStub = UpcallStub.create(RELEASE_MH.bindTo(this), RELEASE_DESC, arena);
 
       // Set up the callback struct
       MemorySegment struct = callbackStruct.reinterpret(40); // struct size
       struct.set(ValueLayout.ADDRESS, OFFSET_JAVA_OBJECT, MemorySegment.NULL);
-      struct.set(ValueLayout.ADDRESS, OFFSET_SCHEMA_FN, schemaStub);
-      struct.set(ValueLayout.ADDRESS, OFFSET_TABLE_TYPE_FN, tableTypeStub);
-      struct.set(ValueLayout.ADDRESS, OFFSET_SCAN_FN, scanStub);
-      struct.set(ValueLayout.ADDRESS, OFFSET_RELEASE_FN, releaseStub);
+      struct.set(ValueLayout.ADDRESS, OFFSET_SCHEMA_FN, schemaStub.segment());
+      struct.set(ValueLayout.ADDRESS, OFFSET_TABLE_TYPE_FN, tableTypeStub.segment());
+      struct.set(ValueLayout.ADDRESS, OFFSET_SCAN_FN, scanStub.segment());
+      struct.set(ValueLayout.ADDRESS, OFFSET_RELEASE_FN, releaseStub.segment());
 
     } catch (Throwable e) {
       throw new DataFusionException("Failed to create TableProviderHandle", e);
@@ -149,7 +185,7 @@ final class TableProviderHandle implements AutoCloseable {
 
       return 0;
     } catch (Exception e) {
-      setError(errorOut, e.getMessage());
+      new ErrorOut(errorOut).set(e.getMessage(), arena);
       return -1;
     }
   }
@@ -190,12 +226,11 @@ final class TableProviderHandle implements AutoCloseable {
       ExecutionPlanHandle planHandle = new ExecutionPlanHandle(plan, allocator, arena);
 
       // Return the callback struct pointer
-      MemorySegment planCallbacks = planHandle.getCallbackStruct();
-      planOut.reinterpret(8).set(ValueLayout.ADDRESS, 0, planCallbacks);
+      new PointerOut(planOut).set(planHandle.getCallbackStruct());
 
       return 0;
     } catch (Exception e) {
-      setError(errorOut, e.getMessage());
+      new ErrorOut(errorOut).set(e.getMessage(), arena);
       return -1;
     }
   }
@@ -204,18 +239,6 @@ final class TableProviderHandle implements AutoCloseable {
   @SuppressWarnings("unused")
   void release(MemorySegment javaObject) {
     // Cleanup happens when arena is closed
-  }
-
-  private void setError(MemorySegment errorOut, String message) {
-    if (errorOut.equals(MemorySegment.NULL)) {
-      return;
-    }
-    try {
-      MemorySegment msgSegment = arena.allocateUtf8String(message);
-      errorOut.reinterpret(8).set(ValueLayout.ADDRESS, 0, msgSegment);
-    } catch (Exception ignored) {
-      // Best effort error reporting
-    }
   }
 
   @Override

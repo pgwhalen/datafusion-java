@@ -31,14 +31,59 @@ final class RecordBatchReaderHandle implements AutoCloseable {
   private static final long OFFSET_LOAD_NEXT_BATCH_FN = 8;
   private static final long OFFSET_RELEASE_FN = 16;
 
+  // Static FunctionDescriptors - define the FFI signatures once at class load
+  private static final FunctionDescriptor LOAD_NEXT_BATCH_DESC =
+      FunctionDescriptor.of(
+          ValueLayout.JAVA_INT,
+          ValueLayout.ADDRESS,
+          ValueLayout.ADDRESS,
+          ValueLayout.ADDRESS,
+          ValueLayout.ADDRESS);
+
+  private static final FunctionDescriptor RELEASE_DESC =
+      FunctionDescriptor.ofVoid(ValueLayout.ADDRESS);
+
+  // Static MethodHandles - looked up once at class load
+  private static final MethodHandle LOAD_NEXT_BATCH_MH = initLoadNextBatchMethodHandle();
+  private static final MethodHandle RELEASE_MH = initReleaseMethodHandle();
+
+  private static MethodHandle initLoadNextBatchMethodHandle() {
+    try {
+      return MethodHandles.lookup()
+          .findVirtual(
+              RecordBatchReaderHandle.class,
+              "loadNextBatch",
+              MethodType.methodType(
+                  int.class,
+                  MemorySegment.class,
+                  MemorySegment.class,
+                  MemorySegment.class,
+                  MemorySegment.class));
+    } catch (NoSuchMethodException | IllegalAccessException e) {
+      throw new ExceptionInInitializerError(e);
+    }
+  }
+
+  private static MethodHandle initReleaseMethodHandle() {
+    try {
+      return MethodHandles.lookup()
+          .findVirtual(
+              RecordBatchReaderHandle.class,
+              "release",
+              MethodType.methodType(void.class, MemorySegment.class));
+    } catch (NoSuchMethodException | IllegalAccessException e) {
+      throw new ExceptionInInitializerError(e);
+    }
+  }
+
   private final Arena arena;
   private final RecordBatchReader reader;
   private final BufferAllocator allocator;
   private final MemorySegment callbackStruct;
 
   // Keep references to upcall stubs to prevent GC
-  private final MemorySegment loadNextBatchStub;
-  private final MemorySegment releaseStub;
+  private final UpcallStub loadNextBatchStub;
+  private final UpcallStub releaseStub;
 
   RecordBatchReaderHandle(RecordBatchReader reader, BufferAllocator allocator, Arena arena) {
     this.arena = arena;
@@ -54,41 +99,16 @@ final class RecordBatchReaderHandle implements AutoCloseable {
         throw new DataFusionException("Failed to allocate RecordBatchReader callbacks");
       }
 
-      // Create upcall stubs for the callback functions
-      MethodHandles.Lookup lookup = MethodHandles.lookup();
-      Linker linker = DataFusionBindings.getLinker();
-
-      // load_next_batch_fn: (java_object, array_out, schema_out, error_out) -> i32
-      MethodHandle loadNextBatchHandle =
-          lookup.bind(
-              this,
-              "loadNextBatch",
-              MethodType.methodType(
-                  int.class,
-                  MemorySegment.class,
-                  MemorySegment.class,
-                  MemorySegment.class,
-                  MemorySegment.class));
-      FunctionDescriptor loadNextBatchDesc =
-          FunctionDescriptor.of(
-              ValueLayout.JAVA_INT,
-              ValueLayout.ADDRESS,
-              ValueLayout.ADDRESS,
-              ValueLayout.ADDRESS,
-              ValueLayout.ADDRESS);
-      this.loadNextBatchStub = linker.upcallStub(loadNextBatchHandle, loadNextBatchDesc, arena);
-
-      // release_fn: (java_object) -> void
-      MethodHandle releaseHandle =
-          lookup.bind(this, "release", MethodType.methodType(void.class, MemorySegment.class));
-      FunctionDescriptor releaseDesc = FunctionDescriptor.ofVoid(ValueLayout.ADDRESS);
-      this.releaseStub = linker.upcallStub(releaseHandle, releaseDesc, arena);
+      // Create upcall stubs - only the stubs are per-instance
+      this.loadNextBatchStub =
+          UpcallStub.create(LOAD_NEXT_BATCH_MH.bindTo(this), LOAD_NEXT_BATCH_DESC, arena);
+      this.releaseStub = UpcallStub.create(RELEASE_MH.bindTo(this), RELEASE_DESC, arena);
 
       // Set up the callback struct
       MemorySegment struct = callbackStruct.reinterpret(24); // struct size
       struct.set(ValueLayout.ADDRESS, OFFSET_JAVA_OBJECT, MemorySegment.NULL);
-      struct.set(ValueLayout.ADDRESS, OFFSET_LOAD_NEXT_BATCH_FN, loadNextBatchStub);
-      struct.set(ValueLayout.ADDRESS, OFFSET_RELEASE_FN, releaseStub);
+      struct.set(ValueLayout.ADDRESS, OFFSET_LOAD_NEXT_BATCH_FN, loadNextBatchStub.segment());
+      struct.set(ValueLayout.ADDRESS, OFFSET_RELEASE_FN, releaseStub.segment());
 
     } catch (Throwable e) {
       throw new DataFusionException("Failed to create RecordBatchReaderHandle", e);
@@ -145,7 +165,7 @@ final class RecordBatchReaderHandle implements AutoCloseable {
       return 1; // Batch available
 
     } catch (Exception e) {
-      setError(errorOut, e.getMessage());
+      new ErrorOut(errorOut).set(e.getMessage(), arena);
       return -1;
     }
   }
@@ -158,18 +178,6 @@ final class RecordBatchReaderHandle implements AutoCloseable {
       reader.close();
     } catch (Exception e) {
       // Best effort - log but don't throw from callback
-    }
-  }
-
-  private void setError(MemorySegment errorOut, String message) {
-    if (errorOut.equals(MemorySegment.NULL)) {
-      return;
-    }
-    try {
-      MemorySegment msgSegment = arena.allocateUtf8String(message);
-      errorOut.reinterpret(8).set(ValueLayout.ADDRESS, 0, msgSegment);
-    } catch (Exception ignored) {
-      // Best effort error reporting
     }
   }
 

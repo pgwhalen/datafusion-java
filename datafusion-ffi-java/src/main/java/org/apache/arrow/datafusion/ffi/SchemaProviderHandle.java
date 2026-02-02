@@ -28,16 +28,103 @@ final class SchemaProviderHandle implements AutoCloseable {
   private static final long OFFSET_TABLE_EXISTS_FN = 24;
   private static final long OFFSET_RELEASE_FN = 32;
 
+  // Static FunctionDescriptors - define the FFI signatures once at class load
+  private static final FunctionDescriptor TABLE_NAMES_DESC =
+      FunctionDescriptor.of(
+          ValueLayout.JAVA_INT,
+          ValueLayout.ADDRESS,
+          ValueLayout.ADDRESS,
+          ValueLayout.ADDRESS,
+          ValueLayout.ADDRESS);
+
+  private static final FunctionDescriptor TABLE_DESC =
+      FunctionDescriptor.of(
+          ValueLayout.JAVA_INT,
+          ValueLayout.ADDRESS,
+          ValueLayout.ADDRESS,
+          ValueLayout.ADDRESS,
+          ValueLayout.ADDRESS);
+
+  private static final FunctionDescriptor TABLE_EXISTS_DESC =
+      FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS);
+
+  private static final FunctionDescriptor RELEASE_DESC =
+      FunctionDescriptor.ofVoid(ValueLayout.ADDRESS);
+
+  // Static MethodHandles - looked up once at class load
+  private static final MethodHandle TABLE_NAMES_MH = initTableNamesMethodHandle();
+  private static final MethodHandle TABLE_MH = initTableMethodHandle();
+  private static final MethodHandle TABLE_EXISTS_MH = initTableExistsMethodHandle();
+  private static final MethodHandle RELEASE_MH = initReleaseMethodHandle();
+
+  private static MethodHandle initTableNamesMethodHandle() {
+    try {
+      return MethodHandles.lookup()
+          .findVirtual(
+              SchemaProviderHandle.class,
+              "getTableNames",
+              MethodType.methodType(
+                  int.class,
+                  MemorySegment.class,
+                  MemorySegment.class,
+                  MemorySegment.class,
+                  MemorySegment.class));
+    } catch (NoSuchMethodException | IllegalAccessException e) {
+      throw new ExceptionInInitializerError(e);
+    }
+  }
+
+  private static MethodHandle initTableMethodHandle() {
+    try {
+      return MethodHandles.lookup()
+          .findVirtual(
+              SchemaProviderHandle.class,
+              "getTable",
+              MethodType.methodType(
+                  int.class,
+                  MemorySegment.class,
+                  MemorySegment.class,
+                  MemorySegment.class,
+                  MemorySegment.class));
+    } catch (NoSuchMethodException | IllegalAccessException e) {
+      throw new ExceptionInInitializerError(e);
+    }
+  }
+
+  private static MethodHandle initTableExistsMethodHandle() {
+    try {
+      return MethodHandles.lookup()
+          .findVirtual(
+              SchemaProviderHandle.class,
+              "tableExists",
+              MethodType.methodType(int.class, MemorySegment.class, MemorySegment.class));
+    } catch (NoSuchMethodException | IllegalAccessException e) {
+      throw new ExceptionInInitializerError(e);
+    }
+  }
+
+  private static MethodHandle initReleaseMethodHandle() {
+    try {
+      return MethodHandles.lookup()
+          .findVirtual(
+              SchemaProviderHandle.class,
+              "release",
+              MethodType.methodType(void.class, MemorySegment.class));
+    } catch (NoSuchMethodException | IllegalAccessException e) {
+      throw new ExceptionInInitializerError(e);
+    }
+  }
+
   private final Arena arena;
   private final SchemaProvider provider;
   private final BufferAllocator allocator;
   private final MemorySegment callbackStruct;
 
   // Keep references to upcall stubs to prevent GC
-  private final MemorySegment tableNamesStub;
-  private final MemorySegment tableStub;
-  private final MemorySegment tableExistsStub;
-  private final MemorySegment releaseStub;
+  private final UpcallStub tableNamesStub;
+  private final UpcallStub tableStub;
+  private final UpcallStub tableExistsStub;
+  private final UpcallStub releaseStub;
 
   SchemaProviderHandle(SchemaProvider provider, BufferAllocator allocator, Arena arena) {
     this.arena = arena;
@@ -53,73 +140,20 @@ final class SchemaProviderHandle implements AutoCloseable {
         throw new DataFusionException("Failed to allocate SchemaProvider callbacks");
       }
 
-      // Create upcall stubs for the callback functions
-      MethodHandles.Lookup lookup = MethodHandles.lookup();
-      Linker linker = DataFusionBindings.getLinker();
-
-      // table_names_fn: (java_object, names_out, names_len_out, error_out) -> i32
-      MethodHandle tableNamesHandle =
-          lookup.bind(
-              this,
-              "getTableNames",
-              MethodType.methodType(
-                  int.class,
-                  MemorySegment.class,
-                  MemorySegment.class,
-                  MemorySegment.class,
-                  MemorySegment.class));
-      FunctionDescriptor tableNamesDesc =
-          FunctionDescriptor.of(
-              ValueLayout.JAVA_INT,
-              ValueLayout.ADDRESS,
-              ValueLayout.ADDRESS,
-              ValueLayout.ADDRESS,
-              ValueLayout.ADDRESS);
-      this.tableNamesStub = linker.upcallStub(tableNamesHandle, tableNamesDesc, arena);
-
-      // table_fn: (java_object, name, table_out, error_out) -> i32
-      MethodHandle tableHandle =
-          lookup.bind(
-              this,
-              "getTable",
-              MethodType.methodType(
-                  int.class,
-                  MemorySegment.class,
-                  MemorySegment.class,
-                  MemorySegment.class,
-                  MemorySegment.class));
-      FunctionDescriptor tableDesc =
-          FunctionDescriptor.of(
-              ValueLayout.JAVA_INT,
-              ValueLayout.ADDRESS,
-              ValueLayout.ADDRESS,
-              ValueLayout.ADDRESS,
-              ValueLayout.ADDRESS);
-      this.tableStub = linker.upcallStub(tableHandle, tableDesc, arena);
-
-      // table_exists_fn: (java_object, name) -> i32
-      MethodHandle tableExistsHandle =
-          lookup.bind(
-              this,
-              "tableExists",
-              MethodType.methodType(int.class, MemorySegment.class, MemorySegment.class));
-      FunctionDescriptor tableExistsDesc =
-          FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS);
-      this.tableExistsStub = linker.upcallStub(tableExistsHandle, tableExistsDesc, arena);
-
-      // release_fn: (java_object) -> void
-      MethodHandle releaseHandle =
-          lookup.bind(this, "release", MethodType.methodType(void.class, MemorySegment.class));
-      FunctionDescriptor releaseDesc = FunctionDescriptor.ofVoid(ValueLayout.ADDRESS);
-      this.releaseStub = linker.upcallStub(releaseHandle, releaseDesc, arena);
+      // Create upcall stubs - only the stubs are per-instance
+      this.tableNamesStub = UpcallStub.create(TABLE_NAMES_MH.bindTo(this), TABLE_NAMES_DESC, arena);
+      this.tableStub = UpcallStub.create(TABLE_MH.bindTo(this), TABLE_DESC, arena);
+      this.tableExistsStub =
+          UpcallStub.create(TABLE_EXISTS_MH.bindTo(this), TABLE_EXISTS_DESC, arena);
+      this.releaseStub = UpcallStub.create(RELEASE_MH.bindTo(this), RELEASE_DESC, arena);
 
       // Set up the callback struct
       MemorySegment struct = callbackStruct.reinterpret(40); // struct size
       struct.set(ValueLayout.ADDRESS, OFFSET_JAVA_OBJECT, MemorySegment.NULL);
-      struct.set(ValueLayout.ADDRESS, OFFSET_TABLE_NAMES_FN, tableNamesStub);
-      struct.set(ValueLayout.ADDRESS, OFFSET_TABLE_FN, tableStub);
-      struct.set(ValueLayout.ADDRESS, OFFSET_TABLE_EXISTS_FN, tableExistsStub);
-      struct.set(ValueLayout.ADDRESS, OFFSET_RELEASE_FN, releaseStub);
+      struct.set(ValueLayout.ADDRESS, OFFSET_TABLE_NAMES_FN, tableNamesStub.segment());
+      struct.set(ValueLayout.ADDRESS, OFFSET_TABLE_FN, tableStub.segment());
+      struct.set(ValueLayout.ADDRESS, OFFSET_TABLE_EXISTS_FN, tableExistsStub.segment());
+      struct.set(ValueLayout.ADDRESS, OFFSET_RELEASE_FN, releaseStub.segment());
 
     } catch (Throwable e) {
       throw new DataFusionException("Failed to create SchemaProviderHandle", e);
@@ -140,10 +174,12 @@ final class SchemaProviderHandle implements AutoCloseable {
       MemorySegment errorOut) {
     try {
       List<String> names = provider.tableNames();
+      PointerOut namesOutPtr = new PointerOut(namesOut);
+      LongOut namesLenOutVal = new LongOut(namesLenOut);
 
       if (names.isEmpty()) {
-        namesOut.reinterpret(8).set(ValueLayout.ADDRESS, 0, MemorySegment.NULL);
-        namesLenOut.reinterpret(8).set(ValueLayout.JAVA_LONG, 0, 0L);
+        namesOutPtr.setNull();
+        namesLenOutVal.set(0L);
         return 0;
       }
 
@@ -155,12 +191,12 @@ final class SchemaProviderHandle implements AutoCloseable {
         stringArray.setAtIndex(ValueLayout.ADDRESS, i, nameSegment);
       }
 
-      namesOut.reinterpret(8).set(ValueLayout.ADDRESS, 0, stringArray);
-      namesLenOut.reinterpret(8).set(ValueLayout.JAVA_LONG, 0, (long) names.size());
+      namesOutPtr.set(stringArray);
+      namesLenOutVal.set(names.size());
 
       return 0;
     } catch (Exception e) {
-      setError(errorOut, e.getMessage());
+      new ErrorOut(errorOut).set(e.getMessage(), arena);
       return -1;
     }
   }
@@ -173,11 +209,12 @@ final class SchemaProviderHandle implements AutoCloseable {
       MemorySegment tableOut,
       MemorySegment errorOut) {
     try {
-      String tableName = name.reinterpret(1024).getUtf8String(0);
+      String tableName = new NativeString(name).value();
       TableProvider table = provider.table(tableName);
+      PointerOut tableOutPtr = new PointerOut(tableOut);
 
       if (table == null) {
-        tableOut.reinterpret(8).set(ValueLayout.ADDRESS, 0, MemorySegment.NULL);
+        tableOutPtr.setNull();
         return 0;
       }
 
@@ -185,12 +222,11 @@ final class SchemaProviderHandle implements AutoCloseable {
       TableProviderHandle tableHandle = new TableProviderHandle(table, allocator, arena);
 
       // Return the callback struct pointer
-      MemorySegment tableCallbacks = tableHandle.getCallbackStruct();
-      tableOut.reinterpret(8).set(ValueLayout.ADDRESS, 0, tableCallbacks);
+      tableOutPtr.set(tableHandle.getCallbackStruct());
 
       return 0;
     } catch (Exception e) {
-      setError(errorOut, e.getMessage());
+      new ErrorOut(errorOut).set(e.getMessage(), arena);
       return -1;
     }
   }
@@ -199,7 +235,7 @@ final class SchemaProviderHandle implements AutoCloseable {
   @SuppressWarnings("unused")
   int tableExists(MemorySegment javaObject, MemorySegment name) {
     try {
-      String tableName = name.reinterpret(1024).getUtf8String(0);
+      String tableName = new NativeString(name).value();
       return provider.tableExists(tableName) ? 1 : 0;
     } catch (Exception e) {
       return 0;
@@ -210,18 +246,6 @@ final class SchemaProviderHandle implements AutoCloseable {
   @SuppressWarnings("unused")
   void release(MemorySegment javaObject) {
     // Cleanup happens when arena is closed
-  }
-
-  private void setError(MemorySegment errorOut, String message) {
-    if (errorOut.equals(MemorySegment.NULL)) {
-      return;
-    }
-    try {
-      MemorySegment msgSegment = arena.allocateUtf8String(message);
-      errorOut.reinterpret(8).set(ValueLayout.ADDRESS, 0, msgSegment);
-    } catch (Exception ignored) {
-      // Best effort error reporting
-    }
   }
 
   @Override

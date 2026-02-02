@@ -87,8 +87,6 @@ public class SessionContext implements AutoCloseable {
       // Export the VectorSchemaRoot to Arrow C Data Interface
       Data.exportVectorSchemaRoot(allocator, root, provider, ffiArray, ffiSchema);
 
-      MemorySegment errorOut = NativeUtil.allocateErrorOut(arena);
-
       // Create null-terminated string for table name
       MemorySegment nameSegment = arena.allocateUtf8String(name);
 
@@ -96,12 +94,13 @@ public class SessionContext implements AutoCloseable {
       MemorySegment schemaAddr = MemorySegment.ofAddress(ffiSchema.memoryAddress());
       MemorySegment arrayAddr = MemorySegment.ofAddress(ffiArray.memoryAddress());
 
-      int result =
-          (int)
-              DataFusionBindings.CONTEXT_REGISTER_RECORD_BATCH.invokeExact(
-                  context, nameSegment, schemaAddr, arrayAddr, errorOut);
-
-      NativeUtil.checkResult(result, errorOut, "Register table '" + name + "'");
+      NativeUtil.call(
+          arena,
+          "Register table '" + name + "'",
+          errorOut ->
+              (int)
+                  DataFusionBindings.CONTEXT_REGISTER_RECORD_BATCH.invokeExact(
+                      context, nameSegment, schemaAddr, arrayAddr, errorOut));
 
       logger.debug("Registered table '{}' with {} rows", name, root.getRowCount());
     } catch (DataFusionException e) {
@@ -122,14 +121,16 @@ public class SessionContext implements AutoCloseable {
     checkNotClosed();
 
     try (Arena arena = Arena.ofConfined()) {
-      MemorySegment errorOut = NativeUtil.allocateErrorOut(arena);
       MemorySegment querySegment = arena.allocateUtf8String(query);
 
       MemorySegment dataframe =
-          (MemorySegment)
-              DataFusionBindings.CONTEXT_SQL.invokeExact(runtime, context, querySegment, errorOut);
-
-      NativeUtil.checkPointer(dataframe, errorOut, "SQL execution");
+          NativeUtil.callForPointer(
+              arena,
+              "SQL execution",
+              errorOut ->
+                  (MemorySegment)
+                      DataFusionBindings.CONTEXT_SQL.invokeExact(
+                          runtime, context, querySegment, errorOut));
 
       logger.debug("Executed SQL query, got DataFrame: {}", dataframe);
       return new DataFrame(runtime, dataframe);
@@ -169,16 +170,16 @@ public class SessionContext implements AutoCloseable {
       CatalogProviderHandle handle = new CatalogProviderHandle(catalog, allocator, catalogArena);
       catalogHandles.add(handle);
 
-      MemorySegment errorOut = NativeUtil.allocateErrorOut(arena);
       MemorySegment nameSegment = arena.allocateUtf8String(name);
       MemorySegment callbacks = handle.getCallbackStruct();
 
-      int result =
-          (int)
-              DataFusionBindings.CONTEXT_REGISTER_CATALOG.invokeExact(
-                  context, nameSegment, callbacks, errorOut);
-
-      NativeUtil.checkResult(result, errorOut, "Register catalog '" + name + "'");
+      NativeUtil.call(
+          arena,
+          "Register catalog '" + name + "'",
+          errorOut ->
+              (int)
+                  DataFusionBindings.CONTEXT_REGISTER_CATALOG.invokeExact(
+                      context, nameSegment, callbacks, errorOut));
 
       logger.debug("Registered catalog '{}'", name);
     } catch (DataFusionException e) {

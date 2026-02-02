@@ -68,14 +68,15 @@ public class RecordBatchStream implements RecordBatchReader, DictionaryProvider 
       // Allocate space for FFI structs
       MemorySegment arrayOut = arena.allocate(ARROW_ARRAY_SIZE);
       MemorySegment schemaOut = arena.allocate(ARROW_SCHEMA_SIZE);
-      MemorySegment errorOut = NativeUtil.allocateErrorOut(arena);
 
       int result =
-          (int)
-              DataFusionBindings.STREAM_NEXT.invokeExact(
-                  runtime, stream, arrayOut, schemaOut, errorOut);
-
-      NativeUtil.checkStreamResult(result, errorOut, "Stream next");
+          NativeUtil.callForStreamResult(
+              arena,
+              "Stream next",
+              errorOut ->
+                  (int)
+                      DataFusionBindings.STREAM_NEXT.invokeExact(
+                          runtime, stream, arrayOut, schemaOut, errorOut));
 
       if (result == 0) {
         // End of stream
@@ -107,11 +108,12 @@ public class RecordBatchStream implements RecordBatchReader, DictionaryProvider 
   private Schema getSchema() {
     try (Arena arena = Arena.ofConfined()) {
       MemorySegment schemaOut = arena.allocate(ARROW_SCHEMA_SIZE);
-      MemorySegment errorOut = NativeUtil.allocateErrorOut(arena);
 
-      int result = (int) DataFusionBindings.STREAM_SCHEMA.invokeExact(stream, schemaOut, errorOut);
-
-      NativeUtil.checkResult(result, errorOut, "Get schema");
+      NativeUtil.call(
+          arena,
+          "Get schema",
+          errorOut ->
+              (int) DataFusionBindings.STREAM_SCHEMA.invokeExact(stream, schemaOut, errorOut));
 
       ArrowSchema arrowSchema = ArrowSchema.wrap(schemaOut.address());
       return Data.importSchema(allocator, arrowSchema, dictionaryProvider);

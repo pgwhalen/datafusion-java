@@ -35,13 +35,14 @@ public class DataFrame implements AutoCloseable {
     checkNotClosed();
 
     try (Arena arena = Arena.ofConfined()) {
-      MemorySegment errorOut = NativeUtil.allocateErrorOut(arena);
-
       MemorySegment stream =
-          (MemorySegment)
-              DataFusionBindings.DATAFRAME_EXECUTE_STREAM.invokeExact(runtime, dataframe, errorOut);
-
-      NativeUtil.checkPointer(stream, errorOut, "Execute stream");
+          NativeUtil.callForPointer(
+              arena,
+              "Execute stream",
+              errorOut ->
+                  (MemorySegment)
+                      DataFusionBindings.DATAFRAME_EXECUTE_STREAM.invokeExact(
+                          runtime, dataframe, errorOut));
 
       logger.debug("Created RecordBatchStream: {}", stream);
       return new RecordBatchStream(runtime, stream, allocator);

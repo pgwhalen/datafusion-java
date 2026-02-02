@@ -32,16 +32,95 @@ final class ExecutionPlanHandle implements AutoCloseable {
   private static final long OFFSET_EXECUTE_FN = 24;
   private static final long OFFSET_RELEASE_FN = 32;
 
+  // Static FunctionDescriptors - define the FFI signatures once at class load
+  private static final FunctionDescriptor SCHEMA_DESC =
+      FunctionDescriptor.of(
+          ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS);
+
+  private static final FunctionDescriptor OUTPUT_PARTITIONING_DESC =
+      FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS);
+
+  private static final FunctionDescriptor EXECUTE_DESC =
+      FunctionDescriptor.of(
+          ValueLayout.JAVA_INT,
+          ValueLayout.ADDRESS,
+          ValueLayout.JAVA_LONG,
+          ValueLayout.ADDRESS,
+          ValueLayout.ADDRESS);
+
+  private static final FunctionDescriptor RELEASE_DESC =
+      FunctionDescriptor.ofVoid(ValueLayout.ADDRESS);
+
+  // Static MethodHandles - looked up once at class load
+  private static final MethodHandle SCHEMA_MH = initSchemaMethodHandle();
+  private static final MethodHandle OUTPUT_PARTITIONING_MH = initOutputPartitioningMethodHandle();
+  private static final MethodHandle EXECUTE_MH = initExecuteMethodHandle();
+  private static final MethodHandle RELEASE_MH = initReleaseMethodHandle();
+
+  private static MethodHandle initSchemaMethodHandle() {
+    try {
+      return MethodHandles.lookup()
+          .findVirtual(
+              ExecutionPlanHandle.class,
+              "getSchema",
+              MethodType.methodType(
+                  int.class, MemorySegment.class, MemorySegment.class, MemorySegment.class));
+    } catch (NoSuchMethodException | IllegalAccessException e) {
+      throw new ExceptionInInitializerError(e);
+    }
+  }
+
+  private static MethodHandle initOutputPartitioningMethodHandle() {
+    try {
+      return MethodHandles.lookup()
+          .findVirtual(
+              ExecutionPlanHandle.class,
+              "getOutputPartitioning",
+              MethodType.methodType(int.class, MemorySegment.class));
+    } catch (NoSuchMethodException | IllegalAccessException e) {
+      throw new ExceptionInInitializerError(e);
+    }
+  }
+
+  private static MethodHandle initExecuteMethodHandle() {
+    try {
+      return MethodHandles.lookup()
+          .findVirtual(
+              ExecutionPlanHandle.class,
+              "execute",
+              MethodType.methodType(
+                  int.class,
+                  MemorySegment.class,
+                  long.class,
+                  MemorySegment.class,
+                  MemorySegment.class));
+    } catch (NoSuchMethodException | IllegalAccessException e) {
+      throw new ExceptionInInitializerError(e);
+    }
+  }
+
+  private static MethodHandle initReleaseMethodHandle() {
+    try {
+      return MethodHandles.lookup()
+          .findVirtual(
+              ExecutionPlanHandle.class,
+              "release",
+              MethodType.methodType(void.class, MemorySegment.class));
+    } catch (NoSuchMethodException | IllegalAccessException e) {
+      throw new ExceptionInInitializerError(e);
+    }
+  }
+
   private final Arena arena;
   private final ExecutionPlan plan;
   private final BufferAllocator allocator;
   private final MemorySegment callbackStruct;
 
   // Keep references to upcall stubs to prevent GC
-  private final MemorySegment schemaStub;
-  private final MemorySegment outputPartitioningStub;
-  private final MemorySegment executeStub;
-  private final MemorySegment releaseStub;
+  private final UpcallStub schemaStub;
+  private final UpcallStub outputPartitioningStub;
+  private final UpcallStub executeStub;
+  private final UpcallStub releaseStub;
 
   ExecutionPlanHandle(ExecutionPlan plan, BufferAllocator allocator, Arena arena) {
     this.arena = arena;
@@ -57,64 +136,21 @@ final class ExecutionPlanHandle implements AutoCloseable {
         throw new DataFusionException("Failed to allocate ExecutionPlan callbacks");
       }
 
-      // Create upcall stubs for the callback functions
-      MethodHandles.Lookup lookup = MethodHandles.lookup();
-      Linker linker = DataFusionBindings.getLinker();
-
-      // schema_fn: (java_object, schema_out, error_out) -> i32
-      MethodHandle schemaHandle =
-          lookup.bind(
-              this,
-              "getSchema",
-              MethodType.methodType(
-                  int.class, MemorySegment.class, MemorySegment.class, MemorySegment.class));
-      FunctionDescriptor schemaDesc =
-          FunctionDescriptor.of(
-              ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS);
-      this.schemaStub = linker.upcallStub(schemaHandle, schemaDesc, arena);
-
-      // output_partitioning_fn: (java_object) -> i32
-      MethodHandle outputPartitioningHandle =
-          lookup.bind(
-              this, "getOutputPartitioning", MethodType.methodType(int.class, MemorySegment.class));
-      FunctionDescriptor outputPartitioningDesc =
-          FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS);
+      // Create upcall stubs - only the stubs are per-instance
+      this.schemaStub = UpcallStub.create(SCHEMA_MH.bindTo(this), SCHEMA_DESC, arena);
       this.outputPartitioningStub =
-          linker.upcallStub(outputPartitioningHandle, outputPartitioningDesc, arena);
-
-      // execute_fn: (java_object, partition, reader_out, error_out) -> i32
-      MethodHandle executeHandle =
-          lookup.bind(
-              this,
-              "execute",
-              MethodType.methodType(
-                  int.class,
-                  MemorySegment.class,
-                  long.class,
-                  MemorySegment.class,
-                  MemorySegment.class));
-      FunctionDescriptor executeDesc =
-          FunctionDescriptor.of(
-              ValueLayout.JAVA_INT,
-              ValueLayout.ADDRESS,
-              ValueLayout.JAVA_LONG,
-              ValueLayout.ADDRESS,
-              ValueLayout.ADDRESS);
-      this.executeStub = linker.upcallStub(executeHandle, executeDesc, arena);
-
-      // release_fn: (java_object) -> void
-      MethodHandle releaseHandle =
-          lookup.bind(this, "release", MethodType.methodType(void.class, MemorySegment.class));
-      FunctionDescriptor releaseDesc = FunctionDescriptor.ofVoid(ValueLayout.ADDRESS);
-      this.releaseStub = linker.upcallStub(releaseHandle, releaseDesc, arena);
+          UpcallStub.create(OUTPUT_PARTITIONING_MH.bindTo(this), OUTPUT_PARTITIONING_DESC, arena);
+      this.executeStub = UpcallStub.create(EXECUTE_MH.bindTo(this), EXECUTE_DESC, arena);
+      this.releaseStub = UpcallStub.create(RELEASE_MH.bindTo(this), RELEASE_DESC, arena);
 
       // Set up the callback struct
       MemorySegment struct = callbackStruct.reinterpret(40); // struct size
       struct.set(ValueLayout.ADDRESS, OFFSET_JAVA_OBJECT, MemorySegment.NULL);
-      struct.set(ValueLayout.ADDRESS, OFFSET_SCHEMA_FN, schemaStub);
-      struct.set(ValueLayout.ADDRESS, OFFSET_OUTPUT_PARTITIONING_FN, outputPartitioningStub);
-      struct.set(ValueLayout.ADDRESS, OFFSET_EXECUTE_FN, executeStub);
-      struct.set(ValueLayout.ADDRESS, OFFSET_RELEASE_FN, releaseStub);
+      struct.set(ValueLayout.ADDRESS, OFFSET_SCHEMA_FN, schemaStub.segment());
+      struct.set(
+          ValueLayout.ADDRESS, OFFSET_OUTPUT_PARTITIONING_FN, outputPartitioningStub.segment());
+      struct.set(ValueLayout.ADDRESS, OFFSET_EXECUTE_FN, executeStub.segment());
+      struct.set(ValueLayout.ADDRESS, OFFSET_RELEASE_FN, releaseStub.segment());
 
     } catch (Throwable e) {
       throw new DataFusionException("Failed to create ExecutionPlanHandle", e);
@@ -147,7 +183,7 @@ final class ExecutionPlanHandle implements AutoCloseable {
 
       return 0;
     } catch (Exception e) {
-      setError(errorOut, e.getMessage());
+      new ErrorOut(errorOut).set(e.getMessage(), arena);
       return -1;
     }
   }
@@ -169,12 +205,11 @@ final class ExecutionPlanHandle implements AutoCloseable {
       RecordBatchReaderHandle readerHandle = new RecordBatchReaderHandle(reader, allocator, arena);
 
       // Return the callback struct pointer
-      MemorySegment readerCallbacks = readerHandle.getCallbackStruct();
-      readerOut.reinterpret(8).set(ValueLayout.ADDRESS, 0, readerCallbacks);
+      new PointerOut(readerOut).set(readerHandle.getCallbackStruct());
 
       return 0;
     } catch (Exception e) {
-      setError(errorOut, e.getMessage());
+      new ErrorOut(errorOut).set(e.getMessage(), arena);
       return -1;
     }
   }
@@ -183,18 +218,6 @@ final class ExecutionPlanHandle implements AutoCloseable {
   @SuppressWarnings("unused")
   void release(MemorySegment javaObject) {
     // Cleanup happens when arena is closed
-  }
-
-  private void setError(MemorySegment errorOut, String message) {
-    if (errorOut.equals(MemorySegment.NULL)) {
-      return;
-    }
-    try {
-      MemorySegment msgSegment = arena.allocateUtf8String(message);
-      errorOut.reinterpret(8).set(ValueLayout.ADDRESS, 0, msgSegment);
-    } catch (Exception ignored) {
-      // Best effort error reporting
-    }
   }
 
   @Override

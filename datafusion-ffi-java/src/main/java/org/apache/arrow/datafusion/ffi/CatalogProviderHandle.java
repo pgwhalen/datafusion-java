@@ -26,15 +26,86 @@ final class CatalogProviderHandle implements AutoCloseable {
   private static final long OFFSET_SCHEMA_FN = 16;
   private static final long OFFSET_RELEASE_FN = 24;
 
+  // Static FunctionDescriptors - define the FFI signatures once at class load
+  private static final FunctionDescriptor SCHEMA_NAMES_DESC =
+      FunctionDescriptor.of(
+          ValueLayout.JAVA_INT,
+          ValueLayout.ADDRESS,
+          ValueLayout.ADDRESS,
+          ValueLayout.ADDRESS,
+          ValueLayout.ADDRESS);
+
+  private static final FunctionDescriptor SCHEMA_DESC =
+      FunctionDescriptor.of(
+          ValueLayout.JAVA_INT,
+          ValueLayout.ADDRESS,
+          ValueLayout.ADDRESS,
+          ValueLayout.ADDRESS,
+          ValueLayout.ADDRESS);
+
+  private static final FunctionDescriptor RELEASE_DESC =
+      FunctionDescriptor.ofVoid(ValueLayout.ADDRESS);
+
+  // Static MethodHandles - looked up once at class load
+  private static final MethodHandle SCHEMA_NAMES_MH = initSchemaNamesMethodHandle();
+  private static final MethodHandle SCHEMA_MH = initSchemaMethodHandle();
+  private static final MethodHandle RELEASE_MH = initReleaseMethodHandle();
+
+  private static MethodHandle initSchemaNamesMethodHandle() {
+    try {
+      return MethodHandles.lookup()
+          .findVirtual(
+              CatalogProviderHandle.class,
+              "getSchemaNames",
+              MethodType.methodType(
+                  int.class,
+                  MemorySegment.class,
+                  MemorySegment.class,
+                  MemorySegment.class,
+                  MemorySegment.class));
+    } catch (NoSuchMethodException | IllegalAccessException e) {
+      throw new ExceptionInInitializerError(e);
+    }
+  }
+
+  private static MethodHandle initSchemaMethodHandle() {
+    try {
+      return MethodHandles.lookup()
+          .findVirtual(
+              CatalogProviderHandle.class,
+              "getSchema",
+              MethodType.methodType(
+                  int.class,
+                  MemorySegment.class,
+                  MemorySegment.class,
+                  MemorySegment.class,
+                  MemorySegment.class));
+    } catch (NoSuchMethodException | IllegalAccessException e) {
+      throw new ExceptionInInitializerError(e);
+    }
+  }
+
+  private static MethodHandle initReleaseMethodHandle() {
+    try {
+      return MethodHandles.lookup()
+          .findVirtual(
+              CatalogProviderHandle.class,
+              "release",
+              MethodType.methodType(void.class, MemorySegment.class));
+    } catch (NoSuchMethodException | IllegalAccessException e) {
+      throw new ExceptionInInitializerError(e);
+    }
+  }
+
   private final Arena arena;
   private final CatalogProvider provider;
   private final BufferAllocator allocator;
   private final MemorySegment callbackStruct;
 
   // Keep references to upcall stubs to prevent GC
-  private final MemorySegment schemaNamesStub;
-  private final MemorySegment schemaStub;
-  private final MemorySegment releaseStub;
+  private final UpcallStub schemaNamesStub;
+  private final UpcallStub schemaStub;
+  private final UpcallStub releaseStub;
 
   CatalogProviderHandle(CatalogProvider provider, BufferAllocator allocator, Arena arena) {
     this.arena = arena;
@@ -50,62 +121,18 @@ final class CatalogProviderHandle implements AutoCloseable {
         throw new DataFusionException("Failed to allocate CatalogProvider callbacks");
       }
 
-      // Create upcall stubs for the callback functions
-      MethodHandles.Lookup lookup = MethodHandles.lookup();
-      Linker linker = DataFusionBindings.getLinker();
-
-      // schema_names_fn: (java_object, names_out, names_len_out, error_out) -> i32
-      MethodHandle schemaNamesHandle =
-          lookup.bind(
-              this,
-              "getSchemaNames",
-              MethodType.methodType(
-                  int.class,
-                  MemorySegment.class,
-                  MemorySegment.class,
-                  MemorySegment.class,
-                  MemorySegment.class));
-      FunctionDescriptor schemaNamesDesc =
-          FunctionDescriptor.of(
-              ValueLayout.JAVA_INT,
-              ValueLayout.ADDRESS,
-              ValueLayout.ADDRESS,
-              ValueLayout.ADDRESS,
-              ValueLayout.ADDRESS);
-      this.schemaNamesStub = linker.upcallStub(schemaNamesHandle, schemaNamesDesc, arena);
-
-      // schema_fn: (java_object, name, schema_out, error_out) -> i32
-      MethodHandle schemaHandle =
-          lookup.bind(
-              this,
-              "getSchema",
-              MethodType.methodType(
-                  int.class,
-                  MemorySegment.class,
-                  MemorySegment.class,
-                  MemorySegment.class,
-                  MemorySegment.class));
-      FunctionDescriptor schemaDesc =
-          FunctionDescriptor.of(
-              ValueLayout.JAVA_INT,
-              ValueLayout.ADDRESS,
-              ValueLayout.ADDRESS,
-              ValueLayout.ADDRESS,
-              ValueLayout.ADDRESS);
-      this.schemaStub = linker.upcallStub(schemaHandle, schemaDesc, arena);
-
-      // release_fn: (java_object) -> void
-      MethodHandle releaseHandle =
-          lookup.bind(this, "release", MethodType.methodType(void.class, MemorySegment.class));
-      FunctionDescriptor releaseDesc = FunctionDescriptor.ofVoid(ValueLayout.ADDRESS);
-      this.releaseStub = linker.upcallStub(releaseHandle, releaseDesc, arena);
+      // Create upcall stubs - only the stubs are per-instance
+      this.schemaNamesStub =
+          UpcallStub.create(SCHEMA_NAMES_MH.bindTo(this), SCHEMA_NAMES_DESC, arena);
+      this.schemaStub = UpcallStub.create(SCHEMA_MH.bindTo(this), SCHEMA_DESC, arena);
+      this.releaseStub = UpcallStub.create(RELEASE_MH.bindTo(this), RELEASE_DESC, arena);
 
       // Set up the callback struct
       MemorySegment struct = callbackStruct.reinterpret(32); // struct size
       struct.set(ValueLayout.ADDRESS, OFFSET_JAVA_OBJECT, MemorySegment.NULL);
-      struct.set(ValueLayout.ADDRESS, OFFSET_SCHEMA_NAMES_FN, schemaNamesStub);
-      struct.set(ValueLayout.ADDRESS, OFFSET_SCHEMA_FN, schemaStub);
-      struct.set(ValueLayout.ADDRESS, OFFSET_RELEASE_FN, releaseStub);
+      struct.set(ValueLayout.ADDRESS, OFFSET_SCHEMA_NAMES_FN, schemaNamesStub.segment());
+      struct.set(ValueLayout.ADDRESS, OFFSET_SCHEMA_FN, schemaStub.segment());
+      struct.set(ValueLayout.ADDRESS, OFFSET_RELEASE_FN, releaseStub.segment());
 
     } catch (Throwable e) {
       throw new DataFusionException("Failed to create CatalogProviderHandle", e);
@@ -126,10 +153,12 @@ final class CatalogProviderHandle implements AutoCloseable {
       MemorySegment errorOut) {
     try {
       List<String> names = provider.schemaNames();
+      PointerOut namesOutPtr = new PointerOut(namesOut);
+      LongOut namesLenOutVal = new LongOut(namesLenOut);
 
       if (names.isEmpty()) {
-        namesOut.reinterpret(8).set(ValueLayout.ADDRESS, 0, MemorySegment.NULL);
-        namesLenOut.reinterpret(8).set(ValueLayout.JAVA_LONG, 0, 0L);
+        namesOutPtr.setNull();
+        namesLenOutVal.set(0L);
         return 0;
       }
 
@@ -141,12 +170,12 @@ final class CatalogProviderHandle implements AutoCloseable {
         stringArray.setAtIndex(ValueLayout.ADDRESS, i, nameSegment);
       }
 
-      namesOut.reinterpret(8).set(ValueLayout.ADDRESS, 0, stringArray);
-      namesLenOut.reinterpret(8).set(ValueLayout.JAVA_LONG, 0, (long) names.size());
+      namesOutPtr.set(stringArray);
+      namesLenOutVal.set(names.size());
 
       return 0;
     } catch (Exception e) {
-      setError(errorOut, e.getMessage());
+      new ErrorOut(errorOut).set(e.getMessage(), arena);
       return -1;
     }
   }
@@ -159,11 +188,12 @@ final class CatalogProviderHandle implements AutoCloseable {
       MemorySegment schemaOut,
       MemorySegment errorOut) {
     try {
-      String schemaName = name.reinterpret(1024).getUtf8String(0);
+      String schemaName = new NativeString(name).value();
       SchemaProvider schema = provider.schema(schemaName);
+      PointerOut schemaOutPtr = new PointerOut(schemaOut);
 
       if (schema == null) {
-        schemaOut.reinterpret(8).set(ValueLayout.ADDRESS, 0, MemorySegment.NULL);
+        schemaOutPtr.setNull();
         return 0;
       }
 
@@ -171,12 +201,11 @@ final class CatalogProviderHandle implements AutoCloseable {
       SchemaProviderHandle schemaHandle = new SchemaProviderHandle(schema, allocator, arena);
 
       // Return the callback struct pointer
-      MemorySegment schemaCallbacks = schemaHandle.getCallbackStruct();
-      schemaOut.reinterpret(8).set(ValueLayout.ADDRESS, 0, schemaCallbacks);
+      schemaOutPtr.set(schemaHandle.getCallbackStruct());
 
       return 0;
     } catch (Exception e) {
-      setError(errorOut, e.getMessage());
+      new ErrorOut(errorOut).set(e.getMessage(), arena);
       return -1;
     }
   }
@@ -185,18 +214,6 @@ final class CatalogProviderHandle implements AutoCloseable {
   @SuppressWarnings("unused")
   void release(MemorySegment javaObject) {
     // Cleanup happens when arena is closed
-  }
-
-  private void setError(MemorySegment errorOut, String message) {
-    if (errorOut.equals(MemorySegment.NULL)) {
-      return;
-    }
-    try {
-      MemorySegment msgSegment = arena.allocateUtf8String(message);
-      errorOut.reinterpret(8).set(ValueLayout.ADDRESS, 0, msgSegment);
-    } catch (Exception ignored) {
-      // Best effort error reporting
-    }
   }
 
   @Override
