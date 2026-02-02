@@ -1,5 +1,7 @@
 package org.apache.arrow.datafusion.ffi;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
@@ -13,10 +15,18 @@ import java.lang.foreign.ValueLayout;
  *
  * @param segment the memory segment to write the error pointer to
  */
-record ErrorOut(MemorySegment segment) {
+public record ErrorOut(MemorySegment segment) {
 
   /** The standard success return code for upcall callbacks. */
   public static final int SUCCESS = 0;
+
+  /**
+   * When true, {@link #fromException} includes the full stack trace in error messages. Controlled
+   * by the FULL_JAVA_STACK_TRACE environment variable.
+   */
+  public static final boolean FULL_STACK_TRACE =
+      System.getenv("FULL_JAVA_STACK_TRACE") != null
+          && !System.getenv("FULL_JAVA_STACK_TRACE").isEmpty();
 
   /**
    * Writes an error message to the output segment.
@@ -49,13 +59,24 @@ record ErrorOut(MemorySegment segment) {
    * }
    * }</pre>
    *
+   * <p>When the FULL_JAVA_STACK_TRACE environment variable is set, includes the full stack trace in
+   * the error message. Otherwise, only the exception message is included.
+   *
    * @param errorOut the error output segment
    * @param e the exception to report
    * @param arena the arena to allocate the error string in
    * @return -1 (the standard error return code)
    */
   public static int fromException(MemorySegment errorOut, Exception e, Arena arena) {
-    new ErrorOut(errorOut).set(e.getMessage(), arena);
+    String message;
+    if (FULL_STACK_TRACE) {
+      StringWriter sw = new StringWriter();
+      e.printStackTrace(new PrintWriter(sw));
+      message = sw.toString();
+    } else {
+      message = e.getMessage();
+    }
+    new ErrorOut(errorOut).set(message, arena);
     return -1;
   }
 }

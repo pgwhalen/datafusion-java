@@ -124,6 +124,8 @@ return ErrorOut.SUCCESS;
 }
 ```
 
+When debugging FFI callback errors, set the `FULL_JAVA_STACK_TRACE` environment variable to include full Java stack traces in error messages. This helps trace exactly where exceptions originated in Java code.
+
 ## Upcall Stub Pattern (Java Callbacks)
 
 When creating Java callbacks that Rust can invoke, follow these patterns:
