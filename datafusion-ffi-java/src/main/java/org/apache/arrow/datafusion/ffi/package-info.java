@@ -32,7 +32,5 @@
  *     }
  * }
  * }</pre>
- *
- * <p>Note: This API requires Java 21+ with preview features enabled.
  */
 package org.apache.arrow.datafusion.ffi;
