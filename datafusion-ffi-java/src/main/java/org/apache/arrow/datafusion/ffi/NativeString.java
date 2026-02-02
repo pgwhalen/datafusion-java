@@ -19,7 +19,7 @@ record NativeString(MemorySegment segment) {
    * @return the Java string value
    */
   public String value() {
-    return segment.reinterpret(DEFAULT_MAX_LENGTH).getUtf8String(0);
+    return segment.reinterpret(DEFAULT_MAX_LENGTH).getString(0);
   }
 
   /**
@@ -29,6 +29,6 @@ record NativeString(MemorySegment segment) {
    * @return the Java string value
    */
   public String value(long maxLength) {
-    return segment.reinterpret(maxLength).getUtf8String(0);
+    return segment.reinterpret(maxLength).getString(0);
   }
 }

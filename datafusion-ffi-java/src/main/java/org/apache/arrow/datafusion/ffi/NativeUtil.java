@@ -201,7 +201,7 @@ public final class NativeUtil {
       }
 
       // Reinterpret with the exact size needed (length + 1 for null terminator)
-      return errorPtr.reinterpret(len + 1).getUtf8String(0);
+      return errorPtr.reinterpret(len + 1).getString(0);
     } catch (Throwable e) {
       // If we fail to read the message, return a fallback
       return "(failed to read error message: " + e.getMessage() + ")";

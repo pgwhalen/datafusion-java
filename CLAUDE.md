@@ -186,7 +186,7 @@ impl std::fmt::Debug for JavaBackedTableProvider {
 ## Build Instructions
 
 ### Prerequisites
-- Java 21+ (for FFM preview features)
+- Java 22+
 - Rust toolchain (cargo)
 
 ### Build and Test the FFM Module
@@ -290,7 +290,7 @@ public void newFunction() {
 ## Dependencies
 
 ### Java (datafusion-ffi-java)
-- Java 21+ with `--enable-preview`
+- Java 22+
 - arrow-vector 18.1.0
 - arrow-c-data 18.1.0
 - JUnit 5 for testing
@@ -303,7 +303,7 @@ public void newFunction() {
 
 ## Known Issues
 
-1. **Java 21 preview features**: The FFM API is preview in Java 21, stable in Java 22+. Code uses `allocateUtf8String` and `getUtf8String` methods.
+1. **FFM API methods**: Code uses `allocateFrom` and `getString` methods from the FFM API (stable in Java 22+).
 
 2. **Legacy module build failures**: The `datafusion-jni` crate has dependency conflicts with newer chrono versions. This is a known issue - use module-specific Gradle commands.
 

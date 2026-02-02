@@ -166,7 +166,7 @@ final class CatalogProviderHandle implements AutoCloseable {
       MemorySegment stringArray = arena.allocate(ValueLayout.ADDRESS.byteSize() * names.size());
 
       for (int i = 0; i < names.size(); i++) {
-        MemorySegment nameSegment = arena.allocateUtf8String(names.get(i));
+        MemorySegment nameSegment = arena.allocateFrom(names.get(i));
         stringArray.setAtIndex(ValueLayout.ADDRESS, i, nameSegment);
       }
 

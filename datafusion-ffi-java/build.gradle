@@ -5,17 +5,15 @@ plugins {
     id 'com.google.osdetector'
 }
 
-// FFM requires Java 21+ with preview features
+// FFM API is stable in Java 22+
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+        languageVersion = JavaLanguageVersion.of(22)
     }
 }
 
 tasks.withType(JavaCompile).configureEach {
-    options.compilerArgs += ['--enable-preview']
-    // No down-compilation - FFM needs Java 21+
-    options.release.set(21)
+    options.release.set(22)
 }
 
 dependencies {
@@ -64,7 +62,6 @@ test {
     dependsOn copyDevLibrary
     def libPath = layout.buildDirectory.dir("ffi_libs/dev").get().asFile.path
     jvmArgs += [
-        '--enable-preview',
         "--enable-native-access=ALL-UNNAMED",
         "-Djava.library.path=$libPath",
         '--add-opens=java.base/java.nio=ALL-UNNAMED'

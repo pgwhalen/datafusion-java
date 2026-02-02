@@ -88,7 +88,7 @@ public class SessionContext implements AutoCloseable {
       Data.exportVectorSchemaRoot(allocator, root, provider, ffiArray, ffiSchema);
 
       // Create null-terminated string for table name
-      MemorySegment nameSegment = arena.allocateUtf8String(name);
+      MemorySegment nameSegment = arena.allocateFrom(name);
 
       // Get memory addresses from Arrow C Data structures
       MemorySegment schemaAddr = MemorySegment.ofAddress(ffiSchema.memoryAddress());
@@ -121,7 +121,7 @@ public class SessionContext implements AutoCloseable {
     checkNotClosed();
 
     try (Arena arena = Arena.ofConfined()) {
-      MemorySegment querySegment = arena.allocateUtf8String(query);
+      MemorySegment querySegment = arena.allocateFrom(query);
 
       MemorySegment dataframe =
           NativeUtil.callForPointer(
@@ -170,7 +170,7 @@ public class SessionContext implements AutoCloseable {
       CatalogProviderHandle handle = new CatalogProviderHandle(catalog, allocator, catalogArena);
       catalogHandles.add(handle);
 
-      MemorySegment nameSegment = arena.allocateUtf8String(name);
+      MemorySegment nameSegment = arena.allocateFrom(name);
       MemorySegment callbacks = handle.getCallbackStruct();
 
       NativeUtil.call(

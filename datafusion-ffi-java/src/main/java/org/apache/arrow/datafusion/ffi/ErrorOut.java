@@ -28,7 +28,7 @@ record ErrorOut(MemorySegment segment) {
       return;
     }
     try {
-      MemorySegment msgSegment = arena.allocateUtf8String(message);
+      MemorySegment msgSegment = arena.allocateFrom(message);
       segment.reinterpret(8).set(ValueLayout.ADDRESS, 0, msgSegment);
     } catch (Exception ignored) {
       // Best effort error reporting
