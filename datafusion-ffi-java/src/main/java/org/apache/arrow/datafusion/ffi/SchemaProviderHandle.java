@@ -5,6 +5,8 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.util.List;
+import java.util.Optional;
+
 import org.apache.arrow.datafusion.DataFusionException;
 import org.apache.arrow.datafusion.SchemaProvider;
 import org.apache.arrow.datafusion.TableProvider;
@@ -212,16 +214,16 @@ final class SchemaProviderHandle implements AutoCloseable {
       MemorySegment errorOut) {
     try {
       String tableName = new NativeString(name).value();
-      TableProvider table = provider.table(tableName);
+      Optional<TableProvider> table = provider.table(tableName);
       PointerOut tableOutPtr = new PointerOut(tableOut);
 
-      if (table == null) {
+      if (table.isEmpty()) {
         tableOutPtr.setNull();
         return 0;
       }
 
       // Create a handle for the table
-      TableProviderHandle tableHandle = new TableProviderHandle(table, allocator, arena);
+      TableProviderHandle tableHandle = new TableProviderHandle(table.get(), allocator, arena);
 
       // Return the callback struct pointer
       tableOutPtr.set(tableHandle.getCallbackStruct());

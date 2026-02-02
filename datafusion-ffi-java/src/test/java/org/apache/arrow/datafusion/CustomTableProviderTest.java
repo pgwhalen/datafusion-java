@@ -2,10 +2,8 @@ package org.apache.arrow.datafusion;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.BigIntVector;
@@ -349,8 +347,8 @@ public class CustomTableProviderTest {
     }
 
     @Override
-    public TableProvider table(String name) {
-      return tables.get(name);
+    public Optional<TableProvider> table(String name) {
+      return Optional.ofNullable(tables.get(name));
     }
   }
 
@@ -368,8 +366,8 @@ public class CustomTableProviderTest {
     }
 
     @Override
-    public SchemaProvider schema(String name) {
-      return schemas.get(name);
+    public Optional<SchemaProvider> schema(String name) {
+      return Optional.ofNullable(schemas.get(name));
     }
   }
 }

@@ -1,6 +1,7 @@
 package org.apache.arrow.datafusion;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * A provider of schemas within a catalog.
@@ -40,5 +41,5 @@ public interface CatalogProvider {
    * @param name The schema name
    * @return The schema provider, or null if the schema doesn't exist
    */
-  SchemaProvider schema(String name);
+  Optional<SchemaProvider> schema(String name);
 }

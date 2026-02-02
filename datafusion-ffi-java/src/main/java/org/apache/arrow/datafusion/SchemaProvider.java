@@ -1,6 +1,7 @@
 package org.apache.arrow.datafusion;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * A provider of tables within a catalog schema.
@@ -40,7 +41,7 @@ public interface SchemaProvider {
    * @param name The table name
    * @return The table provider, or null if the table doesn't exist
    */
-  TableProvider table(String name);
+  Optional<TableProvider> table(String name);
 
   /**
    * Checks if a table exists in this schema.
@@ -51,6 +52,6 @@ public interface SchemaProvider {
    * @return true if the table exists
    */
   default boolean tableExists(String name) {
-    return table(name) != null;
+    return table(name).isPresent();
   }
 }

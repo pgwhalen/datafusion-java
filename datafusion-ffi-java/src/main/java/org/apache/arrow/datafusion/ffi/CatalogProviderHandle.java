@@ -5,6 +5,8 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.util.List;
+import java.util.Optional;
+
 import org.apache.arrow.datafusion.CatalogProvider;
 import org.apache.arrow.datafusion.DataFusionException;
 import org.apache.arrow.datafusion.SchemaProvider;
@@ -191,16 +193,16 @@ final class CatalogProviderHandle implements AutoCloseable {
       MemorySegment errorOut) {
     try {
       String schemaName = new NativeString(name).value();
-      SchemaProvider schema = provider.schema(schemaName);
+      Optional<SchemaProvider> schema = provider.schema(schemaName);
       PointerOut schemaOutPtr = new PointerOut(schemaOut);
 
-      if (schema == null) {
+      if (schema.isEmpty()) {
         schemaOutPtr.setNull();
         return 0;
       }
 
       // Create a handle for the schema
-      SchemaProviderHandle schemaHandle = new SchemaProviderHandle(schema, allocator, arena);
+      SchemaProviderHandle schemaHandle = new SchemaProviderHandle(schema.get(), allocator, arena);
 
       // Return the callback struct pointer
       schemaOutPtr.set(schemaHandle.getCallbackStruct());
