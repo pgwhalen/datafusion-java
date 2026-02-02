@@ -15,6 +15,9 @@ import java.lang.foreign.ValueLayout;
  */
 record ErrorOut(MemorySegment segment) {
 
+  /** The standard success return code for upcall callbacks. */
+  public static final int SUCCESS = 0;
+
   /**
    * Writes an error message to the output segment.
    *

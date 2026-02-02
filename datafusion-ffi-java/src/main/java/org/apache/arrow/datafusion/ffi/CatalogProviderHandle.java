@@ -6,7 +6,6 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.util.List;
 import java.util.Optional;
-
 import org.apache.arrow.datafusion.CatalogProvider;
 import org.apache.arrow.datafusion.DataFusionException;
 import org.apache.arrow.datafusion.SchemaProvider;
@@ -164,7 +163,7 @@ final class CatalogProviderHandle implements AutoCloseable {
       if (names.isEmpty()) {
         namesOutPtr.setNull();
         namesLenOutVal.set(0L);
-        return 0;
+        return ErrorOut.SUCCESS;
       }
 
       // Allocate array of string pointers (address size * count)
@@ -178,7 +177,7 @@ final class CatalogProviderHandle implements AutoCloseable {
       namesOutPtr.set(stringArray);
       namesLenOutVal.set(names.size());
 
-      return 0;
+      return ErrorOut.SUCCESS;
     } catch (Exception e) {
       return ErrorOut.fromException(errorOut, e, arena);
     }
@@ -198,7 +197,7 @@ final class CatalogProviderHandle implements AutoCloseable {
 
       if (schema.isEmpty()) {
         schemaOutPtr.setNull();
-        return 0;
+        return ErrorOut.SUCCESS;
       }
 
       // Create a handle for the schema
@@ -207,7 +206,7 @@ final class CatalogProviderHandle implements AutoCloseable {
       // Return the callback struct pointer
       schemaOutPtr.set(schemaHandle.getCallbackStruct());
 
-      return 0;
+      return ErrorOut.SUCCESS;
     } catch (Exception e) {
       return ErrorOut.fromException(errorOut, e, arena);
     }

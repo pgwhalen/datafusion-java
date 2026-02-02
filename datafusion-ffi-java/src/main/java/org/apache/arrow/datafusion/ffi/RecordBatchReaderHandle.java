@@ -19,6 +19,10 @@ import org.apache.arrow.vector.VectorSchemaRoot;
  * RecordBatchReader}. It manages the lifecycle of the callback struct and upcall stubs.
  */
 final class RecordBatchReaderHandle implements AutoCloseable {
+  // Stream callback return codes (different from standard SUCCESS/ERROR)
+  private static final int STREAM_END = 0;
+  private static final int STREAM_HAS_DATA = 1;
+
   // Size of FFI_ArrowSchema and FFI_ArrowArray structures
   private static final long ARROW_SCHEMA_SIZE = 72;
   private static final long ARROW_ARRAY_SIZE = 80;
@@ -132,7 +136,7 @@ final class RecordBatchReaderHandle implements AutoCloseable {
     try {
       boolean hasNext = reader.loadNextBatch();
       if (!hasNext) {
-        return 0; // End of stream
+        return STREAM_END;
       }
 
       VectorSchemaRoot root = reader.getVectorSchemaRoot();
@@ -164,7 +168,7 @@ final class RecordBatchReaderHandle implements AutoCloseable {
         srcArray.set(ValueLayout.ADDRESS, 72, MemorySegment.NULL);
       }
 
-      return 1; // Batch available
+      return STREAM_HAS_DATA;
 
     } catch (Exception e) {
       return ErrorOut.fromException(errorOut, e, arena);

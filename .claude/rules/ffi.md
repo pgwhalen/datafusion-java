@@ -113,12 +113,12 @@ new PointerOut(tableOut).setNull();  // for null case
 new LongOut(lenOut).set(len);
 ```
 
-**ErrorOut** - for returning error messages from callbacks:
+**ErrorOut** - for callback return values:
 ```java
-// For setting an error without returning:
-new ErrorOut(errorOut).set(e.getMessage(), arena);
+// For the success case:
+return ErrorOut.SUCCESS;
 
-// For the common catch-and-return pattern in callbacks (preferred):
+// For the error case (preferred pattern):
 } catch (Exception e) {
   return ErrorOut.fromException(errorOut, e, arena);
 }
@@ -165,7 +165,7 @@ final class SomeHandle implements AutoCloseable {
     int callback(MemorySegment javaObject, MemorySegment errorOut) {
         try {
             // ... implementation
-            return 0;
+            return ErrorOut.SUCCESS;
         } catch (Exception e) {
             return ErrorOut.fromException(errorOut, e, arena);
         }

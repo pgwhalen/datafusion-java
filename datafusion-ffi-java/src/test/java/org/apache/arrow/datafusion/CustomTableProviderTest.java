@@ -3,7 +3,6 @@ package org.apache.arrow.datafusion;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.*;
-
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.BigIntVector;
@@ -275,10 +274,10 @@ public class CustomTableProviderTest {
     private final Schema schema;
     private final VectorSchemaRoot data;
 
-      SimpleExecutionPlan(Schema schema, VectorSchemaRoot data) {
-        this.schema = schema;
-        this.data = data;
-      }
+    SimpleExecutionPlan(Schema schema, VectorSchemaRoot data) {
+      this.schema = schema;
+      this.data = data;
+    }
 
     @Override
     public Schema schema() {
