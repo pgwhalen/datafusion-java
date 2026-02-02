@@ -1,4 +1,4 @@
-package org.apache.arrow.datafusion.ffi;
+package org.apache.arrow.datafusion;
 
 import java.util.List;
 

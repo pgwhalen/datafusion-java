@@ -1,7 +1,9 @@
-package org.apache.arrow.datafusion.ffi;
+package org.apache.arrow.datafusion;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import org.apache.arrow.datafusion.ffi.DataFusionBindings;
+import org.apache.arrow.datafusion.ffi.NativeUtil;
 import org.apache.arrow.memory.BufferAllocator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

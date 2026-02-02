@@ -1,4 +1,4 @@
-package org.apache.arrow.datafusion.ffi;
+package org.apache.arrow.datafusion;
 
 /** The type of a table in a DataFusion catalog. */
 public enum TableType {

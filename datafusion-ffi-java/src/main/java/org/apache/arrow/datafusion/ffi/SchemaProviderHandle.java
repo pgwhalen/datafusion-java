@@ -5,6 +5,9 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.util.List;
+import org.apache.arrow.datafusion.DataFusionException;
+import org.apache.arrow.datafusion.SchemaProvider;
+import org.apache.arrow.datafusion.TableProvider;
 import org.apache.arrow.memory.BufferAllocator;
 
 /**

@@ -2,6 +2,8 @@ package org.apache.arrow.datafusion.ffi;
 
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
+import org.apache.arrow.datafusion.DataFusionException;
+import org.apache.arrow.datafusion.NativeErrorException;
 
 /**
  * Utility class for handling errors from native DataFusion functions.

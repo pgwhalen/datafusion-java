@@ -1,12 +1,13 @@
-package org.apache.arrow.datafusion.ffi;
+package org.apache.arrow.datafusion;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.util.ArrayList;
-import java.util.List;
 import org.apache.arrow.c.ArrowArray;
 import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
+import org.apache.arrow.datafusion.ffi.DataFusionBindings;
+import org.apache.arrow.datafusion.ffi.NativeUtil;
+import org.apache.arrow.datafusion.ffi.SessionContextFfi;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.dictionary.DictionaryProvider;
@@ -24,29 +25,22 @@ public class SessionContext implements AutoCloseable {
 
   private final MemorySegment runtime;
   private final MemorySegment context;
+  private final SessionContextFfi ffi;
   private volatile boolean closed = false;
-
-  // Shared arena for catalog providers (needs to live as long as the context)
-  private final Arena catalogArena;
-  // Keep references to prevent GC
-  private final List<CatalogProviderHandle> catalogHandles = new ArrayList<>();
-  private BufferAllocator catalogAllocator;
 
   /** Creates a new session context with a new Tokio runtime. */
   public SessionContext() {
-    this.catalogArena = Arena.ofShared();
     try {
       runtime = (MemorySegment) DataFusionBindings.RUNTIME_CREATE.invokeExact();
       if (runtime.equals(MemorySegment.NULL)) {
-        catalogArena.close();
         throw new DataFusionException("Failed to create Tokio runtime");
       }
       context = (MemorySegment) DataFusionBindings.CONTEXT_CREATE.invokeExact();
       if (context.equals(MemorySegment.NULL)) {
         DataFusionBindings.RUNTIME_DESTROY.invokeExact(runtime);
-        catalogArena.close();
         throw new DataFusionException("Failed to create SessionContext");
       }
+      ffi = new SessionContextFfi(context);
       logger.debug("Created SessionContext: runtime={}, context={}", runtime, context);
     } catch (DataFusionException e) {
       throw e;
@@ -159,34 +153,7 @@ public class SessionContext implements AutoCloseable {
    */
   public void registerCatalog(String name, CatalogProvider catalog, BufferAllocator allocator) {
     checkNotClosed();
-
-    // Store allocator for use in callbacks
-    if (this.catalogAllocator == null) {
-      this.catalogAllocator = allocator;
-    }
-
-    try (Arena arena = Arena.ofConfined()) {
-      // Create a handle for the catalog (uses the shared catalog arena)
-      CatalogProviderHandle handle = new CatalogProviderHandle(catalog, allocator, catalogArena);
-      catalogHandles.add(handle);
-
-      MemorySegment nameSegment = arena.allocateFrom(name);
-      MemorySegment callbacks = handle.getCallbackStruct();
-
-      NativeUtil.call(
-          arena,
-          "Register catalog '" + name + "'",
-          errorOut ->
-              (int)
-                  DataFusionBindings.CONTEXT_REGISTER_CATALOG.invokeExact(
-                      context, nameSegment, callbacks, errorOut));
-
-      logger.debug("Registered catalog '{}'", name);
-    } catch (DataFusionException e) {
-      throw e;
-    } catch (Throwable e) {
-      throw new DataFusionException("Failed to register catalog", e);
-    }
+    ffi.registerCatalog(name, catalog, allocator);
   }
 
   /**
@@ -209,21 +176,15 @@ public class SessionContext implements AutoCloseable {
     if (!closed) {
       closed = true;
       try {
-        // Close catalog handles first
-        for (CatalogProviderHandle handle : catalogHandles) {
-          try {
-            handle.close();
-          } catch (Exception e) {
-            logger.warn("Error closing catalog handle", e);
-          }
-        }
-        catalogHandles.clear();
+        // Close catalog handles first (but NOT the arena - upcalls may still be invoked during
+        // context destruction)
+        ffi.closeCatalogHandles();
 
         DataFusionBindings.CONTEXT_DESTROY.invokeExact(context);
         DataFusionBindings.RUNTIME_DESTROY.invokeExact(runtime);
 
-        // Close the catalog arena after context is destroyed
-        catalogArena.close();
+        // Now it's safe to close the arena (no more upcalls possible)
+        ffi.closeArena();
 
         logger.debug("Closed SessionContext");
       } catch (Throwable e) {

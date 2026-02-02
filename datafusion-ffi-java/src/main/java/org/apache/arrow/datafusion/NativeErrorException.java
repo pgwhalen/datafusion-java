@@ -1,4 +1,4 @@
-package org.apache.arrow.datafusion.ffi;
+package org.apache.arrow.datafusion;
 
 /**
  * Exception thrown when a native DataFusion function returns an error.

@@ -1,4 +1,4 @@
-package org.apache.arrow.datafusion.ffi;
+package org.apache.arrow.datafusion;
 
 import static org.junit.jupiter.api.Assertions.*;
 
