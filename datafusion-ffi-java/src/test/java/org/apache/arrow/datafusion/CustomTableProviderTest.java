@@ -211,6 +211,36 @@ public class CustomTableProviderTest {
         assertEquals(100, idVector.get(0));
         assertEquals(101, idVector.get(1));
       }
+
+      // Query with JOIN between the two tables
+      try (DataFrame df =
+              ctx.sql(
+                  "SELECT u.name, p.product_id, p.price "
+                      + "FROM store.default.users u "
+                      + "JOIN store.default.products p ON u.id = p.user_id "
+                      + "ORDER BY p.product_id");
+          RecordBatchStream stream = df.executeStream(allocator)) {
+
+        VectorSchemaRoot root = stream.getVectorSchemaRoot();
+        assertTrue(stream.loadNextBatch());
+        assertEquals(2, root.getRowCount());
+
+        // First row: Alice's product (product_id=100)
+        VarCharVector nameVector = (VarCharVector) root.getVector("name");
+        BigIntVector productIdVector = (BigIntVector) root.getVector("product_id");
+        BigIntVector priceVector = (BigIntVector) root.getVector("price");
+
+        assertEquals("Alice", new String(nameVector.get(0)));
+        assertEquals(100, productIdVector.get(0));
+        assertEquals(999, priceVector.get(0));
+
+        // Second row: Bob's product (product_id=101)
+        assertEquals("Bob", new String(nameVector.get(1)));
+        assertEquals(101, productIdVector.get(1));
+        assertEquals(1499, priceVector.get(1));
+
+        assertFalse(stream.loadNextBatch());
+      }
     }
   }
 
@@ -314,6 +344,7 @@ public class CustomTableProviderTest {
     return new Schema(
         Arrays.asList(
             new Field("product_id", FieldType.nullable(new ArrowType.Int(64, true)), null),
+            new Field("user_id", FieldType.nullable(new ArrowType.Int(64, true)), null),
             new Field("price", FieldType.nullable(new ArrowType.Int(64, true)), null)));
   }
 
@@ -464,17 +495,22 @@ public class CustomTableProviderTest {
   private BatchPopulator productsDataBatch() {
     return root -> {
       BigIntVector idVector = (BigIntVector) root.getVector("product_id");
+      BigIntVector userIdVector = (BigIntVector) root.getVector("user_id");
       BigIntVector priceVector = (BigIntVector) root.getVector("price");
 
       idVector.allocateNew(2);
+      userIdVector.allocateNew(2);
       priceVector.allocateNew(2);
 
       idVector.set(0, 100);
+      userIdVector.set(0, 1); // Belongs to Alice (id=1)
       priceVector.set(0, 999);
       idVector.set(1, 101);
+      userIdVector.set(1, 2); // Belongs to Bob (id=2)
       priceVector.set(1, 1499);
 
       idVector.setValueCount(2);
+      userIdVector.setValueCount(2);
       priceVector.setValueCount(2);
       root.setRowCount(2);
     };
