@@ -166,7 +166,7 @@ final class CatalogProviderHandle implements AutoCloseable {
       if (names.isEmpty()) {
         namesOutPtr.setNull();
         namesLenOutVal.set(0L);
-        return ErrorOut.SUCCESS;
+        return Errors.SUCCESS;
       }
 
       // Allocate array of string pointers (address size * count)
@@ -180,9 +180,9 @@ final class CatalogProviderHandle implements AutoCloseable {
       namesOutPtr.set(stringArray);
       namesLenOutVal.set(names.size());
 
-      return ErrorOut.SUCCESS;
+      return Errors.SUCCESS;
     } catch (Exception e) {
-      return ErrorOut.fromException(errorOut, e, arena, fullStackTrace);
+      return Errors.fromException(errorOut, e, arena, fullStackTrace);
     }
   }
 
@@ -200,7 +200,7 @@ final class CatalogProviderHandle implements AutoCloseable {
 
       if (schema.isEmpty()) {
         schemaOutPtr.setNull();
-        return ErrorOut.SUCCESS;
+        return Errors.SUCCESS;
       }
 
       // Create a handle for the schema
@@ -210,9 +210,9 @@ final class CatalogProviderHandle implements AutoCloseable {
       // Return the callback struct pointer
       schemaOutPtr.set(schemaHandle.getCallbackStruct());
 
-      return ErrorOut.SUCCESS;
+      return Errors.SUCCESS;
     } catch (Exception e) {
-      return ErrorOut.fromException(errorOut, e, arena, fullStackTrace);
+      return Errors.fromException(errorOut, e, arena, fullStackTrace);
     }
   }
 

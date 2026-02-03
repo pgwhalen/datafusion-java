@@ -174,7 +174,7 @@ final class RecordBatchReaderHandle implements AutoCloseable {
       return STREAM_HAS_DATA;
 
     } catch (Exception e) {
-      return ErrorOut.fromException(errorOut, e, arena, fullStackTrace);
+      return Errors.fromException(errorOut, e, arena, fullStackTrace);
     }
   }
 

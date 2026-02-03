@@ -140,14 +140,14 @@ new PointerOut(tableOut).setNull();  // for null case
 new LongOut(lenOut).set(len);
 ```
 
-**ErrorOut** - for callback return values:
+**Errors** - for callback return values:
 ```java
 // For the success case:
-return ErrorOut.SUCCESS;
+return Errors.SUCCESS;
 
 // For the error case (preferred pattern):
 } catch (Exception e) {
-  return ErrorOut.fromException(errorOut, e, arena, fullStackTrace);
+  return Errors.fromException(errorOut, e, arena, fullStackTrace);
 }
 ```
 
@@ -194,9 +194,9 @@ final class SomeHandle implements AutoCloseable {
     int callback(MemorySegment javaObject, MemorySegment errorOut) {
         try {
             // ... implementation
-            return ErrorOut.SUCCESS;
+            return Errors.SUCCESS;
         } catch (Exception e) {
-            return ErrorOut.fromException(errorOut, e, arena);
+            return Errors.fromException(errorOut, e, arena, fullStackTrace);
         }
     }
 }

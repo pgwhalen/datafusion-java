@@ -187,7 +187,7 @@ final class SchemaProviderHandle implements AutoCloseable {
       if (names.isEmpty()) {
         namesOutPtr.setNull();
         namesLenOutVal.set(0L);
-        return ErrorOut.SUCCESS;
+        return Errors.SUCCESS;
       }
 
       // Allocate array of string pointers (address size * count)
@@ -201,9 +201,9 @@ final class SchemaProviderHandle implements AutoCloseable {
       namesOutPtr.set(stringArray);
       namesLenOutVal.set(names.size());
 
-      return ErrorOut.SUCCESS;
+      return Errors.SUCCESS;
     } catch (Exception e) {
-      return ErrorOut.fromException(errorOut, e, arena, fullStackTrace);
+      return Errors.fromException(errorOut, e, arena, fullStackTrace);
     }
   }
 
@@ -221,7 +221,7 @@ final class SchemaProviderHandle implements AutoCloseable {
 
       if (table.isEmpty()) {
         tableOutPtr.setNull();
-        return ErrorOut.SUCCESS;
+        return Errors.SUCCESS;
       }
 
       // Create a handle for the table
@@ -231,9 +231,9 @@ final class SchemaProviderHandle implements AutoCloseable {
       // Return the callback struct pointer
       tableOutPtr.set(tableHandle.getCallbackStruct());
 
-      return ErrorOut.SUCCESS;
+      return Errors.SUCCESS;
     } catch (Exception e) {
-      return ErrorOut.fromException(errorOut, e, arena, fullStackTrace);
+      return Errors.fromException(errorOut, e, arena, fullStackTrace);
     }
   }
 

@@ -189,9 +189,9 @@ final class TableProviderHandle implements AutoCloseable {
         srcSchema.set(ValueLayout.ADDRESS, 64, MemorySegment.NULL);
       }
 
-      return ErrorOut.SUCCESS;
+      return Errors.SUCCESS;
     } catch (Exception e) {
-      return ErrorOut.fromException(errorOut, e, arena, fullStackTrace);
+      return Errors.fromException(errorOut, e, arena, fullStackTrace);
     }
   }
 
@@ -234,9 +234,9 @@ final class TableProviderHandle implements AutoCloseable {
       // Return the callback struct pointer
       new PointerOut(planOut).set(planHandle.getCallbackStruct());
 
-      return ErrorOut.SUCCESS;
+      return Errors.SUCCESS;
     } catch (Exception e) {
-      return ErrorOut.fromException(errorOut, e, arena, fullStackTrace);
+      return Errors.fromException(errorOut, e, arena, fullStackTrace);
     }
   }
 

@@ -6,39 +6,13 @@ import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 
-/**
- * Wraps a MemorySegment used for returning an error message to the caller.
- *
- * <p>This record provides a type-safe wrapper for FFI error output parameters. It handles null
- * checks and string allocation, centralizing error reporting logic that was previously duplicated
- * across Handle classes.
- *
- * @param segment the memory segment to write the error pointer to
- */
-public record ErrorOut(MemorySegment segment) {
+/** Utility methods for error handling in FFI callbacks. */
+public final class Errors {
 
   /** The standard success return code for upcall callbacks. */
   public static final int SUCCESS = 0;
 
-  /**
-   * Writes an error message to the output segment.
-   *
-   * <p>If the segment is null, this method does nothing (best-effort error reporting).
-   *
-   * @param message the error message to write
-   * @param arena the arena to allocate the string in
-   */
-  public void set(String message, Arena arena) {
-    if (segment.equals(MemorySegment.NULL)) {
-      return;
-    }
-    try {
-      MemorySegment msgSegment = arena.allocateFrom(message);
-      segment.reinterpret(8).set(ValueLayout.ADDRESS, 0, msgSegment);
-    } catch (Exception ignored) {
-      // Best effort error reporting
-    }
-  }
+  private Errors() {}
 
   /**
    * Sets the error from an exception and returns an error code.
@@ -47,7 +21,7 @@ public record ErrorOut(MemorySegment segment) {
    *
    * <pre>{@code
    * } catch (Exception e) {
-   *   return ErrorOut.fromException(errorOut, e, arena, fullStackTrace);
+   *   return Errors.fromException(errorOut, e, arena, fullStackTrace);
    * }
    * }</pre>
    *
@@ -67,7 +41,19 @@ public record ErrorOut(MemorySegment segment) {
     } else {
       message = e.getMessage();
     }
-    new ErrorOut(errorOut).set(message, arena);
+    setError(errorOut, message, arena);
     return -1;
+  }
+
+  private static void setError(MemorySegment errorOut, String message, Arena arena) {
+    if (errorOut.equals(MemorySegment.NULL)) {
+      return;
+    }
+    try {
+      MemorySegment msgSegment = arena.allocateFrom(message);
+      errorOut.reinterpret(8).set(ValueLayout.ADDRESS, 0, msgSegment);
+    } catch (Exception ignored) {
+      // Best effort error reporting
+    }
   }
 }

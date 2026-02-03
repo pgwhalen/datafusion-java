@@ -187,9 +187,9 @@ final class ExecutionPlanHandle implements AutoCloseable {
         srcSchema.set(ValueLayout.ADDRESS, 64, MemorySegment.NULL);
       }
 
-      return ErrorOut.SUCCESS;
+      return Errors.SUCCESS;
     } catch (Exception e) {
-      return ErrorOut.fromException(errorOut, e, arena, fullStackTrace);
+      return Errors.fromException(errorOut, e, arena, fullStackTrace);
     }
   }
 
@@ -213,9 +213,9 @@ final class ExecutionPlanHandle implements AutoCloseable {
       // Return the callback struct pointer
       new PointerOut(readerOut).set(readerHandle.getCallbackStruct());
 
-      return ErrorOut.SUCCESS;
+      return Errors.SUCCESS;
     } catch (Exception e) {
-      return ErrorOut.fromException(errorOut, e, arena, fullStackTrace);
+      return Errors.fromException(errorOut, e, arena, fullStackTrace);
     }
   }
 
