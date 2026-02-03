@@ -26,10 +26,21 @@ public class SessionContext implements AutoCloseable {
   private final MemorySegment runtime;
   private final MemorySegment context;
   private final SessionContextFfi ffi;
+  private final SessionConfig config;
   private volatile boolean closed = false;
 
-  /** Creates a new session context with a new Tokio runtime. */
+  /** Creates a new session context with default configuration. */
   public SessionContext() {
+    this(SessionConfig.defaults());
+  }
+
+  /**
+   * Creates a new session context with the specified configuration.
+   *
+   * @param config the session configuration
+   */
+  public SessionContext(SessionConfig config) {
+    this.config = config;
     try {
       runtime = (MemorySegment) DataFusionBindings.RUNTIME_CREATE.invokeExact();
       if (runtime.equals(MemorySegment.NULL)) {
@@ -40,7 +51,7 @@ public class SessionContext implements AutoCloseable {
         DataFusionBindings.RUNTIME_DESTROY.invokeExact(runtime);
         throw new DataFusionException("Failed to create SessionContext");
       }
-      ffi = new SessionContextFfi(context);
+      ffi = new SessionContextFfi(context, config);
       logger.debug("Created SessionContext: runtime={}, context={}", runtime, context);
     } catch (DataFusionException e) {
       throw e;

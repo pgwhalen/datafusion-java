@@ -21,14 +21,6 @@ public record ErrorOut(MemorySegment segment) {
   public static final int SUCCESS = 0;
 
   /**
-   * When true, {@link #fromException} includes the full stack trace in error messages. Controlled
-   * by the FULL_JAVA_STACK_TRACE environment variable.
-   */
-  public static final boolean FULL_STACK_TRACE =
-      System.getenv("FULL_JAVA_STACK_TRACE") != null
-          && !System.getenv("FULL_JAVA_STACK_TRACE").isEmpty();
-
-  /**
    * Writes an error message to the output segment.
    *
    * <p>If the segment is null, this method does nothing (best-effort error reporting).
@@ -55,21 +47,20 @@ public record ErrorOut(MemorySegment segment) {
    *
    * <pre>{@code
    * } catch (Exception e) {
-   *   return ErrorOut.fromException(errorOut, e, arena);
+   *   return ErrorOut.fromException(errorOut, e, arena, fullStackTrace);
    * }
    * }</pre>
-   *
-   * <p>When the FULL_JAVA_STACK_TRACE environment variable is set, includes the full stack trace in
-   * the error message. Otherwise, only the exception message is included.
    *
    * @param errorOut the error output segment
    * @param e the exception to report
    * @param arena the arena to allocate the error string in
+   * @param fullStackTrace when true, includes the full stack trace; otherwise just the message
    * @return -1 (the standard error return code)
    */
-  public static int fromException(MemorySegment errorOut, Exception e, Arena arena) {
+  public static int fromException(
+      MemorySegment errorOut, Exception e, Arena arena, boolean fullStackTrace) {
     String message;
-    if (FULL_STACK_TRACE) {
+    if (fullStackTrace) {
       StringWriter sw = new StringWriter();
       e.printStackTrace(new PrintWriter(sw));
       message = sw.toString();

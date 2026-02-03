@@ -122,6 +122,7 @@ final class SchemaProviderHandle implements AutoCloseable {
   private final Arena arena;
   private final SchemaProvider provider;
   private final BufferAllocator allocator;
+  private final boolean fullStackTrace;
   private final MemorySegment callbackStruct;
 
   // Keep references to upcall stubs to prevent GC
@@ -130,10 +131,12 @@ final class SchemaProviderHandle implements AutoCloseable {
   private final UpcallStub tableExistsStub;
   private final UpcallStub releaseStub;
 
-  SchemaProviderHandle(SchemaProvider provider, BufferAllocator allocator, Arena arena) {
+  SchemaProviderHandle(
+      SchemaProvider provider, BufferAllocator allocator, Arena arena, boolean fullStackTrace) {
     this.arena = arena;
     this.provider = provider;
     this.allocator = allocator;
+    this.fullStackTrace = fullStackTrace;
 
     try {
       // Allocate the callback struct from Rust
@@ -200,7 +203,7 @@ final class SchemaProviderHandle implements AutoCloseable {
 
       return ErrorOut.SUCCESS;
     } catch (Exception e) {
-      return ErrorOut.fromException(errorOut, e, arena);
+      return ErrorOut.fromException(errorOut, e, arena, fullStackTrace);
     }
   }
 
@@ -222,14 +225,15 @@ final class SchemaProviderHandle implements AutoCloseable {
       }
 
       // Create a handle for the table
-      TableProviderHandle tableHandle = new TableProviderHandle(table.get(), allocator, arena);
+      TableProviderHandle tableHandle =
+          new TableProviderHandle(table.get(), allocator, arena, fullStackTrace);
 
       // Return the callback struct pointer
       tableOutPtr.set(tableHandle.getCallbackStruct());
 
       return ErrorOut.SUCCESS;
     } catch (Exception e) {
-      return ErrorOut.fromException(errorOut, e, arena);
+      return ErrorOut.fromException(errorOut, e, arena, fullStackTrace);
     }
   }
 

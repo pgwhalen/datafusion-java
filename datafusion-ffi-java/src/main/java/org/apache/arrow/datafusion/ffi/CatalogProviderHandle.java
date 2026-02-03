@@ -104,6 +104,7 @@ final class CatalogProviderHandle implements AutoCloseable {
   private final Arena arena;
   private final CatalogProvider provider;
   private final BufferAllocator allocator;
+  private final boolean fullStackTrace;
   private final MemorySegment callbackStruct;
 
   // Keep references to upcall stubs to prevent GC
@@ -111,10 +112,12 @@ final class CatalogProviderHandle implements AutoCloseable {
   private final UpcallStub schemaStub;
   private final UpcallStub releaseStub;
 
-  CatalogProviderHandle(CatalogProvider provider, BufferAllocator allocator, Arena arena) {
+  CatalogProviderHandle(
+      CatalogProvider provider, BufferAllocator allocator, Arena arena, boolean fullStackTrace) {
     this.arena = arena;
     this.provider = provider;
     this.allocator = allocator;
+    this.fullStackTrace = fullStackTrace;
 
     try {
       // Allocate the callback struct from Rust
@@ -179,7 +182,7 @@ final class CatalogProviderHandle implements AutoCloseable {
 
       return ErrorOut.SUCCESS;
     } catch (Exception e) {
-      return ErrorOut.fromException(errorOut, e, arena);
+      return ErrorOut.fromException(errorOut, e, arena, fullStackTrace);
     }
   }
 
@@ -201,14 +204,15 @@ final class CatalogProviderHandle implements AutoCloseable {
       }
 
       // Create a handle for the schema
-      SchemaProviderHandle schemaHandle = new SchemaProviderHandle(schema.get(), allocator, arena);
+      SchemaProviderHandle schemaHandle =
+          new SchemaProviderHandle(schema.get(), allocator, arena, fullStackTrace);
 
       // Return the callback struct pointer
       schemaOutPtr.set(schemaHandle.getCallbackStruct());
 
       return ErrorOut.SUCCESS;
     } catch (Exception e) {
-      return ErrorOut.fromException(errorOut, e, arena);
+      return ErrorOut.fromException(errorOut, e, arena, fullStackTrace);
     }
   }
 

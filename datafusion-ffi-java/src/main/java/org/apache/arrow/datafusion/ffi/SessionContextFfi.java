@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import org.apache.arrow.datafusion.CatalogProvider;
 import org.apache.arrow.datafusion.DataFusionException;
+import org.apache.arrow.datafusion.SessionConfig;
 import org.apache.arrow.memory.BufferAllocator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,6 +22,7 @@ public final class SessionContextFfi implements AutoCloseable {
   private static final Logger logger = LoggerFactory.getLogger(SessionContextFfi.class);
 
   private final MemorySegment context;
+  private final SessionConfig config;
 
   // Shared arena for catalog providers (needs to live as long as the context)
   private final Arena catalogArena;
@@ -31,9 +33,11 @@ public final class SessionContextFfi implements AutoCloseable {
    * Creates a new SessionContextFfi.
    *
    * @param context The native context pointer
+   * @param config The session configuration
    */
-  public SessionContextFfi(MemorySegment context) {
+  public SessionContextFfi(MemorySegment context, SessionConfig config) {
     this.context = context;
+    this.config = config;
     this.catalogArena = Arena.ofShared();
   }
 
@@ -48,7 +52,8 @@ public final class SessionContextFfi implements AutoCloseable {
   public void registerCatalog(String name, CatalogProvider catalog, BufferAllocator allocator) {
     try (Arena arena = Arena.ofConfined()) {
       // Create a handle for the catalog (uses the shared catalog arena)
-      CatalogProviderHandle handle = new CatalogProviderHandle(catalog, allocator, catalogArena);
+      CatalogProviderHandle handle =
+          new CatalogProviderHandle(catalog, allocator, catalogArena, config.fullStackTrace());
       catalogHandles.add(handle);
 
       MemorySegment nameSegment = arena.allocateFrom(name);

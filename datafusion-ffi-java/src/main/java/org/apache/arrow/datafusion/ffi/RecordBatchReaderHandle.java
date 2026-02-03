@@ -85,16 +85,19 @@ final class RecordBatchReaderHandle implements AutoCloseable {
   private final Arena arena;
   private final RecordBatchReader reader;
   private final BufferAllocator allocator;
+  private final boolean fullStackTrace;
   private final MemorySegment callbackStruct;
 
   // Keep references to upcall stubs to prevent GC
   private final UpcallStub loadNextBatchStub;
   private final UpcallStub releaseStub;
 
-  RecordBatchReaderHandle(RecordBatchReader reader, BufferAllocator allocator, Arena arena) {
+  RecordBatchReaderHandle(
+      RecordBatchReader reader, BufferAllocator allocator, Arena arena, boolean fullStackTrace) {
     this.arena = arena;
     this.reader = reader;
     this.allocator = allocator;
+    this.fullStackTrace = fullStackTrace;
 
     try {
       // Allocate the callback struct from Rust
@@ -171,7 +174,7 @@ final class RecordBatchReaderHandle implements AutoCloseable {
       return STREAM_HAS_DATA;
 
     } catch (Exception e) {
-      return ErrorOut.fromException(errorOut, e, arena);
+      return ErrorOut.fromException(errorOut, e, arena, fullStackTrace);
     }
   }
 

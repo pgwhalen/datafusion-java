@@ -120,11 +120,11 @@ return ErrorOut.SUCCESS;
 
 // For the error case (preferred pattern):
 } catch (Exception e) {
-  return ErrorOut.fromException(errorOut, e, arena);
+  return ErrorOut.fromException(errorOut, e, arena, fullStackTrace);
 }
 ```
 
-When debugging FFI callback errors, set the `FULL_JAVA_STACK_TRACE` environment variable to include full Java stack traces in error messages. This helps trace exactly where exceptions originated in Java code.
+The `fullStackTrace` parameter controls whether error messages include the full Java stack trace. This is configured via `SessionConfig.builder().fullStackTrace(true).build()` or the `FULL_JAVA_STACK_TRACE` environment variable. Full stack traces help trace exactly where exceptions originated in Java callback code.
 
 ## Upcall Stub Pattern (Java Callbacks)
 

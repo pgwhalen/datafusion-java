@@ -121,6 +121,7 @@ final class TableProviderHandle implements AutoCloseable {
   private final Arena arena;
   private final TableProvider provider;
   private final BufferAllocator allocator;
+  private final boolean fullStackTrace;
   private final MemorySegment callbackStruct;
 
   // Keep references to upcall stubs to prevent GC
@@ -129,10 +130,12 @@ final class TableProviderHandle implements AutoCloseable {
   private final UpcallStub scanStub;
   private final UpcallStub releaseStub;
 
-  TableProviderHandle(TableProvider provider, BufferAllocator allocator, Arena arena) {
+  TableProviderHandle(
+      TableProvider provider, BufferAllocator allocator, Arena arena, boolean fullStackTrace) {
     this.arena = arena;
     this.provider = provider;
     this.allocator = allocator;
+    this.fullStackTrace = fullStackTrace;
 
     try {
       // Allocate the callback struct from Rust
@@ -188,7 +191,7 @@ final class TableProviderHandle implements AutoCloseable {
 
       return ErrorOut.SUCCESS;
     } catch (Exception e) {
-      return ErrorOut.fromException(errorOut, e, arena);
+      return ErrorOut.fromException(errorOut, e, arena, fullStackTrace);
     }
   }
 
@@ -225,14 +228,15 @@ final class TableProviderHandle implements AutoCloseable {
       ExecutionPlan plan = provider.scan(projectionArray, limitValue);
 
       // Create a handle for the plan
-      ExecutionPlanHandle planHandle = new ExecutionPlanHandle(plan, allocator, arena);
+      ExecutionPlanHandle planHandle =
+          new ExecutionPlanHandle(plan, allocator, arena, fullStackTrace);
 
       // Return the callback struct pointer
       new PointerOut(planOut).set(planHandle.getCallbackStruct());
 
       return ErrorOut.SUCCESS;
     } catch (Exception e) {
-      return ErrorOut.fromException(errorOut, e, arena);
+      return ErrorOut.fromException(errorOut, e, arena, fullStackTrace);
     }
   }
 

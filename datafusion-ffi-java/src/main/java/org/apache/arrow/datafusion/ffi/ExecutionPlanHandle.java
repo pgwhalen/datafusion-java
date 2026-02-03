@@ -117,6 +117,7 @@ final class ExecutionPlanHandle implements AutoCloseable {
   private final Arena arena;
   private final ExecutionPlan plan;
   private final BufferAllocator allocator;
+  private final boolean fullStackTrace;
   private final MemorySegment callbackStruct;
 
   // Keep references to upcall stubs to prevent GC
@@ -125,10 +126,12 @@ final class ExecutionPlanHandle implements AutoCloseable {
   private final UpcallStub executeStub;
   private final UpcallStub releaseStub;
 
-  ExecutionPlanHandle(ExecutionPlan plan, BufferAllocator allocator, Arena arena) {
+  ExecutionPlanHandle(
+      ExecutionPlan plan, BufferAllocator allocator, Arena arena, boolean fullStackTrace) {
     this.arena = arena;
     this.plan = plan;
     this.allocator = allocator;
+    this.fullStackTrace = fullStackTrace;
 
     try {
       // Allocate the callback struct from Rust
@@ -186,7 +189,7 @@ final class ExecutionPlanHandle implements AutoCloseable {
 
       return ErrorOut.SUCCESS;
     } catch (Exception e) {
-      return ErrorOut.fromException(errorOut, e, arena);
+      return ErrorOut.fromException(errorOut, e, arena, fullStackTrace);
     }
   }
 
@@ -204,14 +207,15 @@ final class ExecutionPlanHandle implements AutoCloseable {
       RecordBatchReader reader = plan.execute((int) partition, allocator);
 
       // Create a handle for the reader
-      RecordBatchReaderHandle readerHandle = new RecordBatchReaderHandle(reader, allocator, arena);
+      RecordBatchReaderHandle readerHandle =
+          new RecordBatchReaderHandle(reader, allocator, arena, fullStackTrace);
 
       // Return the callback struct pointer
       new PointerOut(readerOut).set(readerHandle.getCallbackStruct());
 
       return ErrorOut.SUCCESS;
     } catch (Exception e) {
-      return ErrorOut.fromException(errorOut, e, arena);
+      return ErrorOut.fromException(errorOut, e, arena, fullStackTrace);
     }
   }
 

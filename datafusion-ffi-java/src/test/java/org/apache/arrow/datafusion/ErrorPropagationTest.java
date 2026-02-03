@@ -3,7 +3,6 @@ package org.apache.arrow.datafusion;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.*;
-import org.apache.arrow.datafusion.ffi.ErrorOut;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
@@ -38,8 +37,8 @@ import org.junit.jupiter.api.Test;
  *   <li>RecordBatchReader.loadNextBatch()
  * </ul>
  *
- * <p>When FULL_JAVA_STACK_TRACE environment variable is set, error messages include the full Java
- * stack trace for debugging.
+ * <p>Full stack traces can be enabled via {@code SessionConfig.builder().fullStackTrace(true)} or
+ * the FULL_JAVA_STACK_TRACE environment variable. This is useful for debugging callback errors.
  */
 public class ErrorPropagationTest {
 
@@ -348,18 +347,14 @@ public class ErrorPropagationTest {
   }
 
   @Test
-  void testStackTraceIncludedWhenEnvVarSet() {
-    // This test verifies the stack trace behavior based on FULL_JAVA_STACK_TRACE env var
-    if (!ErrorOut.FULL_STACK_TRACE) {
-      // When env var is not set, just verify the message is present (already covered above)
-      return;
-    }
+  void testStackTraceIncludedWhenConfigured() {
+    // This test verifies full stack traces are included when configured via SessionConfig
+    SessionConfig config = SessionConfig.builder().fullStackTrace(true).build();
 
     try (BufferAllocator allocator = new RootAllocator();
-        SessionContext ctx = new SessionContext()) {
+        SessionContext ctx = new SessionContext(config)) {
 
       String errorMessage = "Stack trace test error";
-      Schema testSchema = createTestSchema();
 
       // Use a custom exception to make the stack trace identifiable
       TableProvider errorTable =
@@ -411,18 +406,15 @@ public class ErrorPropagationTest {
   }
 
   @Test
-  void testStackTraceIncludesCauseWhenEnvVarSet() {
-    // This test verifies that nested exception causes are included in the stack trace
-    if (!ErrorOut.FULL_STACK_TRACE) {
-      return;
-    }
+  void testStackTraceIncludesCause() {
+    // This test verifies that nested exception causes are included in full stack traces
+    SessionConfig config = SessionConfig.builder().fullStackTrace(true).build();
 
     try (BufferAllocator allocator = new RootAllocator();
-        SessionContext ctx = new SessionContext()) {
+        SessionContext ctx = new SessionContext(config)) {
 
       String rootCause = "Root cause of the problem";
       String wrapperMessage = "Wrapper exception";
-      Schema testSchema = createTestSchema();
 
       TableProvider errorTable =
           new TableProvider() {
@@ -469,6 +461,57 @@ public class ErrorPropagationTest {
       assertTrue(
           exceptionMsg.contains("IllegalArgumentException"),
           "Exception should contain cause exception class. Got: " + exceptionMsg);
+    }
+  }
+
+  @Test
+  void testNoStackTraceByDefault() {
+    // This test verifies that stack traces are NOT included by default (only the message)
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+
+      String errorMessage = "Default config error message";
+
+      TableProvider errorTable =
+          new TableProvider() {
+            @Override
+            public Schema schema() {
+              throw new IllegalStateException(errorMessage);
+            }
+
+            @Override
+            public ExecutionPlan scan(int[] projection, Long limit) {
+              throw new UnsupportedOperationException("Should not be called");
+            }
+          };
+
+      SchemaProvider schema = new SimpleSchemaProvider(Map.of("error_table", errorTable));
+      CatalogProvider catalog = new SimpleCatalogProvider(Map.of("my_schema", schema));
+      ctx.registerCatalog("test_catalog", catalog, allocator);
+
+      Exception exception =
+          assertThrows(
+              Exception.class,
+              () -> {
+                try (DataFrame df = ctx.sql("SELECT * FROM test_catalog.my_schema.error_table")) {
+                  // Should not reach here
+                }
+              });
+
+      String exceptionMsg = exception.getMessage();
+
+      // Verify the error message is present
+      assertTrue(
+          exceptionMsg.contains(errorMessage),
+          "Exception should contain error message. Got: " + exceptionMsg);
+
+      // Verify stack trace elements are NOT present (unless env var is set)
+      if (System.getenv("FULL_JAVA_STACK_TRACE") == null
+          || System.getenv("FULL_JAVA_STACK_TRACE").isEmpty()) {
+        assertFalse(
+            exceptionMsg.contains("at org.apache.arrow"),
+            "Exception should NOT contain stack trace by default. Got: " + exceptionMsg);
+      }
     }
   }
 
