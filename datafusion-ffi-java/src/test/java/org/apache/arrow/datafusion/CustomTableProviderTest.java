@@ -2,7 +2,14 @@ package org.apache.arrow.datafusion;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import java.util.*;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.BigIntVector;
@@ -26,10 +33,8 @@ public class CustomTableProviderTest {
         SessionContext ctx = new SessionContext()) {
 
       // Create a simple table provider that returns fixed data
-      Schema schema = createTestSchema();
-      VectorSchemaRoot data = createTestData(allocator, schema);
-
-      TableProvider myTable = new SimpleTableProvider(schema, data, allocator);
+      Schema schema = createUsersSchema();
+      TableProvider myTable = new TestTableProvider(schema, usersDataBatch());
       SchemaProvider mySchema = new SimpleSchemaProvider(Map.of("my_table", myTable));
       CatalogProvider myCatalog = new SimpleCatalogProvider(Map.of("my_schema", mySchema));
 
@@ -52,8 +57,6 @@ public class CustomTableProviderTest {
 
         assertFalse(stream.loadNextBatch());
       }
-
-      data.close();
     }
   }
 
@@ -62,10 +65,8 @@ public class CustomTableProviderTest {
     try (BufferAllocator allocator = new RootAllocator();
         SessionContext ctx = new SessionContext()) {
 
-      Schema schema = createTestSchema();
-      VectorSchemaRoot data = createTestData(allocator, schema);
-
-      TableProvider myTable = new SimpleTableProvider(schema, data, allocator);
+      Schema schema = createUsersSchema();
+      TableProvider myTable = new TestTableProvider(schema, usersDataBatch());
       SchemaProvider mySchema = new SimpleSchemaProvider(Map.of("test_table", myTable));
       CatalogProvider myCatalog = new SimpleCatalogProvider(Map.of("public", mySchema));
 
@@ -87,8 +88,6 @@ public class CustomTableProviderTest {
 
         assertFalse(stream.loadNextBatch());
       }
-
-      data.close();
     }
   }
 
@@ -97,10 +96,8 @@ public class CustomTableProviderTest {
     try (BufferAllocator allocator = new RootAllocator();
         SessionContext ctx = new SessionContext()) {
 
-      Schema schema = createTestSchema();
-      VectorSchemaRoot data = createTestData(allocator, schema);
-
-      TableProvider myTable = new SimpleTableProvider(schema, data, allocator);
+      Schema schema = createUsersSchema();
+      TableProvider myTable = new TestTableProvider(schema, usersDataBatch());
       SchemaProvider mySchema = new SimpleSchemaProvider(Map.of("data", myTable));
       CatalogProvider myCatalog = new SimpleCatalogProvider(Map.of("main", mySchema));
 
@@ -120,8 +117,52 @@ public class CustomTableProviderTest {
 
         assertFalse(stream.loadNextBatch());
       }
+    }
+  }
 
-      data.close();
+  @Test
+  void testMultipleBatchesFromExecutionPlan() {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+
+      Schema schema = createUsersSchema();
+
+      // Create a table provider that returns multiple batches (3 batches × 2 rows = 6 rows)
+      TableProvider myTable =
+          new TestTableProvider(
+              schema, multiBatchData(0, 2), multiBatchData(1, 2), multiBatchData(2, 2));
+      SchemaProvider mySchema = new SimpleSchemaProvider(Map.of("multi_batch", myTable));
+      CatalogProvider myCatalog = new SimpleCatalogProvider(Map.of("test", mySchema));
+
+      ctx.registerCatalog("batch_catalog", myCatalog, allocator);
+
+      // Query without ORDER BY to avoid coalescing batches during sort
+      try (DataFrame df = ctx.sql("SELECT * FROM batch_catalog.test.multi_batch");
+          RecordBatchStream stream = df.executeStream(allocator)) {
+
+        VectorSchemaRoot root = stream.getVectorSchemaRoot();
+
+        // Collect all rows across all batches - DataFusion may or may not coalesce
+        Set<Long> allIds = new HashSet<>();
+        int totalRows = 0;
+        int batchCount = 0;
+
+        while (stream.loadNextBatch()) {
+          batchCount++;
+          int rowCount = root.getRowCount();
+          totalRows += rowCount;
+
+          BigIntVector idVector = (BigIntVector) root.getVector("id");
+          for (int i = 0; i < rowCount; i++) {
+            allIds.add(idVector.get(i));
+          }
+        }
+
+        // Verify we got all 6 rows with ids 1-6
+        assertEquals(6, totalRows, "Should have 6 total rows");
+        assertEquals(Set.of(1L, 2L, 3L, 4L, 5L, 6L), allIds, "Should have ids 1-6");
+        assertTrue(batchCount >= 1, "Should have at least one batch");
+      }
     }
   }
 
@@ -130,19 +171,14 @@ public class CustomTableProviderTest {
     try (BufferAllocator allocator = new RootAllocator();
         SessionContext ctx = new SessionContext()) {
 
-      // Create two tables with different data
-      Schema schema1 = createTestSchema();
-      VectorSchemaRoot data1 = createTestData(allocator, schema1);
-
-      Schema schema2 = createSecondTestSchema();
-      VectorSchemaRoot data2 = createSecondTestData(allocator, schema2);
-
-      TableProvider table1 = new SimpleTableProvider(schema1, data1, allocator);
-      TableProvider table2 = new SimpleTableProvider(schema2, data2, allocator);
+      // Create two tables with different schemas and data
+      TableProvider usersTable = new TestTableProvider(createUsersSchema(), usersDataBatch());
+      TableProvider productsTable =
+          new TestTableProvider(createProductsSchema(), productsDataBatch());
 
       Map<String, TableProvider> tables = new HashMap<>();
-      tables.put("users", table1);
-      tables.put("products", table2);
+      tables.put("users", usersTable);
+      tables.put("products", productsTable);
 
       SchemaProvider mySchema = new SimpleSchemaProvider(tables);
       CatalogProvider myCatalog = new SimpleCatalogProvider(Map.of("default", mySchema));
@@ -175,87 +211,128 @@ public class CustomTableProviderTest {
         assertEquals(100, idVector.get(0));
         assertEquals(101, idVector.get(1));
       }
-
-      data1.close();
-      data2.close();
     }
   }
 
-  // Helper methods to create test schemas and data
+  @Test
+  void testLimitPushedToTableProvider() {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
 
-  private Schema createTestSchema() {
+      Schema schema = createUsersSchema();
+
+      // Create a table provider that captures the limit value
+      AtomicReference<Long> capturedLimit = new AtomicReference<>();
+      TableProvider limitCapturingTable =
+          new TableProvider() {
+            @Override
+            public Schema schema() {
+              return schema;
+            }
+
+            @Override
+            public ExecutionPlan scan(int[] projection, Long limit) {
+              capturedLimit.set(limit);
+              return new TestExecutionPlan(schema, List.of(usersDataBatch()));
+            }
+          };
+
+      SchemaProvider mySchema = new SimpleSchemaProvider(Map.of("limit_test", limitCapturingTable));
+      CatalogProvider myCatalog = new SimpleCatalogProvider(Map.of("test", mySchema));
+
+      ctx.registerCatalog("limit_catalog", myCatalog, allocator);
+
+      // Query with LIMIT clause
+      try (DataFrame df = ctx.sql("SELECT * FROM limit_catalog.test.limit_test LIMIT 2");
+          RecordBatchStream stream = df.executeStream(allocator)) {
+
+        VectorSchemaRoot root = stream.getVectorSchemaRoot();
+        assertTrue(stream.loadNextBatch());
+        // DataFusion applies the limit, so we get at most 2 rows
+        assertTrue(root.getRowCount() <= 2);
+      }
+
+      // Verify that the limit was passed to the table provider
+      assertNotNull(capturedLimit.get(), "Limit should have been passed to scan()");
+      assertEquals(2L, capturedLimit.get(), "Limit value should be 2");
+    }
+  }
+
+  @Test
+  void testNoLimitPassedAsNull() {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+
+      Schema schema = createUsersSchema();
+
+      // Create a table provider that captures the limit value
+      AtomicReference<Long> capturedLimit = new AtomicReference<>(999L); // Non-null sentinel
+      TableProvider limitCapturingTable =
+          new TableProvider() {
+            @Override
+            public Schema schema() {
+              return schema;
+            }
+
+            @Override
+            public ExecutionPlan scan(int[] projection, Long limit) {
+              capturedLimit.set(limit);
+              return new TestExecutionPlan(schema, List.of(usersDataBatch()));
+            }
+          };
+
+      SchemaProvider mySchema =
+          new SimpleSchemaProvider(Map.of("no_limit_test", limitCapturingTable));
+      CatalogProvider myCatalog = new SimpleCatalogProvider(Map.of("test", mySchema));
+
+      ctx.registerCatalog("no_limit_catalog", myCatalog, allocator);
+
+      // Query without LIMIT clause
+      try (DataFrame df = ctx.sql("SELECT * FROM no_limit_catalog.test.no_limit_test");
+          RecordBatchStream stream = df.executeStream(allocator)) {
+
+        VectorSchemaRoot root = stream.getVectorSchemaRoot();
+        assertTrue(stream.loadNextBatch());
+        assertEquals(3, root.getRowCount()); // All rows returned
+      }
+
+      // Verify that no limit was passed (null)
+      assertNull(capturedLimit.get(), "Limit should be null when no LIMIT clause is used");
+    }
+  }
+
+  // Helper methods to create test schemas
+
+  private Schema createUsersSchema() {
     return new Schema(
         Arrays.asList(
             new Field("id", FieldType.nullable(new ArrowType.Int(64, true)), null),
             new Field("name", FieldType.nullable(new ArrowType.Utf8()), null)));
   }
 
-  private VectorSchemaRoot createTestData(BufferAllocator allocator, Schema schema) {
-    VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
-
-    BigIntVector idVector = (BigIntVector) root.getVector("id");
-    VarCharVector nameVector = (VarCharVector) root.getVector("name");
-
-    idVector.allocateNew(3);
-    nameVector.allocateNew(3);
-
-    idVector.set(0, 1);
-    nameVector.setSafe(0, "Alice".getBytes());
-
-    idVector.set(1, 2);
-    nameVector.setSafe(1, "Bob".getBytes());
-
-    idVector.set(2, 3);
-    nameVector.setSafe(2, "Charlie".getBytes());
-
-    idVector.setValueCount(3);
-    nameVector.setValueCount(3);
-    root.setRowCount(3);
-
-    return root;
-  }
-
-  private Schema createSecondTestSchema() {
+  private Schema createProductsSchema() {
     return new Schema(
         Arrays.asList(
             new Field("product_id", FieldType.nullable(new ArrowType.Int(64, true)), null),
             new Field("price", FieldType.nullable(new ArrowType.Int(64, true)), null)));
   }
 
-  private VectorSchemaRoot createSecondTestData(BufferAllocator allocator, Schema schema) {
-    VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
+  // Test implementation classes
 
-    BigIntVector idVector = (BigIntVector) root.getVector("product_id");
-    BigIntVector priceVector = (BigIntVector) root.getVector("price");
-
-    idVector.allocateNew(2);
-    priceVector.allocateNew(2);
-
-    idVector.set(0, 100);
-    priceVector.set(0, 999);
-
-    idVector.set(1, 101);
-    priceVector.set(1, 1499);
-
-    idVector.setValueCount(2);
-    priceVector.setValueCount(2);
-    root.setRowCount(2);
-
-    return root;
+  /** Functional interface for populating a batch of data in a VectorSchemaRoot. */
+  @FunctionalInterface
+  interface BatchPopulator {
+    void populate(VectorSchemaRoot root);
   }
 
-  // Simple implementation classes for testing
-
-  /** A simple TableProvider that returns fixed data from a VectorSchemaRoot. */
-  static class SimpleTableProvider implements TableProvider {
+  /** A flexible TableProvider for testing that generates batches via BatchPopulator functions. */
+  static class TestTableProvider implements TableProvider {
     private final Schema schema;
-    private final VectorSchemaRoot data;
-    private final BufferAllocator allocator;
+    private final List<BatchPopulator> batches;
 
-    SimpleTableProvider(Schema schema, VectorSchemaRoot data, BufferAllocator allocator) {
+    TestTableProvider(Schema schema, BatchPopulator... batches) {
       this.schema = schema;
-      this.data = data;
-      this.allocator = allocator;
+      this.batches = List.of(batches);
     }
 
     @Override
@@ -265,18 +342,18 @@ public class CustomTableProviderTest {
 
     @Override
     public ExecutionPlan scan(int[] projection, Long limit) {
-      return new SimpleExecutionPlan(schema, data);
+      return new TestExecutionPlan(schema, batches);
     }
   }
 
-  /** A simple ExecutionPlan that returns data from a VectorSchemaRoot. */
-  static class SimpleExecutionPlan implements ExecutionPlan {
+  /** An ExecutionPlan that creates readers using BatchPopulator functions. */
+  static class TestExecutionPlan implements ExecutionPlan {
     private final Schema schema;
-    private final VectorSchemaRoot data;
+    private final List<BatchPopulator> batches;
 
-    SimpleExecutionPlan(Schema schema, VectorSchemaRoot data) {
+    TestExecutionPlan(Schema schema, List<BatchPopulator> batches) {
       this.schema = schema;
-      this.data = data;
+      this.batches = batches;
     }
 
     @Override
@@ -286,30 +363,19 @@ public class CustomTableProviderTest {
 
     @Override
     public RecordBatchReader execute(int partition, BufferAllocator allocator) {
-      // Copy the data to a new VectorSchemaRoot for the reader
-      VectorSchemaRoot copy = VectorSchemaRoot.create(schema, allocator);
-
-      // Transfer the data
-      for (int i = 0; i < schema.getFields().size(); i++) {
-        copy.getFieldVectors().get(i).allocateNew();
-        for (int row = 0; row < data.getRowCount(); row++) {
-          copy.getFieldVectors().get(i).copyFromSafe(row, row, data.getFieldVectors().get(i));
-        }
-        copy.getFieldVectors().get(i).setValueCount(data.getRowCount());
-      }
-      copy.setRowCount(data.getRowCount());
-
-      return new SimpleRecordBatchReader(copy);
+      return new TestRecordBatchReader(schema, batches, allocator);
     }
   }
 
-  /** A simple RecordBatchReader that returns a single batch. */
-  static class SimpleRecordBatchReader implements RecordBatchReader {
+  /** A RecordBatchReader that returns batches by invoking BatchPopulator functions. */
+  static class TestRecordBatchReader implements RecordBatchReader {
     private final VectorSchemaRoot root;
-    private boolean consumed = false;
+    private final List<BatchPopulator> batches;
+    private int currentBatch = 0;
 
-    SimpleRecordBatchReader(VectorSchemaRoot root) {
-      this.root = root;
+    TestRecordBatchReader(Schema schema, List<BatchPopulator> batches, BufferAllocator allocator) {
+      this.root = VectorSchemaRoot.create(schema, allocator);
+      this.batches = batches;
     }
 
     @Override
@@ -319,10 +385,10 @@ public class CustomTableProviderTest {
 
     @Override
     public boolean loadNextBatch() {
-      if (consumed) {
+      if (currentBatch >= batches.size()) {
         return false;
       }
-      consumed = true;
+      batches.get(currentBatch++).populate(root);
       return true;
     }
 
@@ -368,5 +434,71 @@ public class CustomTableProviderTest {
     public Optional<SchemaProvider> schema(String name) {
       return Optional.ofNullable(schemas.get(name));
     }
+  }
+
+  // BatchPopulator factory methods for common test data patterns
+
+  /** Creates a batch populator for the standard test data (Alice, Bob, Charlie). */
+  private BatchPopulator usersDataBatch() {
+    return root -> {
+      BigIntVector idVector = (BigIntVector) root.getVector("id");
+      VarCharVector nameVector = (VarCharVector) root.getVector("name");
+
+      idVector.allocateNew(3);
+      nameVector.allocateNew(3);
+
+      idVector.set(0, 1);
+      nameVector.setSafe(0, "Alice".getBytes());
+      idVector.set(1, 2);
+      nameVector.setSafe(1, "Bob".getBytes());
+      idVector.set(2, 3);
+      nameVector.setSafe(2, "Charlie".getBytes());
+
+      idVector.setValueCount(3);
+      nameVector.setValueCount(3);
+      root.setRowCount(3);
+    };
+  }
+
+  /** Creates a batch populator for product data. */
+  private BatchPopulator productsDataBatch() {
+    return root -> {
+      BigIntVector idVector = (BigIntVector) root.getVector("product_id");
+      BigIntVector priceVector = (BigIntVector) root.getVector("price");
+
+      idVector.allocateNew(2);
+      priceVector.allocateNew(2);
+
+      idVector.set(0, 100);
+      priceVector.set(0, 999);
+      idVector.set(1, 101);
+      priceVector.set(1, 1499);
+
+      idVector.setValueCount(2);
+      priceVector.setValueCount(2);
+      root.setRowCount(2);
+    };
+  }
+
+  /** Creates a batch populator for multi-batch test (2 rows per batch with sequential ids). */
+  private BatchPopulator multiBatchData(int batchIndex, int rowsPerBatch) {
+    return root -> {
+      BigIntVector idVector = (BigIntVector) root.getVector("id");
+      VarCharVector nameVector = (VarCharVector) root.getVector("name");
+
+      idVector.allocateNew(rowsPerBatch);
+      nameVector.allocateNew(rowsPerBatch);
+
+      int baseId = batchIndex * rowsPerBatch + 1;
+      for (int i = 0; i < rowsPerBatch; i++) {
+        int id = baseId + i;
+        idVector.set(i, id);
+        nameVector.setSafe(i, ("Name" + id).getBytes());
+      }
+
+      idVector.setValueCount(rowsPerBatch);
+      nameVector.setValueCount(rowsPerBatch);
+      root.setRowCount(rowsPerBatch);
+    };
   }
 }
