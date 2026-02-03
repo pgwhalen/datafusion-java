@@ -7,7 +7,7 @@ use std::ffi::{c_char, c_void, CStr};
 use std::sync::Arc;
 use tokio::runtime::Runtime;
 
-use crate::error::{clear_error, set_error};
+use crate::error::{clear_error, set_error_return, set_error_return_null};
 
 /// Create a new SessionContext.
 ///
@@ -58,8 +58,7 @@ pub unsafe extern "C" fn datafusion_context_register_record_batch(
     clear_error(error_out);
 
     if ctx.is_null() || name.is_null() || schema.is_null() || array.is_null() {
-        set_error(error_out, "Null pointer argument");
-        return -1;
+        return set_error_return(error_out, "Null pointer argument");
     }
 
     let context = &*(ctx as *mut SessionContext);
@@ -67,10 +66,7 @@ pub unsafe extern "C" fn datafusion_context_register_record_batch(
     // Get table name
     let name_str = match CStr::from_ptr(name).to_str() {
         Ok(s) => s.to_string(),
-        Err(e) => {
-            set_error(error_out, &format!("Invalid table name: {}", e));
-            return -1;
-        }
+        Err(e) => return set_error_return(error_out, &format!("Invalid table name: {}", e)),
     };
 
     // Import the Arrow data from FFI
@@ -81,10 +77,7 @@ pub unsafe extern "C" fn datafusion_context_register_record_batch(
     // Import the array data using the schema
     let array_data = match from_ffi(ffi_array, &ffi_schema) {
         Ok(d) => d,
-        Err(e) => {
-            set_error(error_out, &format!("Failed to import array: {}", e));
-            return -1;
-        }
+        Err(e) => return set_error_return(error_out, &format!("Failed to import array: {}", e)),
     };
 
     // The imported data is a struct array representing the record batch
@@ -98,14 +91,10 @@ pub unsafe extern "C" fn datafusion_context_register_record_batch(
     match datafusion::datasource::MemTable::try_new(Arc::new(schema), vec![vec![batch]]) {
         Ok(table) => {
             if let Err(e) = context.register_table(&name_str, Arc::new(table)) {
-                set_error(error_out, &format!("Failed to register table: {}", e));
-                return -1;
+                return set_error_return(error_out, &format!("Failed to register table: {}", e));
             }
         }
-        Err(e) => {
-            set_error(error_out, &format!("Failed to create memory table: {}", e));
-            return -1;
-        }
+        Err(e) => return set_error_return(error_out, &format!("Failed to create memory table: {}", e)),
     }
 
     0
@@ -134,8 +123,7 @@ pub unsafe extern "C" fn datafusion_context_sql(
     clear_error(error_out);
 
     if rt.is_null() || ctx.is_null() || sql.is_null() {
-        set_error(error_out, "Null pointer argument");
-        return std::ptr::null_mut();
+        return set_error_return_null(error_out, "Null pointer argument");
     }
 
     let runtime = &*(rt as *mut Runtime);
@@ -143,19 +131,13 @@ pub unsafe extern "C" fn datafusion_context_sql(
 
     let sql_str = match CStr::from_ptr(sql).to_str() {
         Ok(s) => s,
-        Err(e) => {
-            set_error(error_out, &format!("Invalid SQL string: {}", e));
-            return std::ptr::null_mut();
-        }
+        Err(e) => return set_error_return_null(error_out, &format!("Invalid SQL string: {}", e)),
     };
 
     runtime.block_on(async {
         match context.sql(sql_str).await {
             Ok(df) => Box::into_raw(Box::new(df)) as *mut c_void,
-            Err(e) => {
-                set_error(error_out, &format!("SQL execution failed: {}", e));
-                std::ptr::null_mut()
-            }
+            Err(e) => set_error_return_null(error_out, &format!("SQL execution failed: {}", e)),
         }
     })
 }

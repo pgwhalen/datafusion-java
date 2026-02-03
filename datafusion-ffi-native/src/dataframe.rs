@@ -2,7 +2,7 @@ use datafusion::dataframe::DataFrame;
 use std::ffi::{c_char, c_void};
 use tokio::runtime::Runtime;
 
-use crate::error::{clear_error, set_error};
+use crate::error::{clear_error, set_error_return_null};
 
 /// Destroy a DataFrame.
 ///
@@ -36,8 +36,7 @@ pub unsafe extern "C" fn datafusion_dataframe_execute_stream(
     clear_error(error_out);
 
     if rt.is_null() || df.is_null() {
-        set_error(error_out, "Null pointer argument");
-        return std::ptr::null_mut();
+        return set_error_return_null(error_out, "Null pointer argument");
     }
 
     let runtime = &*(rt as *mut Runtime);
@@ -46,10 +45,7 @@ pub unsafe extern "C" fn datafusion_dataframe_execute_stream(
     runtime.block_on(async {
         match dataframe.clone().execute_stream().await {
             Ok(stream) => Box::into_raw(Box::new(stream)) as *mut c_void,
-            Err(e) => {
-                set_error(error_out, &format!("Execute stream failed: {}", e));
-                std::ptr::null_mut()
-            }
+            Err(e) => set_error_return_null(error_out, &format!("Execute stream failed: {}", e)),
         }
     })
 }

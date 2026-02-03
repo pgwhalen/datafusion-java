@@ -1,6 +1,6 @@
 //! Rust TableProvider implementation that calls back into Java.
 
-use crate::error::set_error;
+use crate::error::{check_callback_result, set_error_return};
 use crate::java_backed_plan::JavaBackedExecutionPlan;
 use crate::java_provider::{JavaExecutionPlanCallbacks, JavaTableProviderCallbacks};
 use arrow::datatypes::SchemaRef;
@@ -40,15 +40,7 @@ impl JavaBackedTableProvider {
         let mut error_out: *mut c_char = std::ptr::null_mut();
 
         let result = (cb.schema_fn)(cb.java_object, &mut schema_out, &mut error_out);
-        if result != 0 {
-            let msg = if !error_out.is_null() {
-                // Note: Don't free error_out - it's Java-allocated and managed by Java's arena
-                std::ffi::CStr::from_ptr(error_out).to_string_lossy().to_string()
-            } else {
-                "Failed to get schema from Java TableProvider".to_string()
-            };
-            return Err(datafusion::error::DataFusionError::Execution(msg));
-        }
+        check_callback_result(result, error_out, "get schema from Java TableProvider")?;
 
         // Convert FFI schema to Arrow schema
         let schema = match arrow::datatypes::Schema::try_from(&schema_out) {
@@ -120,15 +112,7 @@ impl TableProvider for JavaBackedTableProvider {
                 &mut error_out,
             );
 
-            if result != 0 {
-                let msg = if !error_out.is_null() {
-                    // Note: Don't free error_out - it's Java-allocated and managed by Java's arena
-                    std::ffi::CStr::from_ptr(error_out).to_string_lossy().to_string()
-                } else {
-                    "Failed to scan Java TableProvider".to_string()
-                };
-                return Err(datafusion::error::DataFusionError::Execution(msg));
-            }
+            check_callback_result(result, error_out, "scan Java TableProvider")?;
 
             if plan_out.is_null() {
                 return Err(datafusion::error::DataFusionError::Execution(
@@ -174,8 +158,7 @@ unsafe extern "C" fn dummy_schema_fn(
     _schema_out: *mut FFI_ArrowSchema,
     error_out: *mut *mut c_char,
 ) -> i32 {
-    set_error(error_out, "TableProvider callbacks not initialized");
-    -1
+    set_error_return(error_out, "TableProvider callbacks not initialized")
 }
 
 unsafe extern "C" fn dummy_table_type_fn(_java_object: *mut std::ffi::c_void) -> i32 {
@@ -190,8 +173,7 @@ unsafe extern "C" fn dummy_scan_fn(
     _plan_out: *mut *mut JavaExecutionPlanCallbacks,
     error_out: *mut *mut c_char,
 ) -> i32 {
-    set_error(error_out, "TableProvider callbacks not initialized");
-    -1
+    set_error_return(error_out, "TableProvider callbacks not initialized")
 }
 
 unsafe extern "C" fn dummy_release_fn(_java_object: *mut std::ffi::c_void) {

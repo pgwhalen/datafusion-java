@@ -4,14 +4,17 @@ This document describes the patterns used in `datafusion-ffi-java` and `datafusi
 
 ## Error Handling
 
-### Rust Side: Error Output Pattern
+### Rust Side: Error Output Pattern (Downcalls)
 
 All Rust FFI functions that can fail should:
 1. Accept an `error_out: *mut *mut c_char` parameter as the last argument
 2. Return an `i32` status code (0 = success, non-zero = error) OR a pointer (null = error)
-3. On error, allocate an error string and write it to `error_out`
+3. On error, use the utility functions from `crate::error` to set the error and return
 
+**For i32-returning functions**, use `set_error_return`:
 ```rust
+use crate::error::{clear_error, set_error_return};
+
 #[no_mangle]
 pub unsafe extern "C" fn datafusion_do_something(
     ctx: *mut c_void,
@@ -20,22 +23,20 @@ pub unsafe extern "C" fn datafusion_do_something(
     clear_error(error_out);  // Always clear first
 
     if ctx.is_null() {
-        set_error(error_out, "Context is null");
-        return -1;
+        return set_error_return(error_out, "Context is null");
     }
 
     match do_something_fallible() {
         Ok(_) => 0,
-        Err(e) => {
-            set_error(error_out, &e.to_string());
-            -1
-        }
+        Err(e) => set_error_return(error_out, &format!("Operation failed: {}", e)),
     }
 }
 ```
 
-For pointer-returning functions:
+**For pointer-returning functions**, use `set_error_return_null`:
 ```rust
+use crate::error::{clear_error, set_error_return_null};
+
 #[no_mangle]
 pub unsafe extern "C" fn datafusion_create_thing(
     error_out: *mut *mut c_char,
@@ -44,13 +45,39 @@ pub unsafe extern "C" fn datafusion_create_thing(
 
     match create_thing() {
         Ok(thing) => Box::into_raw(Box::new(thing)) as *mut c_void,
-        Err(e) => {
-            set_error(error_out, &e.to_string());
-            std::ptr::null_mut()
-        }
+        Err(e) => set_error_return_null(error_out, &format!("Create failed: {}", e)),
     }
 }
 ```
+
+### Rust Side: Callback Error Handling (Upcalls)
+
+When Rust code calls back into Java and receives an error, use the callback error utilities:
+
+**For checking callback results**, use `check_callback_result`:
+```rust
+use crate::error::check_callback_result;
+
+// In a method that returns Result<T, DataFusionError>
+let result = (callbacks.some_fn)(callbacks.java_object, &mut out, &mut error_out);
+check_callback_result(result, error_out, "get data from Java")?;
+```
+
+**For creating errors directly** (e.g., in match arms), use `callback_error`:
+```rust
+use crate::error::callback_error;
+
+match result {
+    1 => { /* success */ }
+    0 => { /* end of stream */ }
+    _ => return Poll::Ready(Some(Err(callback_error(
+        error_out,
+        "load next batch from Java",
+    )))),
+}
+```
+
+Note: Java-allocated error strings (from callbacks) should NOT be freed by Rust - they are managed by Java's arena.
 
 ### Java Side: High-Level Error Handling
 

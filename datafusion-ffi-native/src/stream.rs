@@ -5,7 +5,7 @@ use futures::stream::TryStreamExt;
 use std::ffi::{c_char, c_void};
 use tokio::runtime::Runtime;
 
-use crate::error::{clear_error, set_error};
+use crate::error::{clear_error, set_error_return};
 
 /// Destroy a RecordBatchStream.
 ///
@@ -39,8 +39,7 @@ pub unsafe extern "C" fn datafusion_stream_schema(
     clear_error(error_out);
 
     if stream.is_null() || schema_out.is_null() {
-        set_error(error_out, "Null pointer argument");
-        return -1;
+        return set_error_return(error_out, "Null pointer argument");
     }
 
     let stream = &*(stream as *mut SendableRecordBatchStream);
@@ -51,10 +50,7 @@ pub unsafe extern "C" fn datafusion_stream_schema(
             std::ptr::write(schema_out, ffi_schema);
             0
         }
-        Err(e) => {
-            set_error(error_out, &format!("Failed to export schema: {}", e));
-            -1
-        }
+        Err(e) => set_error_return(error_out, &format!("Failed to export schema: {}", e)),
     }
 }
 
@@ -83,8 +79,7 @@ pub unsafe extern "C" fn datafusion_stream_next(
     clear_error(error_out);
 
     if rt.is_null() || stream.is_null() || array_out.is_null() || schema_out.is_null() {
-        set_error(error_out, "Null pointer argument");
-        return -1;
+        return set_error_return(error_out, "Null pointer argument");
     }
 
     let runtime = &*(rt as *mut Runtime);
@@ -97,10 +92,7 @@ pub unsafe extern "C" fn datafusion_stream_next(
                 let struct_array: StructArray = batch.into();
                 let (ffi_array, ffi_schema) = match to_ffi(&struct_array.to_data()) {
                     Ok(result) => result,
-                    Err(e) => {
-                        set_error(error_out, &format!("Failed to export batch: {}", e));
-                        return -1;
-                    }
+                    Err(e) => return set_error_return(error_out, &format!("Failed to export batch: {}", e)),
                 };
                 std::ptr::write(array_out, ffi_array);
                 std::ptr::write(schema_out, ffi_schema);
@@ -110,10 +102,7 @@ pub unsafe extern "C" fn datafusion_stream_next(
                 // End of stream
                 0
             }
-            Err(e) => {
-                set_error(error_out, &format!("Stream error: {}", e));
-                -1
-            }
+            Err(e) => set_error_return(error_out, &format!("Stream error: {}", e)),
         }
     })
 }

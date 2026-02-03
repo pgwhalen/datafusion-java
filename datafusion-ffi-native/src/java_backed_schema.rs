@@ -1,6 +1,6 @@
 //! Rust SchemaProvider implementation that calls back into Java.
 
-use crate::error::set_error;
+use crate::error::{check_callback_result, set_error_return};
 use crate::java_backed_provider::JavaBackedTableProvider;
 use crate::java_provider::{JavaSchemaProviderCallbacks, JavaTableProviderCallbacks};
 use async_trait::async_trait;
@@ -105,15 +105,11 @@ impl SchemaProvider for JavaBackedSchemaProvider {
                 &mut error_out,
             );
 
-            if result != 0 {
-                let msg = if !error_out.is_null() {
-                    // Note: Don't free error_out - it's Java-allocated and managed by Java's arena
-                    CStr::from_ptr(error_out).to_string_lossy().to_string()
-                } else {
-                    format!("Failed to get table '{}' from Java SchemaProvider", name)
-                };
-                return Err(datafusion::error::DataFusionError::Execution(msg));
-            }
+            check_callback_result(
+                result,
+                error_out,
+                &format!("get table '{}' from Java SchemaProvider", name),
+            )?;
 
             if table_out.is_null() {
                 return Ok(None);
@@ -172,8 +168,7 @@ unsafe extern "C" fn dummy_table_names_fn(
     _names_len_out: *mut usize,
     error_out: *mut *mut c_char,
 ) -> i32 {
-    set_error(error_out, "SchemaProvider callbacks not initialized");
-    -1
+    set_error_return(error_out, "SchemaProvider callbacks not initialized")
 }
 
 unsafe extern "C" fn dummy_table_fn(
@@ -182,8 +177,7 @@ unsafe extern "C" fn dummy_table_fn(
     _table_out: *mut *mut JavaTableProviderCallbacks,
     error_out: *mut *mut c_char,
 ) -> i32 {
-    set_error(error_out, "SchemaProvider callbacks not initialized");
-    -1
+    set_error_return(error_out, "SchemaProvider callbacks not initialized")
 }
 
 unsafe extern "C" fn dummy_table_exists_fn(

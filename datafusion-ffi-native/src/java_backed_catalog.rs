@@ -1,6 +1,6 @@
 //! Rust CatalogProvider implementation that calls back into Java.
 
-use crate::error::{clear_error, set_error};
+use crate::error::{clear_error, set_error_return};
 use crate::java_backed_schema::JavaBackedSchemaProvider;
 use crate::java_provider::{JavaCatalogProviderCallbacks, JavaSchemaProviderCallbacks};
 use datafusion::catalog::{CatalogProvider, SchemaProvider};
@@ -167,8 +167,7 @@ pub unsafe extern "C" fn datafusion_context_register_catalog(
     clear_error(error_out);
 
     if ctx.is_null() || name.is_null() || callbacks.is_null() {
-        set_error(error_out, "Null pointer argument");
-        return -1;
+        return set_error_return(error_out, "Null pointer argument");
     }
 
     let context = &*(ctx as *mut SessionContext);
@@ -176,10 +175,7 @@ pub unsafe extern "C" fn datafusion_context_register_catalog(
     // Get catalog name
     let name_str = match CStr::from_ptr(name).to_str() {
         Ok(s) => s.to_string(),
-        Err(e) => {
-            set_error(error_out, &format!("Invalid catalog name: {}", e));
-            return -1;
-        }
+        Err(e) => return set_error_return(error_out, &format!("Invalid catalog name: {}", e)),
     };
 
     // Create the Java-backed catalog provider
@@ -198,8 +194,7 @@ unsafe extern "C" fn dummy_schema_names_fn(
     _names_len_out: *mut usize,
     error_out: *mut *mut c_char,
 ) -> i32 {
-    set_error(error_out, "CatalogProvider callbacks not initialized");
-    -1
+    set_error_return(error_out, "CatalogProvider callbacks not initialized")
 }
 
 unsafe extern "C" fn dummy_schema_fn(
@@ -208,8 +203,7 @@ unsafe extern "C" fn dummy_schema_fn(
     _schema_out: *mut *mut JavaSchemaProviderCallbacks,
     error_out: *mut *mut c_char,
 ) -> i32 {
-    set_error(error_out, "CatalogProvider callbacks not initialized");
-    -1
+    set_error_return(error_out, "CatalogProvider callbacks not initialized")
 }
 
 unsafe extern "C" fn dummy_release_fn(_java_object: *mut std::ffi::c_void) {

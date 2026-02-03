@@ -1,6 +1,6 @@
 //! Rust ExecutionPlan implementation that calls back into Java.
 
-use crate::error::set_error;
+use crate::error::{callback_error, check_callback_result, set_error_return};
 use crate::java_provider::{JavaExecutionPlanCallbacks, JavaRecordBatchReaderCallbacks};
 use arrow::array::StructArray;
 use arrow::datatypes::SchemaRef;
@@ -69,13 +69,10 @@ impl Stream for JavaBackedRecordBatchStream {
                 }
                 _ => {
                     // Error
-                    let msg = if !error_out.is_null() {
-                        // Note: Don't free error_out - it's Java-allocated and managed by Java's arena
-                        std::ffi::CStr::from_ptr(error_out).to_string_lossy().to_string()
-                    } else {
-                        "Unknown error in Java RecordBatchReader".to_string()
-                    };
-                    Poll::Ready(Some(Err(datafusion::error::DataFusionError::Execution(msg))))
+                    Poll::Ready(Some(Err(callback_error(
+                        error_out,
+                        "load next batch from Java RecordBatchReader",
+                    ))))
                 }
             }
         }
@@ -119,15 +116,7 @@ impl JavaBackedExecutionPlan {
         let mut error_out: *mut c_char = std::ptr::null_mut();
 
         let result = (cb.schema_fn)(cb.java_object, &mut schema_out, &mut error_out);
-        if result != 0 {
-            let msg = if !error_out.is_null() {
-                // Note: Don't free error_out - it's Java-allocated and managed by Java's arena
-                std::ffi::CStr::from_ptr(error_out).to_string_lossy().to_string()
-            } else {
-                "Failed to get schema from Java ExecutionPlan".to_string()
-            };
-            return Err(datafusion::error::DataFusionError::Execution(msg));
-        }
+        check_callback_result(result, error_out, "get schema from Java ExecutionPlan")?;
 
         // Convert FFI schema to Arrow schema
         let schema = match arrow::datatypes::Schema::try_from(&schema_out) {
@@ -211,15 +200,7 @@ impl ExecutionPlan for JavaBackedExecutionPlan {
 
             let result = (cb.execute_fn)(cb.java_object, partition, &mut reader_out, &mut error_out);
 
-            if result != 0 {
-                let msg = if !error_out.is_null() {
-                    // Note: Don't free error_out - it's Java-allocated and managed by Java's arena
-                    std::ffi::CStr::from_ptr(error_out).to_string_lossy().to_string()
-                } else {
-                    "Failed to execute Java ExecutionPlan".to_string()
-                };
-                return Err(datafusion::error::DataFusionError::Execution(msg));
-            }
+            check_callback_result(result, error_out, "execute Java ExecutionPlan")?;
 
             if reader_out.is_null() {
                 return Err(datafusion::error::DataFusionError::Execution(
@@ -278,8 +259,7 @@ unsafe extern "C" fn dummy_schema_fn(
     _schema_out: *mut FFI_ArrowSchema,
     error_out: *mut *mut c_char,
 ) -> i32 {
-    set_error(error_out, "ExecutionPlan callbacks not initialized");
-    -1
+    set_error_return(error_out, "ExecutionPlan callbacks not initialized")
 }
 
 unsafe extern "C" fn dummy_output_partitioning_fn(_java_object: *mut std::ffi::c_void) -> i32 {
@@ -292,8 +272,7 @@ unsafe extern "C" fn dummy_execute_fn(
     _reader_out: *mut *mut JavaRecordBatchReaderCallbacks,
     error_out: *mut *mut c_char,
 ) -> i32 {
-    set_error(error_out, "ExecutionPlan callbacks not initialized");
-    -1
+    set_error_return(error_out, "ExecutionPlan callbacks not initialized")
 }
 
 unsafe extern "C" fn dummy_load_next_batch_fn(
@@ -302,8 +281,7 @@ unsafe extern "C" fn dummy_load_next_batch_fn(
     _schema_out: *mut FFI_ArrowSchema,
     error_out: *mut *mut c_char,
 ) -> i32 {
-    set_error(error_out, "RecordBatchReader callbacks not initialized");
-    -1
+    set_error_return(error_out, "RecordBatchReader callbacks not initialized")
 }
 
 unsafe extern "C" fn dummy_release_fn(_java_object: *mut std::ffi::c_void) {
