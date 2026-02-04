@@ -1,5 +1,6 @@
 plugins {
     id 'java-library'
+    id 'maven-publish'
     id 'datafusion.java-conventions'
     id 'com.diffplug.spotless'
     id 'com.google.osdetector'
@@ -10,6 +11,8 @@ java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(22)
     }
+    withJavadocJar()
+    withSourcesJar()
 }
 
 tasks.withType(JavaCompile).configureEach {
@@ -20,6 +23,7 @@ dependencies {
     api 'org.slf4j:slf4j-api:2.0.16'
     api 'org.apache.arrow:arrow-vector:18.1.0'
     implementation 'org.apache.arrow:arrow-c-data:18.1.0'
+    implementation 'org.scijava:native-lib-loader:2.5.0'
     runtimeOnly 'org.apache.arrow:arrow-memory-unsafe:18.0.0'
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
     testRuntimeOnly 'ch.qos.logback:logback-classic:1.5.12'
@@ -33,11 +37,38 @@ spotless {
 
 def cargoBinary = "${System.getProperty('user.home')}/.cargo/bin/cargo"
 
-def extensionMapping = [
+ext.extensionMapping = [
     "osx"    : "dylib",
     "linux"  : "so",
     "windows": "dll"
 ]
+
+// Platform directory names used by native-lib-loader
+// Format: {os}_{arch} where os is osx/linux/windows and arch is 64/arm64
+ext.platformMapping = [
+    "osx-x86_64"     : "osx_64",
+    "osx-aarch_64"   : "osx_arm64",
+    "linux-x86_64"   : "linux_64",
+    "linux-aarch_64" : "linux_arm64",
+    "windows-x86_64" : "windows_64"
+]
+
+// Library filename per OS (Windows has no 'lib' prefix)
+ext.libNameMapping = [
+    "osx"    : "libdatafusion_ffi_native.dylib",
+    "linux"  : "libdatafusion_ffi_native.so",
+    "windows": "datafusion_ffi_native.dll"
+]
+
+// Get the current platform's native-lib-loader directory name
+ext.getCurrentPlatformDir = {
+    def key = "${osdetector.os}-${osdetector.arch}"
+    def result = platformMapping[key]
+    if (result == null) {
+        throw new GradleException("Unsupported platform: $key")
+    }
+    return result
+}
 
 tasks.register('cargoDevBuild', Exec) {
     workingDir "$rootDir/datafusion-ffi-native"
@@ -52,7 +83,7 @@ tasks.register('cargoReleaseBuild', Exec) {
 }
 
 tasks.register('copyDevLibrary', Sync) {
-    def extension = extensionMapping[osdetector.os]
+    def extension = project.extensionMapping[osdetector.os]
     from "${rootDir}/datafusion-ffi-native/target/debug/libdatafusion_ffi_native.$extension"
     into layout.buildDirectory.dir("ffi_libs/dev")
     dependsOn cargoDevBuild
@@ -67,4 +98,95 @@ test {
         '--add-opens=java.base/java.nio=ALL-UNNAMED'
     ]
     useJUnitPlatform()
+}
+
+// Copy release library to JAR resources for current platform
+tasks.register('copyReleaseLibraryForJar', Copy) {
+    def extension = project.extensionMapping[osdetector.os]
+    def platformDir = project.getCurrentPlatformDir()
+    from "${rootDir}/datafusion-ffi-native/target/release/libdatafusion_ffi_native.$extension"
+    into layout.buildDirectory.dir("resources/main/natives/$platformDir")
+    rename { project.libNameMapping[osdetector.os] }
+    dependsOn cargoReleaseBuild
+}
+
+// Copy all native libraries from CI artifacts directory
+// Expected structure: build/native-artifacts/{platform}/libdatafusion_ffi_native.{ext}
+tasks.register('copyAllNativeLibraries', Copy) {
+    def artifactsDir = layout.buildDirectory.dir("native-artifacts")
+    from(artifactsDir) {
+        include "osx_64/*"
+        include "osx_arm64/*"
+        include "linux_64/*"
+        include "linux_arm64/*"
+        include "windows_64/*"
+    }
+    into layout.buildDirectory.dir("resources/main/natives")
+}
+
+// JAR with only the local platform's native library (for development)
+tasks.register('jarWithLocalLib', Jar) {
+    dependsOn copyReleaseLibraryForJar, classes
+    archiveClassifier = 'local'
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from sourceSets.main.output
+    from(layout.buildDirectory.dir("resources/main")) {
+        include "natives/**"
+    }
+}
+
+// JAR with all platform native libraries (for release)
+tasks.register('jarWithAllLibs', Jar) {
+    dependsOn copyAllNativeLibraries, classes
+    archiveClassifier = ''
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from sourceSets.main.output
+    from(layout.buildDirectory.dir("resources/main")) {
+        include "natives/**"
+    }
+}
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            from components.java
+
+            pom {
+                name = 'DataFusion FFI Java'
+                description = 'Java bindings for Apache DataFusion using the Foreign Function & Memory API'
+                url = 'https://github.com/datafusion-contrib/datafusion-java'
+
+                licenses {
+                    license {
+                        name = 'The Apache License, Version 2.0'
+                        url = 'https://www.apache.org/licenses/LICENSE-2.0.txt'
+                    }
+                }
+
+                developers {
+                    developer {
+                        id = 'datafusion-contrib'
+                        name = 'DataFusion Contributors'
+                    }
+                }
+
+                scm {
+                    connection = 'scm:git:git://github.com/datafusion-contrib/datafusion-java.git'
+                    developerConnection = 'scm:git:ssh://github.com:datafusion-contrib/datafusion-java.git'
+                    url = 'https://github.com/datafusion-contrib/datafusion-java'
+                }
+            }
+        }
+    }
+
+    repositories {
+        maven {
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/datafusion-contrib/datafusion-java")
+            credentials {
+                username = System.getenv("GITHUB_ACTOR") ?: project.findProperty("gpr.user") ?: ""
+                password = System.getenv("GITHUB_TOKEN") ?: project.findProperty("gpr.key") ?: ""
+            }
+        }
+    }
 }
