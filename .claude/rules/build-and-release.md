@@ -12,6 +12,26 @@ This document describes the build system, JAR packaging, and release process for
 
 This preserves backward compatibility with existing tests while enabling JAR-embedded distribution.
 
+## Platform Configuration
+
+Supported platforms are defined in `scripts/platforms.conf`, which is the single source of truth. This file is a Java properties file mapping osdetector keys to native-lib-loader directory names:
+
+```properties
+osx-x86_64=osx_64
+osx-aarch_64=osx_arm64
+linux-x86_64=linux_64
+linux-aarch_64=linux_arm64
+windows-x86_64=windows_64
+```
+
+This file is read by:
+- **`build.gradle`** — loaded as a `Properties` object for `platformMapping`
+- **Shell scripts** — loaded via `scripts/platforms.sh` into the `PLATFORMS` bash array
+
+When adding a new platform, update `scripts/platforms.conf` and also:
+- `.github/workflows/publish-ffi.yml` (build-native matrix — ties platform to runner OS and lib filename)
+- `NativeLoader.java` (`getPlatformDirectory` switch — maps from Java `Architecture` enum)
+
 ## Native Library Directory Structure
 
 Native libraries are packaged in the JAR under `natives/{platform}/`:
