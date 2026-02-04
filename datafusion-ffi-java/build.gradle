@@ -154,7 +154,7 @@ publishing {
             pom {
                 name = 'DataFusion FFI Java'
                 description = 'Java bindings for Apache DataFusion using the Foreign Function & Memory API'
-                url = 'https://github.com/datafusion-contrib/datafusion-java'
+                url = 'https://github.com/pgwhalen/datafusion-java'
 
                 licenses {
                     license {
@@ -171,9 +171,9 @@ publishing {
                 }
 
                 scm {
-                    connection = 'scm:git:git://github.com/datafusion-contrib/datafusion-java.git'
-                    developerConnection = 'scm:git:ssh://github.com:datafusion-contrib/datafusion-java.git'
-                    url = 'https://github.com/datafusion-contrib/datafusion-java'
+                    connection = 'scm:git:git://github.com/pgwhalen/datafusion-java.git'
+                    developerConnection = 'scm:git:ssh://github.com:pgwhalen/datafusion-java.git'
+                    url = 'https://github.com/pgwhalen/datafusion-java'
                 }
             }
         }
@@ -182,7 +182,7 @@ publishing {
     repositories {
         maven {
             name = "GitHubPackages"
-            url = uri("https://maven.pkg.github.com/datafusion-contrib/datafusion-java")
+            url = uri("https://maven.pkg.github.com/pgwhalen/datafusion-java")
             credentials {
                 username = System.getenv("GITHUB_ACTOR") ?: project.findProperty("gpr.user") ?: ""
                 password = System.getenv("GITHUB_TOKEN") ?: project.findProperty("gpr.key") ?: ""

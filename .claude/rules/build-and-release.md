@@ -138,7 +138,7 @@ The `publishing` block in `build.gradle` configures GitHub Packages:
 repositories {
     maven {
         name = "GitHubPackages"
-        url = uri("https://maven.pkg.github.com/datafusion-contrib/datafusion-java")
+        url = uri("https://maven.pkg.github.com/pgwhalen/datafusion-java")
         credentials {
             username = System.getenv("GITHUB_ACTOR")
             password = System.getenv("GITHUB_TOKEN")
@@ -164,7 +164,7 @@ After publishing, users can add the dependency:
 ```gradle
 repositories {
     maven {
-        url = uri("https://maven.pkg.github.com/datafusion-contrib/datafusion-java")
+        url = uri("https://maven.pkg.github.com/pgwhalen/datafusion-java")
         credentials {
             username = project.findProperty("gpr.user") ?: System.getenv("GITHUB_ACTOR")
             password = project.findProperty("gpr.key") ?: System.getenv("GITHUB_TOKEN")
