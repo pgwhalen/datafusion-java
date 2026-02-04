@@ -5,6 +5,10 @@ on:
   push:
     branches: [main]
     tags: ['v*']
+    paths:
+      - 'datafusion-ffi-native/**'
+      - 'datafusion-ffi-java/**'
+      - '.github/workflows/publish-ffi.yml'
   pull_request:
     branches: [main]
 
@@ -24,8 +28,9 @@ jobs:
           - os: ubuntu-24.04-arm
             platform: linux_arm64
             lib_name: libdatafusion_ffi_native.so
-          - os: macos-13
+          - os: macos-14
             platform: osx_64
+            rust_target: x86_64-apple-darwin
             lib_name: libdatafusion_ffi_native.dylib
           - os: macos-14
             platform: osx_arm64
@@ -51,15 +56,35 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-cargo-
 
+      - name: Install cross-compilation target
+        if: matrix.rust_target
+        run: rustup target add ${{ matrix.rust_target }}
+
       - name: Build release library
+        if: ${{ !matrix.rust_target }}
         run: cargo build --release
         working-directory: datafusion-ffi-native
 
+      - name: Build release library (cross-compile)
+        if: matrix.rust_target
+        run: cargo build --release --target ${{ matrix.rust_target }}
+        working-directory: datafusion-ffi-native
+
       - name: Upload native library
+        if: ${{ !matrix.rust_target }}
         uses: actions/upload-artifact@v4
         with:
           name: native-${{ matrix.platform }}
           path: datafusion-ffi-native/target/release/${{ matrix.lib_name }}
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Upload native library (cross-compiled)
+        if: matrix.rust_target
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.platform }}
+          path: datafusion-ffi-native/target/${{ matrix.rust_target }}/release/${{ matrix.lib_name }}
           retention-days: 7
           if-no-files-found: error
 
