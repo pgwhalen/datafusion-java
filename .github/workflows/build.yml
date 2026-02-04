@@ -1,9 +1,6 @@
-name: Build
+name: Build (Legacy - Disabled)
 on:
-  push:
-    branches: ["*"]
-  pull_request:
-    branches: ["*"]
+  workflow_dispatch: # Manual trigger only - disabled due to actions/upload-artifact v3 deprecation
 jobs:
   rust:
     strategy:

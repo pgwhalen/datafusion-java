@@ -1,9 +1,6 @@
-name: Release
+name: Release (Legacy - Disabled)
 on:
-  release:
-    types: [created]
-  push:
-    branches: [main]
+  workflow_dispatch: # Manual trigger only - disabled due to actions/upload-artifact v3 deprecation
 jobs:
   rust:
     strategy:
