@@ -44,14 +44,9 @@ ext.extensionMapping = [
 ]
 
 // Platform directory names used by native-lib-loader
-// Format: {os}_{arch} where os is osx/linux/windows and arch is 64/arm64
-ext.platformMapping = [
-    "osx-x86_64"     : "osx_64",
-    "osx-aarch_64"   : "osx_arm64",
-    "linux-x86_64"   : "linux_64",
-    "linux-aarch_64" : "linux_arm64",
-    "windows-x86_64" : "windows_64"
-]
+// Loaded from scripts/platforms.conf (single source of truth)
+ext.platformMapping = new Properties()
+new File(project.rootDir, "scripts/platforms.conf").withInputStream { platformMapping.load(it) }
 
 // Library filename per OS (Windows has no 'lib' prefix)
 ext.libNameMapping = [
@@ -115,11 +110,9 @@ tasks.register('copyReleaseLibraryForJar', Copy) {
 tasks.register('copyAllNativeLibraries', Copy) {
     def artifactsDir = layout.buildDirectory.dir("native-artifacts")
     from(artifactsDir) {
-        include "osx_64/*"
-        include "osx_arm64/*"
-        include "linux_64/*"
-        include "linux_arm64/*"
-        include "windows_64/*"
+        project.platformMapping.values().each { platform ->
+            include "$platform/*"
+        }
     }
     into layout.buildDirectory.dir("resources/main/natives")
 }

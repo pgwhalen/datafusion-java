@@ -9,8 +9,10 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/platforms.sh"
+
 ARTIFACTS_DIR="${1:-datafusion-ffi-java/build/native-artifacts}"
-PLATFORMS=("osx_64" "osx_arm64" "linux_64" "linux_arm64" "windows_64")
 
 mkdir -p "$ARTIFACTS_DIR"
 

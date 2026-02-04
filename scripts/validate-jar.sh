@@ -8,6 +8,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/platforms.sh"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 JAR_DIR="$ROOT_DIR/datafusion-ffi-java/build/libs"
 TEST_DIR="$ROOT_DIR/build/jar-validation"
@@ -123,7 +124,7 @@ list_natives() {
 # Check expected platform directories
 check_platforms() {
     local jar="$1"
-    local expected_platforms=("osx_64" "osx_arm64" "linux_64" "linux_arm64" "windows_64")
+    local expected_platforms=("${PLATFORMS[@]}")
     local found=0
     local missing=0
 
