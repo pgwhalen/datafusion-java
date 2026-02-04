@@ -1,0 +1,163 @@
+name: Publish FFI Java
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Build native libraries on all platforms
+  build-native:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux_64
+            lib_name: libdatafusion_ffi_native.so
+          - os: ubuntu-24.04-arm
+            platform: linux_arm64
+            lib_name: libdatafusion_ffi_native.so
+          - os: macos-13
+            platform: osx_64
+            lib_name: libdatafusion_ffi_native.dylib
+          - os: macos-14
+            platform: osx_arm64
+            lib_name: libdatafusion_ffi_native.dylib
+          - os: windows-latest
+            platform: windows_64
+            lib_name: datafusion_ffi_native.dll
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            datafusion-ffi-native/target
+          key: ${{ runner.os }}-${{ runner.arch }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-cargo-
+
+      - name: Build release library
+        run: cargo build --release
+        working-directory: datafusion-ffi-native
+
+      - name: Upload native library
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.platform }}
+          path: datafusion-ffi-native/target/release/${{ matrix.lib_name }}
+          retention-days: 7
+          if-no-files-found: error
+
+  # Build JAR with all native libraries
+  build-jar:
+    needs: build-native
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 22
+        uses: actions/setup-java@v4
+        with:
+          java-version: '22'
+          distribution: 'temurin'
+
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v4
+
+      - name: Download all native artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: datafusion-ffi-java/build/native-artifacts
+          pattern: native-*
+          merge-multiple: false
+
+      - name: Organize native libraries
+        run: ./scripts/organize-native-libs.sh
+
+      - name: Build JAR with all native libraries
+        run: ./gradlew :datafusion-ffi-java:jarWithAllLibs :datafusion-ffi-java:sourcesJar :datafusion-ffi-java:javadocJar
+
+      - name: Verify JAR contents
+        run: ./scripts/verify-jar-contents.sh
+
+      - name: Upload JAR artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: datafusion-ffi-java-jars
+          path: datafusion-ffi-java/build/libs/
+          retention-days: 7
+
+  # Test JAR on multiple platforms
+  test-jar:
+    needs: build-jar
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 22
+        uses: actions/setup-java@v4
+        with:
+          java-version: '22'
+          distribution: 'temurin'
+
+      - name: Download JAR artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: datafusion-ffi-java-jars
+          path: datafusion-ffi-java/build/libs
+
+      - name: Run validation script (Unix)
+        if: runner.os != 'Windows'
+        run: ./scripts/validate-jar.sh
+
+      - name: Run validation test (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/validate-jar.ps1
+
+  # Publish to GitHub Packages
+  publish:
+    needs: test-jar
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 22
+        uses: actions/setup-java@v4
+        with:
+          java-version: '22'
+          distribution: 'temurin'
+
+      - name: Download JAR artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: datafusion-ffi-java-jars
+          path: datafusion-ffi-java/build/libs
+
+      - name: Publish to GitHub Packages
+        run: ./gradlew :datafusion-ffi-java:publish
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
