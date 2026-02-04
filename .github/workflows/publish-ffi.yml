@@ -1,6 +1,7 @@
 name: Publish FFI Java
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     tags: ['v*']
