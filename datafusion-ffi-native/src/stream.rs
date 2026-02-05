@@ -92,7 +92,12 @@ pub unsafe extern "C" fn datafusion_stream_next(
                 let struct_array: StructArray = batch.into();
                 let (ffi_array, ffi_schema) = match to_ffi(&struct_array.to_data()) {
                     Ok(result) => result,
-                    Err(e) => return set_error_return(error_out, &format!("Failed to export batch: {}", e)),
+                    Err(e) => {
+                        return set_error_return(
+                            error_out,
+                            &format!("Failed to export batch: {}", e),
+                        )
+                    }
                 };
                 std::ptr::write(array_out, ffi_array);
                 std::ptr::write(schema_out, ffi_schema);

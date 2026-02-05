@@ -94,7 +94,9 @@ pub unsafe extern "C" fn datafusion_context_register_record_batch(
                 return set_error_return(error_out, &format!("Failed to register table: {}", e));
             }
         }
-        Err(e) => return set_error_return(error_out, &format!("Failed to create memory table: {}", e)),
+        Err(e) => {
+            return set_error_return(error_out, &format!("Failed to create memory table: {}", e))
+        }
     }
 
     0

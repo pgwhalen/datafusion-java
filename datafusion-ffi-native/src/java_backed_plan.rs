@@ -19,13 +19,13 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 
 /// A RecordBatch stream that calls back into Java.
-struct JavaBackedRecordBatchStream {
+pub struct JavaBackedRecordBatchStream {
     callbacks: *mut JavaRecordBatchReaderCallbacks,
     schema: SchemaRef,
 }
 
 impl JavaBackedRecordBatchStream {
-    fn new(callbacks: *mut JavaRecordBatchReaderCallbacks, schema: SchemaRef) -> Self {
+    pub fn new(callbacks: *mut JavaRecordBatchReaderCallbacks, schema: SchemaRef) -> Self {
         Self { callbacks, schema }
     }
 }
@@ -60,7 +60,9 @@ impl Stream for JavaBackedRecordBatchStream {
                             let batch = RecordBatch::from(struct_array);
                             Poll::Ready(Some(Ok(batch)))
                         }
-                        Err(e) => Poll::Ready(Some(Err(datafusion::error::DataFusionError::ArrowError(e, None)))),
+                        Err(e) => Poll::Ready(Some(Err(
+                            datafusion::error::DataFusionError::ArrowError(e, None),
+                        ))),
                     }
                 }
                 0 => {
@@ -198,7 +200,8 @@ impl ExecutionPlan for JavaBackedExecutionPlan {
             let mut reader_out: *mut JavaRecordBatchReaderCallbacks = std::ptr::null_mut();
             let mut error_out: *mut c_char = std::ptr::null_mut();
 
-            let result = (cb.execute_fn)(cb.java_object, partition, &mut reader_out, &mut error_out);
+            let result =
+                (cb.execute_fn)(cb.java_object, partition, &mut reader_out, &mut error_out);
 
             check_callback_result(result, error_out, "execute Java ExecutionPlan")?;
 
@@ -245,7 +248,8 @@ pub extern "C" fn datafusion_alloc_execution_plan_callbacks() -> *mut JavaExecut
 /// # Safety
 /// The returned pointer must be freed by Rust when the reader is dropped.
 #[no_mangle]
-pub extern "C" fn datafusion_alloc_record_batch_reader_callbacks() -> *mut JavaRecordBatchReaderCallbacks {
+pub extern "C" fn datafusion_alloc_record_batch_reader_callbacks(
+) -> *mut JavaRecordBatchReaderCallbacks {
     Box::into_raw(Box::new(JavaRecordBatchReaderCallbacks {
         java_object: std::ptr::null_mut(),
         load_next_batch_fn: dummy_load_next_batch_fn,

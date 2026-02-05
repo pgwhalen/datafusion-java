@@ -137,6 +137,39 @@ public final class DataFusionBindings {
           "datafusion_alloc_record_batch_reader_callbacks",
           FunctionDescriptor.of(ValueLayout.ADDRESS));
 
+  // File format callback allocation
+  public static final MethodHandle ALLOC_FILE_FORMAT_CALLBACKS =
+      downcall(
+          "datafusion_alloc_file_format_callbacks", FunctionDescriptor.of(ValueLayout.ADDRESS));
+
+  // File source callback allocation
+  public static final MethodHandle ALLOC_FILE_SOURCE_CALLBACKS =
+      downcall(
+          "datafusion_alloc_file_source_callbacks", FunctionDescriptor.of(ValueLayout.ADDRESS));
+
+  // File opener callback allocation
+  public static final MethodHandle ALLOC_FILE_OPENER_CALLBACKS =
+      downcall(
+          "datafusion_alloc_file_opener_callbacks", FunctionDescriptor.of(ValueLayout.ADDRESS));
+
+  // Listing table registration (all-in-one)
+  public static final MethodHandle CONTEXT_REGISTER_LISTING_TABLE =
+      downcall(
+          "datafusion_context_register_listing_table",
+          FunctionDescriptor.of(
+              ValueLayout.JAVA_INT,
+              ValueLayout.ADDRESS, // ctx
+              ValueLayout.ADDRESS, // rt
+              ValueLayout.ADDRESS, // name
+              ValueLayout.ADDRESS, // url
+              ValueLayout.ADDRESS, // file_extension
+              ValueLayout.ADDRESS, // schema (FFI_ArrowSchema*)
+              ValueLayout.ADDRESS, // format_callbacks
+              ValueLayout.JAVA_BOOLEAN, // collect_stat
+              ValueLayout.JAVA_LONG, // target_partitions
+              ValueLayout.ADDRESS // error_out
+              ));
+
   private DataFusionBindings() {}
 
   /** Get the native linker for creating upcall stubs. */

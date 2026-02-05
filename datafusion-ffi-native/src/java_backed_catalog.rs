@@ -135,7 +135,8 @@ impl Drop for JavaBackedCatalogProvider {
 /// # Safety
 /// The returned pointer must be freed by Rust when the provider is dropped.
 #[no_mangle]
-pub extern "C" fn datafusion_alloc_catalog_provider_callbacks() -> *mut JavaCatalogProviderCallbacks {
+pub extern "C" fn datafusion_alloc_catalog_provider_callbacks() -> *mut JavaCatalogProviderCallbacks
+{
     Box::into_raw(Box::new(JavaCatalogProviderCallbacks {
         java_object: std::ptr::null_mut(),
         schema_names_fn: dummy_schema_names_fn,

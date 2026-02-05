@@ -198,10 +198,7 @@ pub struct JavaCatalogProviderCallbacks {
 /// The array must have been allocated using Java's arena and the strings
 /// must be valid C strings.
 #[no_mangle]
-pub unsafe extern "C" fn datafusion_free_string_array(
-    strings: *mut *mut c_char,
-    len: usize,
-) {
+pub unsafe extern "C" fn datafusion_free_string_array(strings: *mut *mut c_char, len: usize) {
     if strings.is_null() {
         return;
     }

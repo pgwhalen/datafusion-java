@@ -51,7 +51,7 @@ public class SessionContext implements AutoCloseable {
         DataFusionBindings.RUNTIME_DESTROY.invokeExact(runtime);
         throw new DataFusionException("Failed to create SessionContext");
       }
-      ffi = new SessionContextFfi(context, config);
+      ffi = new SessionContextFfi(context, runtime, config);
       logger.debug("Created SessionContext: runtime={}, context={}", runtime, context);
     } catch (DataFusionException e) {
       throw e;
@@ -168,6 +168,29 @@ public class SessionContext implements AutoCloseable {
   }
 
   /**
+   * Registers a listing table with the session context.
+   *
+   * <p>A listing table scans files in a directory using a user-provided {@link FileFormat}. For
+   * example:
+   *
+   * <pre>{@code
+   * ListingTableUrl url = ListingTableUrl.parse("/path/to/data/");
+   * ListingOptions options = ListingOptions.builder(myFormat).build();
+   * ListingTable table = ListingTable.builder(url, options).schema(mySchema).build();
+   * ctx.registerListingTable("my_table", table, allocator);
+   * }</pre>
+   *
+   * @param name The table name
+   * @param table The listing table configuration
+   * @param allocator The buffer allocator to use for Arrow data transfers
+   * @throws DataFusionException if registration fails
+   */
+  public void registerListingTable(String name, ListingTable table, BufferAllocator allocator) {
+    checkNotClosed();
+    ffi.registerListingTable(name, table, allocator);
+  }
+
+  /**
    * Gets the native runtime pointer for use by other FFI classes.
    *
    * @return The runtime memory segment
@@ -187,15 +210,16 @@ public class SessionContext implements AutoCloseable {
     if (!closed) {
       closed = true;
       try {
-        // Close catalog handles first (but NOT the arena - upcalls may still be invoked during
+        // Close handles first (but NOT arenas - upcalls may still be invoked during
         // context destruction)
         ffi.closeCatalogHandles();
+        ffi.closeFormatHandles();
 
         DataFusionBindings.CONTEXT_DESTROY.invokeExact(context);
         DataFusionBindings.RUNTIME_DESTROY.invokeExact(runtime);
 
-        // Now it's safe to close the arena (no more upcalls possible)
-        ffi.closeArena();
+        // Now it's safe to close arenas (no more upcalls possible)
+        ffi.closeArenas();
 
         logger.debug("Closed SessionContext");
       } catch (Throwable e) {
