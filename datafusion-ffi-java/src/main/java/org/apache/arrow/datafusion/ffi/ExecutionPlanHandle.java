@@ -18,7 +18,7 @@ import org.apache.arrow.vector.types.pojo.Schema;
  * <p>This class creates upcall stubs that Rust can invoke to execute a Java {@link ExecutionPlan}.
  * It manages the lifecycle of the callback struct and upcall stubs.
  */
-final class ExecutionPlanHandle implements AutoCloseable {
+final class ExecutionPlanHandle implements TraitHandle {
   private static final long ARROW_SCHEMA_SIZE = 72;
 
   // Callback struct field offsets
@@ -164,7 +164,7 @@ final class ExecutionPlanHandle implements AutoCloseable {
   }
 
   /** Get the callback struct pointer to pass to Rust. */
-  MemorySegment getCallbackStruct() {
+  public MemorySegment getTraitStruct() {
     return callbackStruct;
   }
 
@@ -211,7 +211,7 @@ final class ExecutionPlanHandle implements AutoCloseable {
           new RecordBatchReaderHandle(reader, allocator, arena, fullStackTrace);
 
       // Return the callback struct pointer
-      new PointerOut(readerOut).set(readerHandle.getCallbackStruct());
+      readerHandle.setToPointer(readerOut);
 
       return Errors.SUCCESS;
     } catch (Exception e) {

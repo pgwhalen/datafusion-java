@@ -162,7 +162,7 @@ When creating Java callbacks that Rust can invoke, follow these patterns:
 Make `MethodHandle` and `FunctionDescriptor` objects static to enable JIT optimization:
 
 ```java
-final class SomeHandle implements AutoCloseable {
+final class SomeHandle implements TraitHandle {
     // Static descriptors - define FFI signatures once at class load
     private static final FunctionDescriptor CALLBACK_DESC =
         FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS);
@@ -238,6 +238,65 @@ Arena catalogArena = Arena.ofShared();
 // Store to prevent GC while Rust holds pointers
 catalogArenas.put(name, catalogArena);
 ```
+
+## Java Interface to Rust Trait Mapping
+
+Java interfaces that correspond directly to DataFusion Rust traits MUST mirror the trait's method names, converted to Java naming conventions (e.g., `create_file_opener` becomes `createFileOpener`). The interfaces may differ in the number of methods (some Rust trait methods may be omitted or combined where Java's type system requires it), but every method that is included must preserve the semantics of its Rust counterpart as closely as possible. Deviations are only acceptable where fundamental differences between Java and Rust make an exact match impossible (e.g., ownership, lifetime parameters, async vs sync).
+
+### Rules
+
+1. **Method names must match** -- Apply camelCase conversion to the Rust snake_case name and nothing else. Do not rename, abbreviate, or "improve" the name.
+2. **Semantics must match** -- A Java method should do the same thing as the Rust trait method it maps to. Return types and parameter intent should correspond directly.
+3. **Subset is OK, invention is not** -- An interface may omit Rust trait methods that are not yet needed, but it must not add methods that have no counterpart in the Rust trait.
+4. **Differences only where languages require it** -- For example, Rust's `async fn scan(...)` may become a synchronous `scan(...)` in Java because the FFI boundary is synchronous. These are acceptable because they are forced by the language boundary, not design choices.
+
+### Handle Class Pattern
+
+Every Java interface that maps to a DataFusion Rust trait MUST have a corresponding `*Handle` class in the `ffi` package (e.g., `TableProvider` -> `TableProviderHandle`, `FileSource` -> `FileSourceHandle`). The Handle is the internal FFI bridge that creates upcall stubs so Rust can call back into the Java interface implementation. Users never see Handle classes; they only implement the public interface.
+
+Current pairs:
+
+| Interface | Handle |
+|-----------|--------|
+| `CatalogProvider` | `CatalogProviderHandle` |
+| `SchemaProvider` | `SchemaProviderHandle` |
+| `TableProvider` | `TableProviderHandle` |
+| `ExecutionPlan` | `ExecutionPlanHandle` |
+| `RecordBatchReader` | `RecordBatchReaderHandle` |
+| `FileFormat` | `FileFormatHandle` |
+| `FileSource` | `FileSourceHandle` |
+| `FileOpener` | `FileOpenerHandle` |
+
+#### Handle class rules
+
+1. **Implements `TraitHandle`** -- Declared as `final class XxxHandle implements TraitHandle`. The `TraitHandle` interface extends `AutoCloseable` and provides `getTraitStruct()` plus a default `setToPointer(MemorySegment)` method. Never public.
+
+2. **Wraps the interface instance** -- The constructor takes the corresponding interface as its first parameter and stores it in a field. Callback methods delegate to this interface instance.
+
+3. **Struct layout documented in comments** -- The Rust `#[repr(C)]` callback struct layout is documented as a comment block near the top, with matching `OFFSET_*` constants for each field.
+
+4. **Static FunctionDescriptors and MethodHandles** -- Each callback has a static `*_DESC` (FunctionDescriptor) and a static `*_MH` (MethodHandle looked up via `init*MethodHandle()`). These are class-level constants, never per-instance, to enable JIT optimization.
+
+5. **Constructor signature** -- Always takes the interface instance, `BufferAllocator`, `Arena`, and `boolean fullStackTrace`. Some Handles take additional context (e.g., `Schema`). The constructor:
+   - Allocates the Rust callback struct via `DataFusionBindings.ALLOC_*_CALLBACKS`
+   - Creates `UpcallStub` instances bound to `this` for each callback
+   - Populates the struct fields with the upcall stub segments
+
+6. **UpcallStub fields stored to prevent GC** -- Each upcall stub is stored in an instance field (named `*Stub`) with a comment noting this prevents garbage collection.
+
+7. **`getTraitStruct()` method** -- Returns the `MemorySegment` pointing to the populated Rust callback struct. This is what gets passed across the FFI boundary.
+
+8. **Callback methods** -- Each callback method:
+   - Is annotated `@SuppressWarnings("unused")` with a comment that it is called via upcall stub
+   - Takes `MemorySegment javaObject` as its first parameter (unused on the Java side but required by the Rust struct calling convention)
+   - Returns `int` using `Errors.SUCCESS` on success and `Errors.fromException(errorOut, e, arena, fullStackTrace)` on failure
+   - Delegates to the wrapped interface instance for business logic
+
+9. **`release` callback** -- Every Handle has a `release(MemorySegment javaObject)` callback. This is usually a no-op (cleanup happens when the arena closes), except for `RecordBatchReaderHandle` which must close the reader to prevent resource leaks.
+
+10. **`close()` is a no-op** -- The `close()` method from `AutoCloseable` is typically empty because the callback struct is freed by Rust when it drops the wrapper.
+
+11. **Child Handle creation** -- When a callback returns a sub-object, the callback method creates the next Handle in the chain and writes its callback struct pointer to the output using `setToPointer`. For example, `SchemaProviderHandle.getTable()` creates a `TableProviderHandle` and calls `tableHandle.setToPointer(tableOut)`.
 
 ## Naming Conventions
 

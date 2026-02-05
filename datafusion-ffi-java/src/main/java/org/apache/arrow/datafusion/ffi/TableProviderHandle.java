@@ -18,7 +18,7 @@ import org.apache.arrow.vector.types.pojo.Schema;
  * <p>This class creates upcall stubs that Rust can invoke to access a Java {@link TableProvider}.
  * It manages the lifecycle of the callback struct and upcall stubs.
  */
-final class TableProviderHandle implements AutoCloseable {
+final class TableProviderHandle implements TraitHandle {
   private static final long ARROW_SCHEMA_SIZE = 72;
 
   // Callback struct field offsets
@@ -166,7 +166,7 @@ final class TableProviderHandle implements AutoCloseable {
   }
 
   /** Get the callback struct pointer to pass to Rust. */
-  MemorySegment getCallbackStruct() {
+  public MemorySegment getTraitStruct() {
     return callbackStruct;
   }
 
@@ -232,7 +232,7 @@ final class TableProviderHandle implements AutoCloseable {
           new ExecutionPlanHandle(plan, allocator, arena, fullStackTrace);
 
       // Return the callback struct pointer
-      new PointerOut(planOut).set(planHandle.getCallbackStruct());
+      planHandle.setToPointer(planOut);
 
       return Errors.SUCCESS;
     } catch (Exception e) {

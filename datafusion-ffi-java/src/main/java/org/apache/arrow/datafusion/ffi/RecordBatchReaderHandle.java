@@ -18,7 +18,7 @@ import org.apache.arrow.vector.VectorSchemaRoot;
  * <p>This class creates upcall stubs that Rust can invoke to read batches from a Java {@link
  * RecordBatchReader}. It manages the lifecycle of the callback struct and upcall stubs.
  */
-final class RecordBatchReaderHandle implements AutoCloseable {
+final class RecordBatchReaderHandle implements TraitHandle {
   // Stream callback return codes (different from standard SUCCESS/ERROR)
   private static final int STREAM_END = 0;
   private static final int STREAM_HAS_DATA = 1;
@@ -125,7 +125,7 @@ final class RecordBatchReaderHandle implements AutoCloseable {
   }
 
   /** Get the callback struct pointer to pass to Rust. */
-  MemorySegment getCallbackStruct() {
+  public MemorySegment getTraitStruct() {
     return callbackStruct;
   }
 

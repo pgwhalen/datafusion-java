@@ -75,7 +75,7 @@ public final class SessionContextFfi implements AutoCloseable {
       catalogHandles.add(handle);
 
       MemorySegment nameSegment = arena.allocateFrom(name);
-      MemorySegment callbacks = handle.getCallbackStruct();
+      MemorySegment callbacks = handle.getTraitStruct();
 
       NativeUtil.call(
           arena,
@@ -134,7 +134,7 @@ public final class SessionContextFfi implements AutoCloseable {
                         urlSegment,
                         extSegment,
                         schemaAddr,
-                        handle.getCallbackStruct(),
+                        handle.getTraitStruct(),
                         table.options().collectStat(),
                         (long) table.options().targetPartitions(),
                         errorOut));

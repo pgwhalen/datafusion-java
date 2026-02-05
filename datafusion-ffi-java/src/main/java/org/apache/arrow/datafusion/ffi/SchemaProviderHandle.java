@@ -17,7 +17,7 @@ import org.apache.arrow.memory.BufferAllocator;
  * <p>This class creates upcall stubs that Rust can invoke to access a Java {@link SchemaProvider}.
  * It manages the lifecycle of the callback struct and upcall stubs.
  */
-final class SchemaProviderHandle implements AutoCloseable {
+final class SchemaProviderHandle implements TraitHandle {
   // Callback struct field offsets
   // struct JavaSchemaProviderCallbacks {
   //   java_object: *mut c_void,         // offset 0
@@ -168,7 +168,7 @@ final class SchemaProviderHandle implements AutoCloseable {
   }
 
   /** Get the callback struct pointer to pass to Rust. */
-  MemorySegment getCallbackStruct() {
+  public MemorySegment getTraitStruct() {
     return callbackStruct;
   }
 
@@ -229,7 +229,7 @@ final class SchemaProviderHandle implements AutoCloseable {
           new TableProviderHandle(table.get(), allocator, arena, fullStackTrace);
 
       // Return the callback struct pointer
-      tableOutPtr.set(tableHandle.getCallbackStruct());
+      tableHandle.setToPointer(tableOut);
 
       return Errors.SUCCESS;
     } catch (Exception e) {

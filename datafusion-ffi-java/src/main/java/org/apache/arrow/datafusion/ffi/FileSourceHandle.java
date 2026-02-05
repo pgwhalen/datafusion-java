@@ -16,7 +16,7 @@ import org.apache.arrow.vector.types.pojo.Schema;
  * <p>This class creates upcall stubs that Rust can invoke to create a FileOpener from a Java {@link
  * FileSource}. It manages the lifecycle of the callback struct and upcall stubs.
  */
-final class FileSourceHandle implements AutoCloseable {
+final class FileSourceHandle implements TraitHandle {
 
   // Callback struct field offsets
   // struct JavaFileSourceCallbacks {
@@ -118,7 +118,7 @@ final class FileSourceHandle implements AutoCloseable {
   }
 
   /** Get the callback struct pointer to pass to Rust. */
-  MemorySegment getCallbackStruct() {
+  public MemorySegment getTraitStruct() {
     return callbackStruct;
   }
 
@@ -134,7 +134,7 @@ final class FileSourceHandle implements AutoCloseable {
           new FileOpenerHandle(opener, allocator, arena, fullStackTrace);
 
       // Return the callback struct pointer
-      new PointerOut(openerOut).set(openerHandle.getCallbackStruct());
+      openerHandle.setToPointer(openerOut);
 
       return Errors.SUCCESS;
     } catch (Exception e) {

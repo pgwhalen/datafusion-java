@@ -15,7 +15,7 @@ import org.apache.arrow.memory.BufferAllocator;
  * <p>This class creates upcall stubs that Rust can invoke to open file content using a Java {@link
  * FileOpener}. It manages the lifecycle of the callback struct and upcall stubs.
  */
-final class FileOpenerHandle implements AutoCloseable {
+final class FileOpenerHandle implements TraitHandle {
 
   // Callback struct field offsets
   // struct JavaFileOpenerCallbacks {
@@ -119,7 +119,7 @@ final class FileOpenerHandle implements AutoCloseable {
   }
 
   /** Get the callback struct pointer to pass to Rust. */
-  MemorySegment getCallbackStruct() {
+  public MemorySegment getTraitStruct() {
     return callbackStruct;
   }
 
@@ -143,7 +143,7 @@ final class FileOpenerHandle implements AutoCloseable {
           new RecordBatchReaderHandle(reader, allocator, arena, fullStackTrace);
 
       // Return the callback struct pointer
-      new PointerOut(readerOut).set(readerHandle.getCallbackStruct());
+      readerHandle.setToPointer(readerOut);
 
       return Errors.SUCCESS;
     } catch (Exception e) {

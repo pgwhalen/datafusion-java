@@ -16,7 +16,7 @@ import org.apache.arrow.vector.types.pojo.Schema;
  * <p>This class creates upcall stubs that Rust can invoke to get a FileSource from a Java {@link
  * FileFormat}. It manages the lifecycle of the callback struct and upcall stubs.
  */
-final class FileFormatHandle implements AutoCloseable {
+final class FileFormatHandle implements TraitHandle {
 
   // Callback struct field offsets
   // struct JavaFileFormatCallbacks {
@@ -117,7 +117,7 @@ final class FileFormatHandle implements AutoCloseable {
   }
 
   /** Get the callback struct pointer to pass to Rust. */
-  MemorySegment getCallbackStruct() {
+  public MemorySegment getTraitStruct() {
     return callbackStruct;
   }
 
@@ -133,7 +133,7 @@ final class FileFormatHandle implements AutoCloseable {
           new FileSourceHandle(source, schema, allocator, arena, fullStackTrace);
 
       // Return the callback struct pointer
-      new PointerOut(sourceOut).set(sourceHandle.getCallbackStruct());
+      sourceHandle.setToPointer(sourceOut);
 
       return Errors.SUCCESS;
     } catch (Exception e) {
