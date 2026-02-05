@@ -4,6 +4,7 @@ import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
+import java.nio.charset.StandardCharsets;
 import org.apache.arrow.datafusion.DataFusionException;
 import org.apache.arrow.datafusion.FileOpener;
 import org.apache.arrow.datafusion.RecordBatchReader;
@@ -29,7 +30,7 @@ final class FileOpenerHandle implements TraitHandle {
   private static final long STRUCT_SIZE = 24;
 
   // open_fn: (ADDRESS, ADDRESS, LONG, ADDRESS, ADDRESS) -> INT
-  //   java_object, file_content, file_content_len, reader_out, error_out -> result
+  //   java_object, file_path, file_path_len, reader_out, error_out -> result
   private static final FunctionDescriptor OPEN_DESC =
       FunctionDescriptor.of(
           ValueLayout.JAVA_INT,
@@ -123,20 +124,21 @@ final class FileOpenerHandle implements TraitHandle {
     return callbackStruct;
   }
 
-  /** Callback: Open file content and return a RecordBatchReader. */
+  /** Callback: Open a file by path and return a RecordBatchReader. */
   @SuppressWarnings("unused") // Called via upcall stub
   int open(
       MemorySegment javaObject,
-      MemorySegment fileContent,
-      long fileContentLen,
+      MemorySegment filePath,
+      long filePathLen,
       MemorySegment readerOut,
       MemorySegment errorOut) {
     try {
-      // Copy native bytes to Java byte array
-      byte[] bytes = fileContent.reinterpret(fileContentLen).toArray(ValueLayout.JAVA_BYTE);
+      // Convert native UTF-8 bytes to Java String
+      byte[] pathBytes = filePath.reinterpret(filePathLen).toArray(ValueLayout.JAVA_BYTE);
+      String path = new String(pathBytes, StandardCharsets.UTF_8);
 
       // Call Java FileOpener implementation
-      RecordBatchReader reader = opener.open(bytes);
+      RecordBatchReader reader = opener.open(path);
 
       // Wrap the reader using RecordBatchReaderHandle (reuse existing FFI bridge)
       RecordBatchReaderHandle readerHandle =

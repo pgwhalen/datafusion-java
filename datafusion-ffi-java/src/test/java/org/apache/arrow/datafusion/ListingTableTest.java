@@ -37,8 +37,13 @@ public class ListingTableTest {
     }
 
     @Override
-    public RecordBatchReader open(byte[] content) {
-      String text = new String(content, StandardCharsets.UTF_8);
+    public RecordBatchReader open(String filePath) {
+      String text;
+      try {
+        text = Files.readString(Path.of(filePath));
+      } catch (IOException e) {
+        throw new RuntimeException("Failed to read file: " + filePath, e);
+      }
       String[] lines = text.split("\n");
 
       // Parse data rows (skip header)

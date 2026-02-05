@@ -1,11 +1,10 @@
 package org.apache.arrow.datafusion;
 
 /**
- * Interface for opening file content and producing record batches.
+ * Interface for opening files by path and producing record batches.
  *
  * <p>A FileOpener is created by a {@link FileSource} with a specific schema and allocator already
- * bound. When DataFusion needs to read a file, it calls {@link #open(byte[])} with the raw file
- * bytes.
+ * bound. When DataFusion needs to read a file, it calls {@link #open(String)} with the file path.
  *
  * <p>Example:
  *
@@ -20,18 +19,18 @@ package org.apache.arrow.datafusion;
  *     }
  *
  *     @Override
- *     public RecordBatchReader open(byte[] fileContent) {
- *         // Parse file content into record batches using schema and allocator
+ *     public RecordBatchReader open(String filePath) {
+ *         // Read file and parse into record batches using schema and allocator
  *     }
  * }
  * }</pre>
  */
 public interface FileOpener {
   /**
-   * Opens file content and returns a RecordBatchReader yielding batches.
+   * Opens a file by path and returns a RecordBatchReader yielding batches.
    *
-   * @param fileContent raw bytes of the file
+   * @param filePath absolute path to the file
    * @return a reader that produces record batches
    */
-  RecordBatchReader open(byte[] fileContent);
+  RecordBatchReader open(String filePath);
 }

@@ -104,20 +104,20 @@ pub struct JavaFileOpenerCallbacks {
     /// Opaque pointer to the Java object.
     pub java_object: *mut c_void,
 
-    /// Open file content, returning a RecordBatchReaderCallbacks pointer.
+    /// Open a file by path, returning a RecordBatchReaderCallbacks pointer.
     ///
     /// Parameters:
     /// - java_object: opaque pointer
-    /// - file_content: pointer to file bytes
-    /// - file_content_len: length of file bytes
+    /// - file_path: pointer to UTF-8 file path bytes
+    /// - file_path_len: length of file path bytes
     /// - reader_out: receives a `*mut JavaRecordBatchReaderCallbacks`
     /// - error_out: receives error message on failure
     ///
     /// Returns 0 on success, -1 on error.
     pub open_fn: unsafe extern "C" fn(
         java_object: *mut c_void,
-        file_content: *const u8,
-        file_content_len: usize,
+        file_path: *const u8,
+        file_path_len: usize,
         reader_out: *mut *mut JavaRecordBatchReaderCallbacks,
         error_out: *mut *mut c_char,
     ) -> i32,
@@ -338,12 +338,8 @@ impl ExecutionPlan for JavaBackedFileExec {
     fn execute(
         &self,
         partition: usize,
-        context: Arc<TaskContext>,
+        _context: Arc<TaskContext>,
     ) -> Result<SendableRecordBatchStream> {
-        let object_store = context
-            .runtime_env()
-            .object_store(&self.base_config.object_store_url)?;
-
         // Call Java to get a FileOpener
         let cb = unsafe { &*self.source_callbacks };
         let mut opener_out: *mut JavaFileOpenerCallbacks = std::ptr::null_mut();
@@ -362,7 +358,6 @@ impl ExecutionPlan for JavaBackedFileExec {
         }
 
         let opener = JavaBackedFileOpener {
-            object_store,
             callbacks: Arc::new(OpenerCallbacksHolder { ptr: opener_out }),
             schema: Arc::clone(&self.schema),
         };
@@ -405,14 +400,13 @@ impl Drop for OpenerCallbacksHolder {
     }
 }
 
-/// A FileOpener that reads file bytes from ObjectStore and sends them to Java.
+/// A FileOpener that passes file paths to Java for reading.
 ///
 /// Owns a `JavaFileOpenerCallbacks` pointer (via `OpenerCallbacksHolder`).
-/// When `open()` is called, it reads the file from the object store and calls
+/// When `open()` is called, it extracts the file path from the metadata and calls
 /// `open_fn` to get a `JavaRecordBatchReaderCallbacks`, which is used to create
 /// a `JavaBackedRecordBatchStream`.
 struct JavaBackedFileOpener {
-    object_store: Arc<dyn ObjectStore>,
     callbacks: Arc<OpenerCallbacksHolder>,
     schema: SchemaRef,
 }
@@ -421,25 +415,23 @@ impl Unpin for JavaBackedFileOpener {}
 
 impl FileOpener for JavaBackedFileOpener {
     fn open(&self, file_meta: FileMeta) -> Result<FileOpenFuture> {
-        let store = Arc::clone(&self.object_store);
         let callbacks = Arc::clone(&self.callbacks);
         let schema = Arc::clone(&self.schema);
 
         Ok(Box::pin(async move {
-            // 1. Read file bytes from ObjectStore
-            let path = file_meta.object_meta.location.clone();
-            let data = store.get(&path).await?.bytes().await?;
-            let bytes = data.to_vec();
+            // 1. Extract file path from metadata
+            let path = format!("/{}", file_meta.object_meta.location.as_ref());
+            let path_bytes = path.as_bytes();
 
-            // 2. Call Java callback to open file
+            // 2. Call Java callback to open file by path
             let cb = unsafe { &*callbacks.ptr };
             let mut reader_out: *mut JavaRecordBatchReaderCallbacks = std::ptr::null_mut();
             let mut error_out: *mut c_char = std::ptr::null_mut();
             let result = unsafe {
                 (cb.open_fn)(
                     cb.java_object,
-                    bytes.as_ptr(),
-                    bytes.len(),
+                    path_bytes.as_ptr(),
+                    path_bytes.len(),
                     &mut reader_out,
                     &mut error_out,
                 )
@@ -491,8 +483,8 @@ unsafe extern "C" fn dummy_create_file_opener_fn(
 
 unsafe extern "C" fn dummy_open_fn(
     _java_object: *mut c_void,
-    _file_content: *const u8,
-    _file_content_len: usize,
+    _file_path: *const u8,
+    _file_path_len: usize,
     _reader_out: *mut *mut JavaRecordBatchReaderCallbacks,
     error_out: *mut *mut c_char,
 ) -> i32 {
