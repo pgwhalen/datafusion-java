@@ -245,6 +245,66 @@ public class CustomTableProviderTest {
   }
 
   @Test
+  void testDynamicTableRegistration() {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+
+      // Start with one table
+      Schema schema = createUsersSchema();
+      TableProvider usersTable = new TestTableProvider(schema, usersDataBatch());
+
+      Map<String, TableProvider> tables = new HashMap<>();
+      tables.put("users", usersTable);
+
+      SimpleSchemaProvider mySchema = new SimpleSchemaProvider(tables);
+      CatalogProvider myCatalog = new SimpleCatalogProvider(Map.of("default", mySchema));
+
+      ctx.registerCatalog("dynamic", myCatalog, allocator);
+
+      // Query the initial table
+      try (DataFrame df = ctx.sql("SELECT * FROM dynamic.default.users ORDER BY id");
+          RecordBatchStream stream = df.executeStream(allocator)) {
+
+        VectorSchemaRoot root = stream.getVectorSchemaRoot();
+        assertTrue(stream.loadNextBatch());
+        assertEquals(3, root.getRowCount());
+      }
+
+      // Dynamically register a second table
+      TableProvider productsTable =
+          new TestTableProvider(createProductsSchema(), productsDataBatch());
+      Optional<TableProvider> previous = mySchema.registerTable("products", productsTable);
+      assertTrue(previous.isEmpty(), "No previous table should exist for 'products'");
+
+      // Query the newly registered table
+      try (DataFrame df = ctx.sql("SELECT * FROM dynamic.default.products ORDER BY product_id");
+          RecordBatchStream stream = df.executeStream(allocator)) {
+
+        VectorSchemaRoot root = stream.getVectorSchemaRoot();
+        assertTrue(stream.loadNextBatch());
+        assertEquals(2, root.getRowCount());
+
+        BigIntVector idVector = (BigIntVector) root.getVector("product_id");
+        assertEquals(100, idVector.get(0));
+        assertEquals(101, idVector.get(1));
+      }
+
+      // Deregister the original table
+      Optional<TableProvider> removed = mySchema.deregisterTable("users");
+      assertTrue(removed.isPresent(), "Deregister should return the removed table");
+
+      // Querying the removed table should fail
+      assertThrows(
+          Exception.class,
+          () -> {
+            try (DataFrame df = ctx.sql("SELECT * FROM dynamic.default.users")) {
+              // Should not reach here
+            }
+          });
+    }
+  }
+
+  @Test
   void testLimitPushedToTableProvider() {
     try (BufferAllocator allocator = new RootAllocator();
         SessionContext ctx = new SessionContext()) {
@@ -445,6 +505,16 @@ public class CustomTableProviderTest {
     @Override
     public Optional<TableProvider> table(String name) {
       return Optional.ofNullable(tables.get(name));
+    }
+
+    @Override
+    public Optional<TableProvider> registerTable(String name, TableProvider table) {
+      return Optional.ofNullable(tables.put(name, table));
+    }
+
+    @Override
+    public Optional<TableProvider> deregisterTable(String name) {
+      return Optional.ofNullable(tables.remove(name));
     }
   }
 

@@ -533,6 +533,16 @@ public class ErrorPropagationTest {
     public Optional<TableProvider> table(String name) {
       return Optional.ofNullable(tables.get(name));
     }
+
+    @Override
+    public Optional<TableProvider> registerTable(String name, TableProvider table) {
+      return Optional.ofNullable(tables.put(name, table));
+    }
+
+    @Override
+    public Optional<TableProvider> deregisterTable(String name) {
+      return Optional.ofNullable(tables.remove(name));
+    }
   }
 
   static class SimpleCatalogProvider implements CatalogProvider {

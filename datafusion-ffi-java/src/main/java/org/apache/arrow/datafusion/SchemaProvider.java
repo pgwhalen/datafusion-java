@@ -44,6 +44,39 @@ public interface SchemaProvider {
   Optional<TableProvider> table(String name);
 
   /**
+   * If supported by the implementation, adds a new table to this schema.
+   *
+   * <p>If a table of the same name was already registered, returns the previously registered table.
+   *
+   * <p>Default implementation throws {@link UnsupportedOperationException}.
+   *
+   * @param name The table name
+   * @param table The table provider to register
+   * @return The previously registered table with the same name, if any
+   * @throws UnsupportedOperationException if this schema does not support registering tables
+   */
+  default Optional<TableProvider> registerTable(String name, TableProvider table) {
+    throw new UnsupportedOperationException("schema provider does not support registering tables");
+  }
+
+  /**
+   * If supported by the implementation, removes the named table from this schema and returns the
+   * previously registered {@link TableProvider}, if any.
+   *
+   * <p>If no table with the given name exists, returns empty.
+   *
+   * <p>Default implementation throws {@link UnsupportedOperationException}.
+   *
+   * @param name The table name
+   * @return The previously registered table, if any
+   * @throws UnsupportedOperationException if this schema does not support deregistering tables
+   */
+  default Optional<TableProvider> deregisterTable(String name) {
+    throw new UnsupportedOperationException(
+        "schema provider does not support deregistering tables");
+  }
+
+  /**
    * Checks if a table exists in this schema.
    *
    * <p>Default implementation checks if {@link #table(String)} returns non-null.
