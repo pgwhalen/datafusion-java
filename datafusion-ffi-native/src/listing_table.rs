@@ -102,12 +102,16 @@ pub struct JavaFileOpenerCallbacks {
     /// Opaque pointer to the Java object.
     pub java_object: *mut c_void,
 
-    /// Open a file by path, returning a RecordBatchReaderCallbacks pointer.
+    /// Open a file, returning a RecordBatchReaderCallbacks pointer.
     ///
     /// Parameters:
     /// - java_object: opaque pointer
     /// - file_path: pointer to UTF-8 file path bytes
     /// - file_path_len: length of file path bytes
+    /// - file_size: file size in bytes
+    /// - has_range: 1 if byte range present, 0 if not
+    /// - range_start: start of byte range (0 if no range)
+    /// - range_end: end of byte range (0 if no range)
     /// - reader_out: receives a `*mut JavaRecordBatchReaderCallbacks`
     /// - error_out: receives error message on failure
     ///
@@ -116,6 +120,10 @@ pub struct JavaFileOpenerCallbacks {
         java_object: *mut c_void,
         file_path: *const u8,
         file_path_len: usize,
+        file_size: u64,
+        has_range: i32,
+        range_start: i64,
+        range_end: i64,
         reader_out: *mut *mut JavaRecordBatchReaderCallbacks,
         error_out: *mut *mut c_char,
     ) -> i32,
@@ -528,11 +536,16 @@ impl FileOpener for JavaBackedFileOpener {
         let schema = Arc::clone(&self.schema);
 
         Ok(Box::pin(async move {
-            // 1. Extract file path from metadata
+            // 1. Extract fields from PartitionedFile
             let path = format!("/{}", partitioned_file.path().as_ref());
             let path_bytes = path.as_bytes();
+            let file_size = partitioned_file.object_meta.size as u64;
+            let (has_range, range_start, range_end) = match &partitioned_file.range {
+                Some(range) => (1i32, range.start as i64, range.end as i64),
+                None => (0i32, 0i64, 0i64),
+            };
 
-            // 2. Call Java callback to open file by path
+            // 2. Call Java callback to open file
             let cb = unsafe { &*callbacks.ptr };
             let mut reader_out: *mut JavaRecordBatchReaderCallbacks = std::ptr::null_mut();
             let mut error_out: *mut c_char = std::ptr::null_mut();
@@ -541,6 +554,10 @@ impl FileOpener for JavaBackedFileOpener {
                     cb.java_object,
                     path_bytes.as_ptr(),
                     path_bytes.len(),
+                    file_size,
+                    has_range,
+                    range_start,
+                    range_end,
                     &mut reader_out,
                     &mut error_out,
                 )
@@ -591,6 +608,10 @@ unsafe extern "C" fn dummy_open_fn(
     _java_object: *mut c_void,
     _file_path: *const u8,
     _file_path_len: usize,
+    _file_size: u64,
+    _has_range: i32,
+    _range_start: i64,
+    _range_end: i64,
     _reader_out: *mut *mut JavaRecordBatchReaderCallbacks,
     error_out: *mut *mut c_char,
 ) -> i32 {

@@ -37,12 +37,12 @@ public class ListingTableTest {
     }
 
     @Override
-    public RecordBatchReader open(String filePath) {
+    public RecordBatchReader open(PartitionedFile file) {
       String text;
       try {
-        text = Files.readString(Path.of(filePath));
+        text = Files.readString(Path.of(file.path()));
       } catch (IOException e) {
-        throw new RuntimeException("Failed to read file: " + filePath, e);
+        throw new RuntimeException("Failed to read file: " + file.path(), e);
       }
       String[] lines = text.split("\n");
 

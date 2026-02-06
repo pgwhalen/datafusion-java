@@ -7,6 +7,7 @@ import java.lang.invoke.MethodType;
 import java.nio.charset.StandardCharsets;
 import org.apache.arrow.datafusion.DataFusionException;
 import org.apache.arrow.datafusion.FileOpener;
+import org.apache.arrow.datafusion.PartitionedFile;
 import org.apache.arrow.datafusion.RecordBatchReader;
 import org.apache.arrow.memory.BufferAllocator;
 
@@ -29,13 +30,18 @@ final class FileOpenerHandle implements TraitHandle {
   private static final long OFFSET_RELEASE_FN = 16;
   private static final long STRUCT_SIZE = 24;
 
-  // open_fn: (ADDRESS, ADDRESS, LONG, ADDRESS, ADDRESS) -> INT
-  //   java_object, file_path, file_path_len, reader_out, error_out -> result
+  // open_fn: (ADDRESS, ADDRESS, LONG, LONG, INT, LONG, LONG, ADDRESS, ADDRESS) -> INT
+  //   java_object, file_path, file_path_len, file_size, has_range, range_start, range_end,
+  //   reader_out, error_out -> result
   private static final FunctionDescriptor OPEN_DESC =
       FunctionDescriptor.of(
           ValueLayout.JAVA_INT,
           ValueLayout.ADDRESS,
           ValueLayout.ADDRESS,
+          ValueLayout.JAVA_LONG,
+          ValueLayout.JAVA_LONG,
+          ValueLayout.JAVA_INT,
+          ValueLayout.JAVA_LONG,
           ValueLayout.JAVA_LONG,
           ValueLayout.ADDRESS,
           ValueLayout.ADDRESS);
@@ -58,6 +64,10 @@ final class FileOpenerHandle implements TraitHandle {
                   int.class,
                   MemorySegment.class,
                   MemorySegment.class,
+                  long.class,
+                  long.class,
+                  int.class,
+                  long.class,
                   long.class,
                   MemorySegment.class,
                   MemorySegment.class));
@@ -124,12 +134,16 @@ final class FileOpenerHandle implements TraitHandle {
     return callbackStruct;
   }
 
-  /** Callback: Open a file by path and return a RecordBatchReader. */
+  /** Callback: Open a file and return a RecordBatchReader. */
   @SuppressWarnings("unused") // Called via upcall stub
   int open(
       MemorySegment javaObject,
       MemorySegment filePath,
       long filePathLen,
+      long fileSize,
+      int hasRange,
+      long rangeStart,
+      long rangeEnd,
       MemorySegment readerOut,
       MemorySegment errorOut) {
     try {
@@ -137,8 +151,14 @@ final class FileOpenerHandle implements TraitHandle {
       byte[] pathBytes = filePath.reinterpret(filePathLen).toArray(ValueLayout.JAVA_BYTE);
       String path = new String(pathBytes, StandardCharsets.UTF_8);
 
+      // Build PartitionedFile from FFI parameters
+      Long rangeStartObj = hasRange != 0 ? rangeStart : null;
+      Long rangeEndObj = hasRange != 0 ? rangeEnd : null;
+      PartitionedFile partitionedFile =
+          new PartitionedFile(path, fileSize, rangeStartObj, rangeEndObj);
+
       // Call Java FileOpener implementation
-      RecordBatchReader reader = opener.open(path);
+      RecordBatchReader reader = opener.open(partitionedFile);
 
       // Wrap the reader using RecordBatchReaderHandle (reuse existing FFI bridge)
       RecordBatchReaderHandle readerHandle =
