@@ -1,7 +1,9 @@
 //! Rust ExecutionPlan implementation that calls back into Java.
 
 use crate::error::{callback_error, check_callback_result, set_error_return};
-use crate::java_provider::{JavaExecutionPlanCallbacks, JavaRecordBatchReaderCallbacks};
+use crate::java_provider::{
+    FFI_PlanProperties, JavaExecutionPlanCallbacks, JavaRecordBatchReaderCallbacks,
+};
 use arrow::array::StructArray;
 use arrow::datatypes::SchemaRef;
 use arrow::ffi::{from_ffi, FFI_ArrowArray, FFI_ArrowSchema};
@@ -126,19 +128,38 @@ impl JavaBackedExecutionPlan {
             Err(e) => return Err(datafusion::error::DataFusionError::ArrowError(Box::new(e), None)),
         };
 
-        // Get output partitioning count from Java
-        let num_partitions = (cb.output_partitioning_fn)(cb.java_object);
-        let partitioning = if num_partitions <= 1 {
+        // Get plan properties from Java via single callback
+        let mut ffi_props = FFI_PlanProperties {
+            output_partitioning: 1,
+            emission_type: 0,
+            boundedness: 0,
+        };
+        (cb.properties_fn)(cb.java_object, &mut ffi_props);
+
+        let partitioning = if ffi_props.output_partitioning <= 1 {
             Partitioning::UnknownPartitioning(1)
         } else {
-            Partitioning::UnknownPartitioning(num_partitions as usize)
+            Partitioning::UnknownPartitioning(ffi_props.output_partitioning as usize)
+        };
+
+        let emission_type = match ffi_props.emission_type {
+            1 => EmissionType::Final,
+            2 => EmissionType::Both,
+            _ => EmissionType::Incremental,
+        };
+
+        let boundedness = match ffi_props.boundedness {
+            1 => Boundedness::Unbounded {
+                requires_infinite_memory: false,
+            },
+            _ => Boundedness::Bounded,
         };
 
         let properties = PlanProperties::new(
             EquivalenceProperties::new(Arc::clone(&schema)),
             partitioning,
-            EmissionType::Incremental,
-            Boundedness::Bounded,
+            emission_type,
+            boundedness,
         );
 
         Ok(Self {
@@ -237,7 +258,7 @@ pub extern "C" fn datafusion_alloc_execution_plan_callbacks() -> *mut JavaExecut
     Box::into_raw(Box::new(JavaExecutionPlanCallbacks {
         java_object: std::ptr::null_mut(),
         schema_fn: dummy_schema_fn,
-        output_partitioning_fn: dummy_output_partitioning_fn,
+        properties_fn: dummy_properties_fn,
         execute_fn: dummy_execute_fn,
         release_fn: dummy_release_fn,
     }))
@@ -266,8 +287,14 @@ unsafe extern "C" fn dummy_schema_fn(
     set_error_return(error_out, "ExecutionPlan callbacks not initialized")
 }
 
-unsafe extern "C" fn dummy_output_partitioning_fn(_java_object: *mut std::ffi::c_void) -> i32 {
-    1
+unsafe extern "C" fn dummy_properties_fn(
+    _java_object: *mut std::ffi::c_void,
+    properties_out: *mut FFI_PlanProperties,
+) {
+    // Defaults: 1 partition, Incremental, Bounded
+    (*properties_out).output_partitioning = 1;
+    (*properties_out).emission_type = 0;
+    (*properties_out).boundedness = 0;
 }
 
 unsafe extern "C" fn dummy_execute_fn(

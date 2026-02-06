@@ -391,6 +391,65 @@ public class CustomTableProviderTest {
     }
   }
 
+  @Test
+  void testCustomPlanProperties() {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+
+      Schema schema = createUsersSchema();
+
+      // Create a table provider with a custom execution plan that uses non-default properties
+      TableProvider customPropsTable =
+          new TableProvider() {
+            @Override
+            public Schema schema() {
+              return schema;
+            }
+
+            @Override
+            public ExecutionPlan scan(int[] projection, Long limit) {
+              return new ExecutionPlan() {
+                @Override
+                public Schema schema() {
+                  return schema;
+                }
+
+                @Override
+                public PlanProperties properties() {
+                  return new PlanProperties(1, EmissionType.BOTH, Boundedness.BOUNDED);
+                }
+
+                @Override
+                public RecordBatchReader execute(int partition, BufferAllocator alloc) {
+                  return new TestRecordBatchReader(schema, List.of(usersDataBatch()), alloc);
+                }
+              };
+            }
+          };
+
+      SchemaProvider mySchema = new SimpleSchemaProvider(Map.of("props_test", customPropsTable));
+      CatalogProvider myCatalog = new SimpleCatalogProvider(Map.of("default", mySchema));
+
+      ctx.registerCatalog("props_catalog", myCatalog, allocator);
+
+      // Query the table - should work correctly regardless of plan properties
+      try (DataFrame df = ctx.sql("SELECT * FROM props_catalog.default.props_test ORDER BY id");
+          RecordBatchStream stream = df.executeStream(allocator)) {
+
+        VectorSchemaRoot root = stream.getVectorSchemaRoot();
+        assertTrue(stream.loadNextBatch());
+        assertEquals(3, root.getRowCount());
+
+        BigIntVector idVector = (BigIntVector) root.getVector("id");
+        assertEquals(1, idVector.get(0));
+        assertEquals(2, idVector.get(1));
+        assertEquals(3, idVector.get(2));
+
+        assertFalse(stream.loadNextBatch());
+      }
+    }
+  }
+
   // Helper methods to create test schemas
 
   private Schema createUsersSchema() {

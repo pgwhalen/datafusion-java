@@ -33,6 +33,19 @@ pub struct JavaRecordBatchReaderCallbacks {
     pub release_fn: unsafe extern "C" fn(java_object: *mut c_void),
 }
 
+/// FFI bridge struct for plan properties, written by Java's `properties_fn` callback.
+///
+/// Maps 1:1 to DataFusion's `PlanProperties` and Java's `PlanProperties` record.
+#[repr(C)]
+pub struct FFI_PlanProperties {
+    /// Number of output partitions.
+    pub output_partitioning: i32,
+    /// Emission type (0=Incremental, 1=Final, 2=Both).
+    pub emission_type: i32,
+    /// Boundedness (0=Bounded, 1=Unbounded).
+    pub boundedness: i32,
+}
+
 /// Callback struct for a Java-backed ExecutionPlan.
 ///
 /// This corresponds to Java's ExecutionPlan interface.
@@ -50,8 +63,11 @@ pub struct JavaExecutionPlanCallbacks {
         error_out: *mut *mut c_char,
     ) -> i32,
 
-    /// Returns the number of output partitions.
-    pub output_partitioning_fn: unsafe extern "C" fn(java_object: *mut c_void) -> i32,
+    /// Gets the plan properties (partitioning, emission type, boundedness).
+    ///
+    /// Writes to the provided FFI_PlanProperties struct.
+    pub properties_fn:
+        unsafe extern "C" fn(java_object: *mut c_void, properties_out: *mut FFI_PlanProperties),
 
     /// Executes the plan for the given partition.
     ///

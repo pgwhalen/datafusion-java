@@ -198,7 +198,11 @@ final class TableProviderHandle implements TraitHandle {
   /** Callback: Get the table type. */
   @SuppressWarnings("unused")
   int getTableType(MemorySegment javaObject) {
-    return provider.tableType().getValue();
+    return switch (provider.tableType()) {
+      case BASE -> 0;
+      case VIEW -> 1;
+      case TEMPORARY -> 2;
+    };
   }
 
   /** Callback: Create a scan (execution plan). */

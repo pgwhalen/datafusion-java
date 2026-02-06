@@ -8,6 +8,7 @@ import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
 import org.apache.arrow.datafusion.DataFusionException;
 import org.apache.arrow.datafusion.ExecutionPlan;
+import org.apache.arrow.datafusion.PlanProperties;
 import org.apache.arrow.datafusion.RecordBatchReader;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.types.pojo.Schema;
@@ -25,23 +26,34 @@ final class ExecutionPlanHandle implements TraitHandle {
   // struct JavaExecutionPlanCallbacks {
   //   java_object: *mut c_void,             // offset 0
   //   schema_fn: fn,                        // offset 8
-  //   output_partitioning_fn: fn,           // offset 16
+  //   properties_fn: fn,                    // offset 16
   //   execute_fn: fn,                       // offset 24
   //   release_fn: fn,                       // offset 32
   // }
   private static final long OFFSET_JAVA_OBJECT = 0;
   private static final long OFFSET_SCHEMA_FN = 8;
-  private static final long OFFSET_OUTPUT_PARTITIONING_FN = 16;
+  private static final long OFFSET_PROPERTIES_FN = 16;
   private static final long OFFSET_EXECUTE_FN = 24;
   private static final long OFFSET_RELEASE_FN = 32;
+
+  // FFI_PlanProperties struct field offsets (3 x i32 = 12 bytes)
+  // struct FFI_PlanProperties {
+  //   output_partitioning: i32,             // offset 0
+  //   emission_type: i32,                   // offset 4
+  //   boundedness: i32,                     // offset 8
+  // }
+  private static final long FFI_PLAN_PROPERTIES_SIZE = 12;
+  private static final long PROPS_OFFSET_OUTPUT_PARTITIONING = 0;
+  private static final long PROPS_OFFSET_EMISSION_TYPE = 4;
+  private static final long PROPS_OFFSET_BOUNDEDNESS = 8;
 
   // Static FunctionDescriptors - define the FFI signatures once at class load
   private static final FunctionDescriptor SCHEMA_DESC =
       FunctionDescriptor.of(
           ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS);
 
-  private static final FunctionDescriptor OUTPUT_PARTITIONING_DESC =
-      FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS);
+  private static final FunctionDescriptor PROPERTIES_DESC =
+      FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS);
 
   private static final FunctionDescriptor EXECUTE_DESC =
       FunctionDescriptor.of(
@@ -56,7 +68,7 @@ final class ExecutionPlanHandle implements TraitHandle {
 
   // Static MethodHandles - looked up once at class load
   private static final MethodHandle SCHEMA_MH = initSchemaMethodHandle();
-  private static final MethodHandle OUTPUT_PARTITIONING_MH = initOutputPartitioningMethodHandle();
+  private static final MethodHandle PROPERTIES_MH = initPropertiesMethodHandle();
   private static final MethodHandle EXECUTE_MH = initExecuteMethodHandle();
   private static final MethodHandle RELEASE_MH = initReleaseMethodHandle();
 
@@ -73,13 +85,13 @@ final class ExecutionPlanHandle implements TraitHandle {
     }
   }
 
-  private static MethodHandle initOutputPartitioningMethodHandle() {
+  private static MethodHandle initPropertiesMethodHandle() {
     try {
       return MethodHandles.lookup()
           .findVirtual(
               ExecutionPlanHandle.class,
-              "getOutputPartitioning",
-              MethodType.methodType(int.class, MemorySegment.class));
+              "getProperties",
+              MethodType.methodType(void.class, MemorySegment.class, MemorySegment.class));
     } catch (NoSuchMethodException | IllegalAccessException e) {
       throw new ExceptionInInitializerError(e);
     }
@@ -122,7 +134,7 @@ final class ExecutionPlanHandle implements TraitHandle {
 
   // Keep references to upcall stubs to prevent GC
   private final UpcallStub schemaStub;
-  private final UpcallStub outputPartitioningStub;
+  private final UpcallStub propertiesStub;
   private final UpcallStub executeStub;
   private final UpcallStub releaseStub;
 
@@ -144,17 +156,15 @@ final class ExecutionPlanHandle implements TraitHandle {
 
       // Create upcall stubs - only the stubs are per-instance
       this.schemaStub = UpcallStub.create(SCHEMA_MH.bindTo(this), SCHEMA_DESC, arena);
-      this.outputPartitioningStub =
-          UpcallStub.create(OUTPUT_PARTITIONING_MH.bindTo(this), OUTPUT_PARTITIONING_DESC, arena);
+      this.propertiesStub = UpcallStub.create(PROPERTIES_MH.bindTo(this), PROPERTIES_DESC, arena);
       this.executeStub = UpcallStub.create(EXECUTE_MH.bindTo(this), EXECUTE_DESC, arena);
       this.releaseStub = UpcallStub.create(RELEASE_MH.bindTo(this), RELEASE_DESC, arena);
 
       // Set up the callback struct
-      MemorySegment struct = callbackStruct.reinterpret(40); // struct size
+      MemorySegment struct = callbackStruct.reinterpret(40); // 5 pointers * 8 bytes
       struct.set(ValueLayout.ADDRESS, OFFSET_JAVA_OBJECT, MemorySegment.NULL);
       struct.set(ValueLayout.ADDRESS, OFFSET_SCHEMA_FN, schemaStub.segment());
-      struct.set(
-          ValueLayout.ADDRESS, OFFSET_OUTPUT_PARTITIONING_FN, outputPartitioningStub.segment());
+      struct.set(ValueLayout.ADDRESS, OFFSET_PROPERTIES_FN, propertiesStub.segment());
       struct.set(ValueLayout.ADDRESS, OFFSET_EXECUTE_FN, executeStub.segment());
       struct.set(ValueLayout.ADDRESS, OFFSET_RELEASE_FN, releaseStub.segment());
 
@@ -169,7 +179,7 @@ final class ExecutionPlanHandle implements TraitHandle {
   }
 
   /** Callback: Get the schema. */
-  @SuppressWarnings("unused")
+  @SuppressWarnings("unused") // Called via upcall stub
   int getSchema(MemorySegment javaObject, MemorySegment schemaOut, MemorySegment errorOut) {
     try {
       Schema schema = plan.schema();
@@ -193,14 +203,31 @@ final class ExecutionPlanHandle implements TraitHandle {
     }
   }
 
-  /** Callback: Get output partitioning count. */
-  @SuppressWarnings("unused")
-  int getOutputPartitioning(MemorySegment javaObject) {
-    return plan.outputPartitioning();
+  /** Callback: Get plan properties (partitioning, emission type, boundedness). */
+  @SuppressWarnings("unused") // Called via upcall stub
+  void getProperties(MemorySegment javaObject, MemorySegment propertiesOut) {
+    PlanProperties props = plan.properties();
+    MemorySegment out = propertiesOut.reinterpret(FFI_PLAN_PROPERTIES_SIZE);
+    out.set(ValueLayout.JAVA_INT, PROPS_OFFSET_OUTPUT_PARTITIONING, props.outputPartitioning());
+    out.set(
+        ValueLayout.JAVA_INT,
+        PROPS_OFFSET_EMISSION_TYPE,
+        switch (props.emissionType()) {
+          case INCREMENTAL -> 0;
+          case FINAL -> 1;
+          case BOTH -> 2;
+        });
+    out.set(
+        ValueLayout.JAVA_INT,
+        PROPS_OFFSET_BOUNDEDNESS,
+        switch (props.boundedness()) {
+          case BOUNDED -> 0;
+          case UNBOUNDED -> 1;
+        });
   }
 
   /** Callback: Execute the plan for a partition. */
-  @SuppressWarnings("unused")
+  @SuppressWarnings("unused") // Called via upcall stub
   int execute(
       MemorySegment javaObject, long partition, MemorySegment readerOut, MemorySegment errorOut) {
     try {
@@ -220,7 +247,7 @@ final class ExecutionPlanHandle implements TraitHandle {
   }
 
   /** Callback: Release the plan. */
-  @SuppressWarnings("unused")
+  @SuppressWarnings("unused") // Called via upcall stub
   void release(MemorySegment javaObject) {
     // Cleanup happens when arena is closed
   }

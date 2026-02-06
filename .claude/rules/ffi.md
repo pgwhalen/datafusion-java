@@ -215,6 +215,42 @@ pub struct JavaCallbacks {
 }
 ```
 
+### 1:1 Callback-to-Trait-Method Rule
+
+Each function pointer in a `Java*Callbacks` struct must correspond 1:1 to a method on the DataFusion trait **and** the Java interface it mirrors. Do not split one trait method into multiple callbacks, and do not merge multiple trait methods into one callback.
+
+When a trait method returns a compound type (e.g., `properties() -> &PlanProperties`), create an `FFI_*` bridge struct in `java_provider.rs` to carry the data across FFI, and use a single callback that writes to that struct:
+
+```rust
+// Bridge struct in java_provider.rs
+#[repr(C)]
+pub struct FFI_PlanProperties {
+    pub output_partitioning: i32,
+    pub emission_type: i32,
+    pub boundedness: i32,
+}
+
+// Single callback in JavaExecutionPlanCallbacks — maps 1:1 to ExecutionPlan::properties()
+pub properties_fn: unsafe extern "C" fn(
+    java_object: *mut c_void,
+    properties_out: *mut FFI_PlanProperties,
+),
+```
+
+On the Java side, the Handle callback writes to the struct:
+
+```java
+void getProperties(MemorySegment javaObject, MemorySegment propertiesOut) {
+    PlanProperties props = plan.properties();
+    MemorySegment out = propertiesOut.reinterpret(12);
+    out.set(ValueLayout.JAVA_INT, 0, props.outputPartitioning());
+    out.set(ValueLayout.JAVA_INT, 4, /* enum switch */);
+    out.set(ValueLayout.JAVA_INT, 8, /* enum switch */);
+}
+```
+
+This keeps the callback struct aligned with the trait hierarchy and makes it easy to verify correctness by comparing `Java*Callbacks` fields against DataFusion trait methods.
+
 ## Arrow C Data Interface
 
 ### Ownership Transfer
@@ -249,6 +285,33 @@ Java interfaces that correspond directly to DataFusion Rust traits MUST mirror t
 2. **Semantics must match** -- A Java method should do the same thing as the Rust trait method it maps to. Return types and parameter intent should correspond directly.
 3. **Subset is OK, invention is not** -- An interface may omit Rust trait methods that are not yet needed, but it must not add methods that have no counterpart in the Rust trait.
 4. **Differences only where languages require it** -- For example, Rust's `async fn scan(...)` may become a synchronous `scan(...)` in Java because the FFI boundary is synchronous. These are acceptable because they are forced by the language boundary, not design choices.
+
+### Enum FFI Encoding
+
+Public Java enums that mirror Rust enums (e.g., `TableType`, `EmissionType`, `Boundedness`) must **not** carry FFI integer values. The enum variants are plain (`BASE`, `VIEW`, `TEMPORARY` — no constructor argument). All integer encoding/decoding lives in the `*Handle` callback that crosses the FFI boundary, using a switch expression:
+
+```java
+// In TableProviderHandle (FFI layer)
+int getTableType(MemorySegment javaObject) {
+    return switch (provider.tableType()) {
+      case BASE -> 0;
+      case VIEW -> 1;
+      case TEMPORARY -> 2;
+    };
+}
+```
+
+On the Rust side, the reverse mapping uses `match` with a `_ =>` default for safety:
+
+```rust
+let emission_type = match emission_type_value {
+    1 => EmissionType::Final,
+    2 => EmissionType::Both,
+    _ => EmissionType::Incremental,
+};
+```
+
+This keeps FFI encoding details out of the public API. Library users see clean enums; Handle classes own the serialization.
 
 ### Handle Class Pattern
 

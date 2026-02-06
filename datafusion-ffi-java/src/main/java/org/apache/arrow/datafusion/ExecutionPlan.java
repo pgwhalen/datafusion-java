@@ -49,6 +49,18 @@ public interface ExecutionPlan {
   }
 
   /**
+   * Returns the plan properties describing output characteristics.
+   *
+   * <p>Default implementation uses {@link #outputPartitioning()} with incremental emission and
+   * bounded input. Override this method to customize emission type and boundedness.
+   *
+   * @return The plan properties
+   */
+  default PlanProperties properties() {
+    return new PlanProperties(outputPartitioning(), EmissionType.INCREMENTAL, Boundedness.BOUNDED);
+  }
+
+  /**
    * Executes the plan for the given partition.
    *
    * <p>The returned {@link RecordBatchReader} will be iterated by the caller to consume the data.
