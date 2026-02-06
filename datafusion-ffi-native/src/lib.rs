@@ -7,7 +7,9 @@ mod java_backed_provider;
 mod java_backed_schema;
 mod java_provider;
 mod listing_table;
+mod logical_plan;
 mod runtime;
+mod session_state;
 mod stream;
 mod table_provider;
 
@@ -20,5 +22,7 @@ pub use java_backed_provider::*;
 pub use java_backed_schema::*;
 pub use java_provider::*;
 pub use listing_table::*;
+pub use logical_plan::*;
 pub use runtime::*;
+pub use session_state::*;
 pub use stream::*;

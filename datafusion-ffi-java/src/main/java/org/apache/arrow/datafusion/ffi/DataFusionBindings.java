@@ -152,6 +152,33 @@ public final class DataFusionBindings {
       downcall(
           "datafusion_alloc_file_opener_callbacks", FunctionDescriptor.of(ValueLayout.ADDRESS));
 
+  // Session state functions
+  public static final MethodHandle CONTEXT_STATE =
+      downcall(
+          "datafusion_context_state",
+          FunctionDescriptor.of(
+              ValueLayout.ADDRESS,
+              ValueLayout.ADDRESS, // ctx
+              ValueLayout.ADDRESS // error_out
+              ));
+
+  public static final MethodHandle SESSION_STATE_DESTROY =
+      downcall("datafusion_session_state_destroy", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
+
+  public static final MethodHandle SESSION_STATE_CREATE_LOGICAL_PLAN =
+      downcall(
+          "datafusion_session_state_create_logical_plan",
+          FunctionDescriptor.of(
+              ValueLayout.ADDRESS,
+              ValueLayout.ADDRESS, // state_with_rt
+              ValueLayout.ADDRESS, // sql
+              ValueLayout.ADDRESS // error_out
+              ));
+
+  // Logical plan functions
+  public static final MethodHandle LOGICAL_PLAN_DESTROY =
+      downcall("datafusion_logical_plan_destroy", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
+
   // Listing table registration (all-in-one)
   public static final MethodHandle CONTEXT_REGISTER_LISTING_TABLE =
       downcall(

@@ -194,6 +194,33 @@ public class SessionContext implements AutoCloseable {
   }
 
   /**
+   * Creates a snapshot of this session's state.
+   *
+   * <p>The returned SessionState owns its own Tokio runtime and can outlive this SessionContext.
+   *
+   * @return a new SessionState
+   * @throws DataFusionException if the state cannot be created
+   */
+  public SessionState state() {
+    checkNotClosed();
+
+    try (Arena arena = Arena.ofConfined()) {
+      MemorySegment statePtr =
+          NativeUtil.callForPointer(
+              arena,
+              "Get session state",
+              errorOut ->
+                  (MemorySegment) DataFusionBindings.CONTEXT_STATE.invokeExact(context, errorOut));
+
+      return new SessionState(statePtr);
+    } catch (DataFusionException e) {
+      throw e;
+    } catch (Throwable e) {
+      throw new DataFusionException("Failed to get session state", e);
+    }
+  }
+
+  /**
    * Gets the native runtime pointer for use by other FFI classes.
    *
    * @return The runtime memory segment
