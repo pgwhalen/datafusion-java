@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
@@ -162,7 +163,8 @@ public class ListingTableTest {
         TsvFormat format = new TsvFormat();
         ListingOptions options = ListingOptions.builder(format).fileExtension(".tsv").build();
         ListingTableUrl url = ListingTableUrl.parse(tempDir.toUri().toString());
-        ListingTable table = ListingTable.builder(url, options).schema(schema).build();
+        ListingTable table =
+            ListingTable.builder(url).withListingOptions(options).withSchema(schema).build();
 
         ctx.registerListingTable("tsv_data", table, allocator);
 
@@ -217,7 +219,8 @@ public class ListingTableTest {
         TsvFormat format = new TsvFormat();
         ListingOptions options = ListingOptions.builder(format).fileExtension(".tsv").build();
         ListingTableUrl url = ListingTableUrl.parse(tempDir.toUri().toString());
-        ListingTable table = ListingTable.builder(url, options).schema(schema).build();
+        ListingTable table =
+            ListingTable.builder(url).withListingOptions(options).withSchema(schema).build();
 
         ctx.registerListingTable("multi_data", table, allocator);
 
@@ -240,6 +243,66 @@ public class ListingTableTest {
           }
 
           assertEquals(4, totalRows, "Should have 4 total rows from 2 files");
+          assertEquals(Set.of(1L, 2L, 3L, 4L), allIds, "Should have ids 1-4");
+        }
+      }
+
+      allocator.close();
+    }
+  }
+
+  @Test
+  void testListingTableWithMultiPaths() throws IOException {
+    // Create two separate directories with TSV files
+    Path dir1 = tempDir.resolve("dir1");
+    Path dir2 = tempDir.resolve("dir2");
+    Files.createDirectories(dir1);
+    Files.createDirectories(dir2);
+    Files.writeString(dir1.resolve("data.tsv"), "id\tname\n1\tAlice\n2\tBob\n");
+    Files.writeString(dir2.resolve("data.tsv"), "id\tname\n3\tCharlie\n4\tDave\n");
+
+    Schema schema =
+        new Schema(
+            Arrays.asList(
+                new Field("id", FieldType.nullable(new ArrowType.Int(64, true)), null),
+                new Field("name", FieldType.nullable(new ArrowType.Utf8()), null)));
+
+    try (BufferAllocator rootAllocator = new RootAllocator()) {
+      BufferAllocator allocator = rootAllocator.newChildAllocator("test", 0, Long.MAX_VALUE);
+
+      try (SessionContext ctx = new SessionContext()) {
+        TsvFormat format = new TsvFormat();
+        ListingOptions options = ListingOptions.builder(format).fileExtension(".tsv").build();
+
+        // Use builderWithMultiPaths to register multiple directories
+        ListingTableUrl url1 = ListingTableUrl.parse(dir1.toUri().toString());
+        ListingTableUrl url2 = ListingTableUrl.parse(dir2.toUri().toString());
+        ListingTable table =
+            ListingTable.builderWithMultiPaths(List.of(url1, url2))
+                .withListingOptions(options)
+                .withSchema(schema)
+                .build();
+
+        ctx.registerListingTable("multi_path_data", table, allocator);
+
+        try (DataFrame df = ctx.sql("SELECT id, name FROM multi_path_data ORDER BY id");
+            RecordBatchStream stream = df.executeStream(allocator)) {
+
+          VectorSchemaRoot root = stream.getVectorSchemaRoot();
+
+          Set<Long> allIds = new HashSet<>();
+          int totalRows = 0;
+
+          while (stream.loadNextBatch()) {
+            int rowCount = root.getRowCount();
+            totalRows += rowCount;
+            BigIntVector idVector = (BigIntVector) root.getVector("id");
+            for (int i = 0; i < rowCount; i++) {
+              allIds.add(idVector.get(i));
+            }
+          }
+
+          assertEquals(4, totalRows, "Should have 4 total rows from 2 directories");
           assertEquals(Set.of(1L, 2L, 3L, 4L), allIds, "Should have ids 1-4");
         }
       }

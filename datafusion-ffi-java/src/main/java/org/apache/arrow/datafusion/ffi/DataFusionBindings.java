@@ -161,11 +161,12 @@ public final class DataFusionBindings {
               ValueLayout.ADDRESS, // ctx
               ValueLayout.ADDRESS, // rt
               ValueLayout.ADDRESS, // name
-              ValueLayout.ADDRESS, // url
+              ValueLayout.ADDRESS, // urls (pointer to array of C string pointers)
+              ValueLayout.JAVA_LONG, // urls_len
               ValueLayout.ADDRESS, // file_extension
               ValueLayout.ADDRESS, // schema (FFI_ArrowSchema*)
               ValueLayout.ADDRESS, // format_callbacks
-              ValueLayout.JAVA_BOOLEAN, // collect_stat
+              ValueLayout.JAVA_INT, // collect_stat (i32 in Rust, 0=false, 1=true)
               ValueLayout.JAVA_LONG, // target_partitions
               ValueLayout.ADDRESS // error_out
               ));

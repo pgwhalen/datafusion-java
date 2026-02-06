@@ -675,7 +675,8 @@ pub extern "C" fn datafusion_alloc_file_opener_callbacks() -> *mut JavaFileOpene
 /// * `ctx` - Pointer to SessionContext
 /// * `rt` - Pointer to Tokio Runtime
 /// * `name` - Table name (null-terminated C string)
-/// * `url` - Directory path (null-terminated C string)
+/// * `urls` - Array of directory path pointers (null-terminated C strings)
+/// * `urls_len` - Number of URLs in the array
 /// * `file_extension` - File extension (null-terminated C string, e.g. ".tsv")
 /// * `schema` - Pointer to FFI_ArrowSchema (borrowed, Java owns release)
 /// * `format_callbacks` - Pointer to JavaFileFormatCallbacks (takes ownership)
@@ -690,11 +691,12 @@ pub unsafe extern "C" fn datafusion_context_register_listing_table(
     ctx: *mut c_void,
     rt: *mut c_void,
     name: *const c_char,
-    url: *const c_char,
+    urls: *const *const c_char,
+    urls_len: usize,
     file_extension: *const c_char,
     schema: *mut FFI_ArrowSchema,
     format_callbacks: *mut JavaFileFormatCallbacks,
-    collect_stat: bool,
+    collect_stat: i32,
     target_partitions: usize,
     error_out: *mut *mut c_char,
 ) -> i32 {
@@ -703,12 +705,13 @@ pub unsafe extern "C" fn datafusion_context_register_listing_table(
     if ctx.is_null()
         || rt.is_null()
         || name.is_null()
-        || url.is_null()
+        || urls.is_null()
+        || urls_len == 0
         || file_extension.is_null()
         || schema.is_null()
         || format_callbacks.is_null()
     {
-        return set_error_return(error_out, "Null pointer argument");
+        return set_error_return(error_out, "Null pointer argument or empty URLs");
     }
 
     let context = &*(ctx as *mut SessionContext);
@@ -717,11 +720,6 @@ pub unsafe extern "C" fn datafusion_context_register_listing_table(
     let name_str = match CStr::from_ptr(name).to_str() {
         Ok(s) => s.to_string(),
         Err(e) => return set_error_return(error_out, &format!("Invalid table name: {}", e)),
-    };
-
-    let url_str = match CStr::from_ptr(url).to_str() {
-        Ok(s) => s.to_string(),
-        Err(e) => return set_error_return(error_out, &format!("Invalid URL: {}", e)),
     };
 
     let ext_str = match CStr::from_ptr(file_extension).to_str() {
@@ -748,17 +746,33 @@ pub unsafe extern "C" fn datafusion_context_register_listing_table(
     // Build ListingOptions
     let options = ListingOptions::new(format as Arc<dyn FileFormat>)
         .with_file_extension(ext_str)
-        .with_collect_stat(collect_stat)
+        .with_collect_stat(collect_stat != 0)
         .with_target_partitions(target_partitions);
 
-    // Parse URL and create table config
+    // Parse URLs and create table config
     runtime.block_on(async {
-        let table_url = match ListingTableUrl::parse(&url_str) {
-            Ok(u) => u,
-            Err(e) => return set_error_return(error_out, &format!("Failed to parse URL: {}", e)),
-        };
+        let urls_slice = std::slice::from_raw_parts(urls, urls_len);
+        let mut table_urls = Vec::with_capacity(urls_len);
+        for &url_ptr in urls_slice {
+            let url_str = match CStr::from_ptr(url_ptr).to_str() {
+                Ok(s) => s.to_string(),
+                Err(e) => {
+                    return set_error_return(error_out, &format!("Invalid URL: {}", e))
+                }
+            };
+            let table_url = match ListingTableUrl::parse(&url_str) {
+                Ok(u) => u,
+                Err(e) => {
+                    return set_error_return(
+                        error_out,
+                        &format!("Failed to parse URL: {}", e),
+                    )
+                }
+            };
+            table_urls.push(table_url);
+        }
 
-        let config = ListingTableConfig::new(table_url)
+        let config = ListingTableConfig::new_with_multi_paths(table_urls)
             .with_listing_options(options)
             .with_schema(arrow_schema);
 

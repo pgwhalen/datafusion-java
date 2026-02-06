@@ -10,4 +10,6 @@ This document describes the listing table FFI bindings, which allow Java users t
 
 3. **Reuse the same multi-level callback pattern as catalogs** -- The `FileFormat` -> `FileSource` -> `FileOpener` chain follows the exact same pattern as `CatalogProvider` -> `SchemaProvider` -> `TableProvider` -> `ExecutionPlan` -> `RecordBatchReader`: each level has a Java interface, a Handle class (FFI bridge), a Rust callback struct, and a Rust wrapper struct.
 
-4**Pure Java config classes** -- `ListingTableUrl`, `ListingOptions`, and `ListingTable` are pure Java data carriers. They don't wrap native pointers. All native object creation happens in a single FFI registration call (`datafusion_context_register_listing_table`).
+4. **Pure Java config classes** -- `ListingTableUrl`, `ListingOptions`, and `ListingTable` are pure Java data carriers. They don't wrap native pointers. All native object creation happens in a single FFI registration call (`datafusion_context_register_listing_table`).
+
+5. **Builder methods mirror Rust's `ListingTableConfig`** -- `ListingTable.builder(url)` mirrors `ListingTableConfig::new(table_path)`, `ListingTable.builderWithMultiPaths(urls)` mirrors `ListingTableConfig::new_with_multi_paths(table_paths)`, and builder methods `withListingOptions()` / `withSchema()` mirror `with_listing_options()` / `with_schema()`. The `ListingTable` stores a `List<ListingTableUrl> tablePaths` (not a single URL) to support multiple paths natively.

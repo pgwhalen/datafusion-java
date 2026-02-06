@@ -2,6 +2,7 @@ package org.apache.arrow.datafusion.ffi;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.util.ArrayList;
 import java.util.List;
 import org.apache.arrow.c.ArrowSchema;
@@ -9,6 +10,7 @@ import org.apache.arrow.c.Data;
 import org.apache.arrow.datafusion.CatalogProvider;
 import org.apache.arrow.datafusion.DataFusionException;
 import org.apache.arrow.datafusion.ListingTable;
+import org.apache.arrow.datafusion.ListingTableUrl;
 import org.apache.arrow.datafusion.SessionConfig;
 import org.apache.arrow.memory.BufferAllocator;
 import org.slf4j.Logger;
@@ -114,8 +116,15 @@ public final class SessionContextFfi implements AutoCloseable {
       formatHandles.add(handle);
 
       MemorySegment nameSegment = arena.allocateFrom(name);
-      MemorySegment urlSegment = arena.allocateFrom(table.url().url());
       MemorySegment extSegment = arena.allocateFrom(table.options().fileExtension());
+
+      // Build array of URL string pointers
+      java.util.List<ListingTableUrl> tablePaths = table.tablePaths();
+      MemorySegment urlsArray = arena.allocate(ValueLayout.ADDRESS, tablePaths.size());
+      for (int i = 0; i < tablePaths.size(); i++) {
+        MemorySegment urlSegment = arena.allocateFrom(tablePaths.get(i).url());
+        urlsArray.setAtIndex(ValueLayout.ADDRESS, i, urlSegment);
+      }
 
       // Export schema via Arrow C Data Interface
       try (ArrowSchema ffiSchema = ArrowSchema.allocateNew(allocator)) {
@@ -131,11 +140,12 @@ public final class SessionContextFfi implements AutoCloseable {
                         context,
                         runtime,
                         nameSegment,
-                        urlSegment,
+                        urlsArray,
+                        (long) tablePaths.size(),
                         extSegment,
                         schemaAddr,
                         handle.getTraitStruct(),
-                        table.options().collectStat(),
+                        table.options().collectStat() ? 1 : 0,
                         (long) table.options().targetPartitions(),
                         errorOut));
       }
