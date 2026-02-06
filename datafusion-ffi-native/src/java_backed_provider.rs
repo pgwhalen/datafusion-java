@@ -45,7 +45,7 @@ impl JavaBackedTableProvider {
         // Convert FFI schema to Arrow schema
         let schema = match arrow::datatypes::Schema::try_from(&schema_out) {
             Ok(s) => Arc::new(s),
-            Err(e) => return Err(datafusion::error::DataFusionError::ArrowError(e, None)),
+            Err(e) => return Err(datafusion::error::DataFusionError::ArrowError(Box::new(e), None)),
         };
 
         Ok(Self { callbacks, schema })
