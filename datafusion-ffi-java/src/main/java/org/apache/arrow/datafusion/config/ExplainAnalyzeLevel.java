@@ -1,4 +1,4 @@
-package org.apache.arrow.datafusion;
+package org.apache.arrow.datafusion.config;
 
 /** Detail level for EXPLAIN ANALYZE output. */
 public enum ExplainAnalyzeLevel {

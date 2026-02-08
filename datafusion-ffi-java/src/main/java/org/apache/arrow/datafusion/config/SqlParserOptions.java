@@ -1,4 +1,4 @@
-package org.apache.arrow.datafusion;
+package org.apache.arrow.datafusion.config;
 
 import java.util.Map;
 

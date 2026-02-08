@@ -1,4 +1,4 @@
-package org.apache.arrow.datafusion;
+package org.apache.arrow.datafusion.config;
 
 /** Compression codec used for spilling intermediate results to disk. */
 public enum SpillCompression {

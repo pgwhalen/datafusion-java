@@ -11,7 +11,7 @@ import org.apache.arrow.datafusion.CatalogProvider;
 import org.apache.arrow.datafusion.DataFusionException;
 import org.apache.arrow.datafusion.ListingTable;
 import org.apache.arrow.datafusion.ListingTableUrl;
-import org.apache.arrow.datafusion.SessionConfig;
+import org.apache.arrow.datafusion.config.SessionConfig;
 import org.apache.arrow.memory.BufferAllocator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

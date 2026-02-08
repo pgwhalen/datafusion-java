@@ -1,4 +1,4 @@
-package org.apache.arrow.datafusion;
+package org.apache.arrow.datafusion.config;
 
 /** Output format for EXPLAIN statements. */
 public enum ExplainFormat {

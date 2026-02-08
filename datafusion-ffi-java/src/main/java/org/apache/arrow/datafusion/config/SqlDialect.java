@@ -1,4 +1,4 @@
-package org.apache.arrow.datafusion;
+package org.apache.arrow.datafusion.config;
 
 /** SQL dialect for the parser. Maps to DataFusion's {@code Dialect} enum. */
 public enum SqlDialect {

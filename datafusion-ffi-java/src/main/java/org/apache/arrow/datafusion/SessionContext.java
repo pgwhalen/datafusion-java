@@ -7,6 +7,7 @@ import java.util.Map;
 import org.apache.arrow.c.ArrowArray;
 import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
+import org.apache.arrow.datafusion.config.SessionConfig;
 import org.apache.arrow.datafusion.ffi.DataFusionBindings;
 import org.apache.arrow.datafusion.ffi.NativeUtil;
 import org.apache.arrow.datafusion.ffi.SessionContextFfi;
@@ -66,7 +67,7 @@ public class SessionContext implements AutoCloseable {
     }
   }
 
-  private static MemorySegment createWithConfig(SessionConfig config) throws Throwable {
+  private static MemorySegment createWithConfig(SessionConfig config) {
     Map<String, String> options = config.toOptionsMap();
 
     try (Arena arena = Arena.ofConfined()) {
@@ -251,15 +252,6 @@ public class SessionContext implements AutoCloseable {
     } catch (Throwable e) {
       throw new DataFusionException("Failed to get session state", e);
     }
-  }
-
-  /**
-   * Gets the native runtime pointer for use by other FFI classes.
-   *
-   * @return The runtime memory segment
-   */
-  MemorySegment getRuntime() {
-    return runtime;
   }
 
   private void checkNotClosed() {

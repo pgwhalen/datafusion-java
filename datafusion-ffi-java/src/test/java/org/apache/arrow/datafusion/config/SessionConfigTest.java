@@ -1,8 +1,11 @@
-package org.apache.arrow.datafusion;
+package org.apache.arrow.datafusion.config;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.Map;
+import org.apache.arrow.datafusion.DataFrame;
+import org.apache.arrow.datafusion.RecordBatchStream;
+import org.apache.arrow.datafusion.SessionContext;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.BigIntVector;
