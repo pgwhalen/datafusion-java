@@ -24,6 +24,17 @@ public final class DataFusionBindings {
   public static final MethodHandle CONTEXT_CREATE =
       downcall("datafusion_context_create", FunctionDescriptor.of(ValueLayout.ADDRESS));
 
+  public static final MethodHandle CONTEXT_CREATE_WITH_CONFIG =
+      downcall(
+          "datafusion_context_create_with_config",
+          FunctionDescriptor.of(
+              ValueLayout.ADDRESS,
+              ValueLayout.ADDRESS, // keys
+              ValueLayout.ADDRESS, // values
+              ValueLayout.JAVA_LONG, // len
+              ValueLayout.ADDRESS // error_out
+              ));
+
   public static final MethodHandle CONTEXT_DESTROY =
       downcall("datafusion_context_destroy", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
 

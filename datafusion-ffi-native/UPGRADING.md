@@ -70,7 +70,25 @@ If tests fail with errors from the native library, check:
 2. Search DataFusion source for the error message to find context
 3. Compare with built-in implementations (e.g., `CsvSource`) for patterns
 
-## Step 65: Update Documentation
+## Step 5: Update Java SessionConfig Option Records
+
+The Java option records (`CatalogOptions`, `ExecutionOptions`, `ParquetOptions`, `OptimizerOptions`,
+`SqlParserOptions`, `ExplainOptions`, `FormatOptions`) mirror DataFusion's `ConfigOptions`.
+Their Javadoc is copied from Rust doc comments.
+
+When upgrading DataFusion, review `datafusion-common/src/config.rs` for:
+- **Added options**: Add new fields to the corresponding Java record and its Builder
+- **Removed options**: Remove the Java field (or deprecate if backward compatibility is needed)
+- **Renamed options**: Update the config key in `writeTo()` and rename the Java field
+- **New option groups**: Create a new `*Options.java` record and add it to `SessionConfig.Builder`
+
+After updating the records, update `SessionConfigTest.java`:
+- Each `testAll*OptionsViaShow()` test sets every field via the builder and asserts the value via `SHOW`
+- Add new fields to the appropriate test method's builder and add a corresponding `assertShow` call
+- Remove deleted fields from both the builder and assertions
+- If a new option group is added, create a new `testAll*OptionsViaShow()` test method following the same pattern
+
+## Step 6: Update Documentation
 
 After a successful upgrade:
 1. Update CLAUDE.md if patterns changed significantly

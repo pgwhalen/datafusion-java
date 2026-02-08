@@ -11,7 +11,6 @@ mod logical_plan;
 mod runtime;
 mod session_state;
 mod stream;
-mod table_provider;
 
 pub use context::*;
 pub use dataframe::*;

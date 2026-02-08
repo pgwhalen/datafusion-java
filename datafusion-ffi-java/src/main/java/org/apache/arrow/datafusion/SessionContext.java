@@ -2,6 +2,8 @@ package org.apache.arrow.datafusion;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
+import java.util.Map;
 import org.apache.arrow.c.ArrowArray;
 import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
@@ -46,7 +48,11 @@ public class SessionContext implements AutoCloseable {
       if (runtime.equals(MemorySegment.NULL)) {
         throw new DataFusionException("Failed to create Tokio runtime");
       }
-      context = (MemorySegment) DataFusionBindings.CONTEXT_CREATE.invokeExact();
+      if (config.hasOptions()) {
+        context = createWithConfig(config);
+      } else {
+        context = (MemorySegment) DataFusionBindings.CONTEXT_CREATE.invokeExact();
+      }
       if (context.equals(MemorySegment.NULL)) {
         DataFusionBindings.RUNTIME_DESTROY.invokeExact(runtime);
         throw new DataFusionException("Failed to create SessionContext");
@@ -57,6 +63,33 @@ public class SessionContext implements AutoCloseable {
       throw e;
     } catch (Throwable e) {
       throw new DataFusionException("Failed to create SessionContext", e);
+    }
+  }
+
+  private static MemorySegment createWithConfig(SessionConfig config) throws Throwable {
+    Map<String, String> options = config.toOptionsMap();
+
+    try (Arena arena = Arena.ofConfined()) {
+      int size = options.size();
+
+      // Allocate parallel arrays of C string pointers
+      MemorySegment keys = arena.allocate(ValueLayout.ADDRESS, size);
+      MemorySegment values = arena.allocate(ValueLayout.ADDRESS, size);
+
+      int i = 0;
+      for (Map.Entry<String, String> entry : options.entrySet()) {
+        keys.setAtIndex(ValueLayout.ADDRESS, i, arena.allocateFrom(entry.getKey()));
+        values.setAtIndex(ValueLayout.ADDRESS, i, arena.allocateFrom(entry.getValue()));
+        i++;
+      }
+
+      return NativeUtil.callForPointer(
+          arena,
+          "Create SessionContext with config",
+          errorOut ->
+              (MemorySegment)
+                  DataFusionBindings.CONTEXT_CREATE_WITH_CONFIG.invokeExact(
+                      keys, values, (long) size, errorOut));
     }
   }
 

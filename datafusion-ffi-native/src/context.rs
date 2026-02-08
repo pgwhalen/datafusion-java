@@ -2,7 +2,9 @@ use arrow::array::StructArray;
 use arrow::datatypes::Schema;
 use arrow::ffi::{from_ffi, FFI_ArrowArray, FFI_ArrowSchema};
 use arrow::record_batch::RecordBatch;
+use datafusion::execution::config::SessionConfig;
 use datafusion::execution::context::SessionContext;
+use std::collections::HashMap;
 use std::ffi::{c_char, c_void, CStr};
 use std::sync::Arc;
 use tokio::runtime::Runtime;
@@ -19,6 +21,84 @@ use crate::error::{clear_error, set_error_return, set_error_return_null};
 #[no_mangle]
 pub extern "C" fn datafusion_context_create() -> *mut c_void {
     let context = SessionContext::new();
+    Box::into_raw(Box::new(context)) as *mut c_void
+}
+
+/// Create a new SessionContext with configuration options.
+///
+/// Options are passed as parallel arrays of null-terminated C strings (keys and values).
+/// Keys use dotted notation (e.g., "datafusion.execution.batch_size").
+///
+/// # Arguments
+/// * `keys` - Pointer to array of C string pointers (config keys)
+/// * `values` - Pointer to array of C string pointers (config values)
+/// * `len` - Number of key/value pairs
+/// * `error_out` - Pointer to receive error message
+///
+/// # Returns
+/// A pointer to the SessionContext, or null on error.
+///
+/// # Safety
+/// All pointers must be valid. The caller must call `datafusion_context_destroy` to free.
+#[no_mangle]
+pub unsafe extern "C" fn datafusion_context_create_with_config(
+    keys: *const *const c_char,
+    values: *const *const c_char,
+    len: usize,
+    error_out: *mut *mut c_char,
+) -> *mut c_void {
+    clear_error(error_out);
+
+    if len > 0 && (keys.is_null() || values.is_null()) {
+        return set_error_return_null(error_out, "Null keys or values pointer with non-zero length");
+    }
+
+    let mut settings = HashMap::with_capacity(len);
+    for i in 0..len {
+        let key_ptr = *keys.add(i);
+        let value_ptr = *values.add(i);
+
+        if key_ptr.is_null() || value_ptr.is_null() {
+            return set_error_return_null(
+                error_out,
+                &format!("Null key or value at index {}", i),
+            );
+        }
+
+        let key = match CStr::from_ptr(key_ptr).to_str() {
+            Ok(s) => s.to_string(),
+            Err(e) => {
+                return set_error_return_null(
+                    error_out,
+                    &format!("Invalid key at index {}: {}", i, e),
+                )
+            }
+        };
+
+        let value = match CStr::from_ptr(value_ptr).to_str() {
+            Ok(s) => s.to_string(),
+            Err(e) => {
+                return set_error_return_null(
+                    error_out,
+                    &format!("Invalid value at index {}: {}", i, e),
+                )
+            }
+        };
+
+        settings.insert(key, value);
+    }
+
+    let config = match SessionConfig::from_string_hash_map(&settings) {
+        Ok(c) => c,
+        Err(e) => {
+            return set_error_return_null(
+                error_out,
+                &format!("Failed to create SessionConfig: {}", e),
+            )
+        }
+    };
+
+    let context = SessionContext::new_with_config(config);
     Box::into_raw(Box::new(context)) as *mut c_void
 }
 
