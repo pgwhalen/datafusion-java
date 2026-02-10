@@ -321,7 +321,8 @@ public class CustomTableProviderTest {
             }
 
             @Override
-            public ExecutionPlan scan(int[] projection, Long limit) {
+            public ExecutionPlan scan(
+                Session session, Expr[] filters, int[] projection, Long limit) {
               capturedLimit.set(limit);
               return new TestExecutionPlan(schema, List.of(usersDataBatch()));
             }
@@ -365,7 +366,8 @@ public class CustomTableProviderTest {
             }
 
             @Override
-            public ExecutionPlan scan(int[] projection, Long limit) {
+            public ExecutionPlan scan(
+                Session session, Expr[] filters, int[] projection, Long limit) {
               capturedLimit.set(limit);
               return new TestExecutionPlan(schema, List.of(usersDataBatch()));
             }
@@ -407,7 +409,8 @@ public class CustomTableProviderTest {
             }
 
             @Override
-            public ExecutionPlan scan(int[] projection, Long limit) {
+            public ExecutionPlan scan(
+                Session session, Expr[] filters, int[] projection, Long limit) {
               return new ExecutionPlan() {
                 @Override
                 public Schema schema() {
@@ -491,7 +494,7 @@ public class CustomTableProviderTest {
     }
 
     @Override
-    public ExecutionPlan scan(int[] projection, Long limit) {
+    public ExecutionPlan scan(Session session, Expr[] filters, int[] projection, Long limit) {
       return new TestExecutionPlan(schema, batches);
     }
   }

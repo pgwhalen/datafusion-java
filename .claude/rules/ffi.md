@@ -372,6 +372,29 @@ Current pairs:
 | Java upcall stub field | `*Stub` suffix |
 | Java Handle class | `*Handle` suffix |
 
+## FFI Encapsulation Rules
+
+All native call logic and `java.lang.foreign` API usage MUST be confined to the `ffi` package (`org.apache.arrow.datafusion.ffi`). Public API classes in `org.apache.arrow.datafusion` must never leak FFI implementation details.
+
+### Rules
+
+1. **No native calls outside `ffi/`** -- Only classes in the `ffi` package may invoke `DataFusionBindings` method handles (`.invokeExact()`). Public API classes must delegate to a corresponding `*Ffi` class in the `ffi` package instead.
+
+2. **No `java.lang.foreign` imports outside `ffi/`** -- Classes in `org.apache.arrow.datafusion` must NOT import `java.lang.foreign.MemorySegment`, `Arena`, `ValueLayout`, `FunctionDescriptor`, `Linker`, or any other type from `java.lang.foreign`. These are internal FFI plumbing.
+
+3. **No `MemorySegment` in public API signatures** -- No public constructor, method, or field in `org.apache.arrow.datafusion` may use `MemorySegment` as a parameter type, return type, or field type. Native pointers must be wrapped in an `*Ffi` class in the `ffi` package.
+
+4. **No `ffi` package imports outside `ffi/`** -- Classes in `org.apache.arrow.datafusion` must NOT import `DataFusionBindings` or `NativeUtil`. The only `ffi` types they may reference are their corresponding `*Ffi` wrapper (e.g., `PhysicalExprFfi`) to delegate lifecycle and native operations.
+
+5. **Delegation pattern** -- When a public API class wraps a native pointer, it must follow this pattern:
+   - Create a `*Ffi` class in the `ffi` package that owns the `MemorySegment` and contains all native call logic
+   - The public API class holds a `*Ffi` instance and delegates to it
+   - Example: `PhysicalExpr` wraps `PhysicalExprFfi`; `LiteralGuarantee.analyze()` delegates to `LiteralGuaranteeFfi.analyze()`
+
+### Existing violations
+
+There are currently no known violations. Do NOT add new violations.
+
 ## Common Gotchas
 
 1. **Debug implementations**: Rust wrapper structs implementing DataFusion traits need manual `Debug` impl since they contain raw pointers

@@ -1,11 +1,6 @@
 package org.apache.arrow.datafusion;
 
-import java.lang.foreign.Arena;
-import java.lang.foreign.MemorySegment;
-import org.apache.arrow.datafusion.ffi.DataFusionBindings;
-import org.apache.arrow.datafusion.ffi.NativeUtil;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.arrow.datafusion.ffi.SessionStateFfi;
 
 /**
  * A snapshot of a DataFusion session's state, capable of creating logical plans.
@@ -15,13 +10,11 @@ import org.slf4j.LoggerFactory;
  * created it.
  */
 public class SessionState implements AutoCloseable {
-  private static final Logger logger = LoggerFactory.getLogger(SessionState.class);
 
-  private final MemorySegment stateWithRuntime;
-  private volatile boolean closed = false;
+  private final SessionStateFfi ffi;
 
-  SessionState(MemorySegment stateWithRuntime) {
-    this.stateWithRuntime = stateWithRuntime;
+  SessionState(SessionStateFfi ffi) {
+    this.ffi = ffi;
   }
 
   /**
@@ -32,45 +25,11 @@ public class SessionState implements AutoCloseable {
    * @throws DataFusionException if the SQL is invalid or planning fails
    */
   public LogicalPlan createLogicalPlan(String sql) {
-    checkNotClosed();
-
-    try (Arena arena = Arena.ofConfined()) {
-      MemorySegment sqlSegment = arena.allocateFrom(sql);
-
-      MemorySegment plan =
-          NativeUtil.callForPointer(
-              arena,
-              "Create logical plan",
-              errorOut ->
-                  (MemorySegment)
-                      DataFusionBindings.SESSION_STATE_CREATE_LOGICAL_PLAN.invokeExact(
-                          stateWithRuntime, sqlSegment, errorOut));
-
-      logger.debug("Created LogicalPlan: {}", plan);
-      return new LogicalPlan(plan);
-    } catch (DataFusionException e) {
-      throw e;
-    } catch (Throwable e) {
-      throw new DataFusionException("Failed to create logical plan", e);
-    }
-  }
-
-  private void checkNotClosed() {
-    if (closed) {
-      throw new IllegalStateException("SessionState has been closed");
-    }
+    return new LogicalPlan(ffi.createLogicalPlan(sql));
   }
 
   @Override
   public void close() {
-    if (!closed) {
-      closed = true;
-      try {
-        DataFusionBindings.SESSION_STATE_DESTROY.invokeExact(stateWithRuntime);
-        logger.debug("Closed SessionState");
-      } catch (Throwable e) {
-        logger.error("Error closing SessionState", e);
-      }
-    }
+    ffi.close();
   }
 }

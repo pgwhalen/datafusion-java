@@ -5,6 +5,8 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import org.apache.arrow.c.ArrowArray;
 import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
 import org.apache.arrow.datafusion.CatalogProvider;
@@ -13,21 +15,23 @@ import org.apache.arrow.datafusion.ListingTable;
 import org.apache.arrow.datafusion.ListingTableUrl;
 import org.apache.arrow.datafusion.config.SessionConfig;
 import org.apache.arrow.memory.BufferAllocator;
+import org.apache.arrow.vector.VectorSchemaRoot;
+import org.apache.arrow.vector.dictionary.DictionaryProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * Internal FFI helper for SessionContext.
  *
- * <p>This class manages the FFI-level operations for SessionContext, including catalog registration
- * and lifecycle management of native resources. It exists in the ffi package to access
- * package-private classes like {@link CatalogProviderHandle}.
+ * <p>This class manages all FFI-level operations for SessionContext, including runtime/context
+ * creation, table registration, SQL execution, and lifecycle management of native resources. It
+ * exists in the ffi package to access package-private classes like {@link CatalogProviderHandle}.
  */
 public final class SessionContextFfi implements AutoCloseable {
   private static final Logger logger = LoggerFactory.getLogger(SessionContextFfi.class);
 
-  private final MemorySegment context;
   private final MemorySegment runtime;
+  private final MemorySegment context;
   private final SessionConfig config;
 
   // Shared arena for catalog providers (needs to live as long as the context)
@@ -41,24 +45,155 @@ public final class SessionContextFfi implements AutoCloseable {
   private final List<FileFormatHandle> formatHandles = new ArrayList<>();
 
   /**
-   * Creates a new SessionContextFfi.
+   * Creates a new SessionContextFfi, including the native runtime and context.
    *
-   * @param context The native context pointer
    * @param config The session configuration
+   * @throws DataFusionException if runtime or context creation fails
    */
-  /**
-   * Creates a new SessionContextFfi.
-   *
-   * @param context The native context pointer
-   * @param runtime The native runtime pointer
-   * @param config The session configuration
-   */
-  public SessionContextFfi(MemorySegment context, MemorySegment runtime, SessionConfig config) {
-    this.context = context;
-    this.runtime = runtime;
+  public SessionContextFfi(SessionConfig config) {
     this.config = config;
-    this.catalogArena = Arena.ofShared();
-    this.listingTableArena = Arena.ofShared();
+    try {
+      runtime = (MemorySegment) DataFusionBindings.RUNTIME_CREATE.invokeExact();
+      if (runtime.equals(MemorySegment.NULL)) {
+        throw new DataFusionException("Failed to create Tokio runtime");
+      }
+      if (config.hasOptions()) {
+        context = createWithConfig(config);
+      } else {
+        context = (MemorySegment) DataFusionBindings.CONTEXT_CREATE.invokeExact();
+      }
+      if (context.equals(MemorySegment.NULL)) {
+        DataFusionBindings.RUNTIME_DESTROY.invokeExact(runtime);
+        throw new DataFusionException("Failed to create SessionContext");
+      }
+      this.catalogArena = Arena.ofShared();
+      this.listingTableArena = Arena.ofShared();
+      logger.debug("Created SessionContext: runtime={}, context={}", runtime, context);
+    } catch (DataFusionException e) {
+      throw e;
+    } catch (Throwable e) {
+      throw new DataFusionException("Failed to create SessionContext", e);
+    }
+  }
+
+  private static MemorySegment createWithConfig(SessionConfig config) {
+    Map<String, String> options = config.toOptionsMap();
+
+    try (Arena arena = Arena.ofConfined()) {
+      int size = options.size();
+
+      // Allocate parallel arrays of C string pointers
+      MemorySegment keys = arena.allocate(ValueLayout.ADDRESS, size);
+      MemorySegment values = arena.allocate(ValueLayout.ADDRESS, size);
+
+      int i = 0;
+      for (Map.Entry<String, String> entry : options.entrySet()) {
+        keys.setAtIndex(ValueLayout.ADDRESS, i, arena.allocateFrom(entry.getKey()));
+        values.setAtIndex(ValueLayout.ADDRESS, i, arena.allocateFrom(entry.getValue()));
+        i++;
+      }
+
+      return NativeUtil.callForPointer(
+          arena,
+          "Create SessionContext with config",
+          errorOut ->
+              (MemorySegment)
+                  DataFusionBindings.CONTEXT_CREATE_WITH_CONFIG.invokeExact(
+                      keys, values, (long) size, errorOut));
+    }
+  }
+
+  /**
+   * Registers a VectorSchemaRoot as a table in the session context.
+   *
+   * @param name The table name
+   * @param root The VectorSchemaRoot containing the data
+   * @param provider The DictionaryProvider for dictionary-encoded columns (may be null)
+   * @param allocator The buffer allocator
+   * @throws DataFusionException if registration fails
+   */
+  public void registerTable(
+      String name, VectorSchemaRoot root, DictionaryProvider provider, BufferAllocator allocator) {
+    try (Arena arena = Arena.ofConfined();
+        ArrowSchema ffiSchema = ArrowSchema.allocateNew(allocator);
+        ArrowArray ffiArray = ArrowArray.allocateNew(allocator)) {
+
+      // Export the VectorSchemaRoot to Arrow C Data Interface
+      Data.exportVectorSchemaRoot(allocator, root, provider, ffiArray, ffiSchema);
+
+      // Create null-terminated string for table name
+      MemorySegment nameSegment = arena.allocateFrom(name);
+
+      // Get memory addresses from Arrow C Data structures
+      MemorySegment schemaAddr = MemorySegment.ofAddress(ffiSchema.memoryAddress());
+      MemorySegment arrayAddr = MemorySegment.ofAddress(ffiArray.memoryAddress());
+
+      NativeUtil.call(
+          arena,
+          "Register table '" + name + "'",
+          errorOut ->
+              (int)
+                  DataFusionBindings.CONTEXT_REGISTER_RECORD_BATCH.invokeExact(
+                      context, nameSegment, schemaAddr, arrayAddr, errorOut));
+
+      logger.debug("Registered table '{}' with {} rows", name, root.getRowCount());
+    } catch (DataFusionException e) {
+      throw e;
+    } catch (Throwable e) {
+      throw new DataFusionException("Failed to register table", e);
+    }
+  }
+
+  /**
+   * Executes a SQL query and returns a DataFrameFfi.
+   *
+   * @param query The SQL query to execute
+   * @return A DataFrameFfi wrapping the native runtime and dataframe pointers
+   * @throws DataFusionException if query execution fails
+   */
+  public DataFrameFfi sql(String query) {
+    try (Arena arena = Arena.ofConfined()) {
+      MemorySegment querySegment = arena.allocateFrom(query);
+
+      MemorySegment dataframe =
+          NativeUtil.callForPointer(
+              arena,
+              "SQL execution",
+              errorOut ->
+                  (MemorySegment)
+                      DataFusionBindings.CONTEXT_SQL.invokeExact(
+                          runtime, context, querySegment, errorOut));
+
+      logger.debug("Executed SQL query, got DataFrame: {}", dataframe);
+      return new DataFrameFfi(runtime, dataframe);
+    } catch (DataFusionException e) {
+      throw e;
+    } catch (Throwable e) {
+      throw new DataFusionException("Failed to execute SQL", e);
+    }
+  }
+
+  /**
+   * Creates a snapshot of this session's state.
+   *
+   * @return a SessionStateFfi wrapping the native state pointer
+   * @throws DataFusionException if the state cannot be created
+   */
+  public SessionStateFfi state() {
+    try (Arena arena = Arena.ofConfined()) {
+      MemorySegment statePtr =
+          NativeUtil.callForPointer(
+              arena,
+              "Get session state",
+              errorOut ->
+                  (MemorySegment) DataFusionBindings.CONTEXT_STATE.invokeExact(context, errorOut));
+
+      return new SessionStateFfi(statePtr);
+    } catch (DataFusionException e) {
+      throw e;
+    } catch (Throwable e) {
+      throw new DataFusionException("Failed to get session state", e);
+    }
   }
 
   /**
@@ -119,7 +254,7 @@ public final class SessionContextFfi implements AutoCloseable {
       MemorySegment extSegment = arena.allocateFrom(table.options().fileExtension());
 
       // Build array of URL string pointers
-      java.util.List<ListingTableUrl> tablePaths = table.tablePaths();
+      List<ListingTableUrl> tablePaths = table.tablePaths();
       MemorySegment urlsArray = arena.allocate(ValueLayout.ADDRESS, tablePaths.size());
       for (int i = 0; i < tablePaths.size(); i++) {
         MemorySegment urlSegment = arena.allocateFrom(tablePaths.get(i).url());
@@ -159,12 +294,38 @@ public final class SessionContextFfi implements AutoCloseable {
   }
 
   /**
-   * Closes the catalog handles. Call this before destroying the native context.
+   * Closes the session context and all associated resources.
    *
-   * <p>Note: The catalog arena is not closed here because upcall stubs may still be invoked during
-   * context destruction. Call {@link #closeArenas()} after the native context is destroyed.
+   * <p>The close order is important:
+   *
+   * <ol>
+   *   <li>Close handles (but NOT arenas - upcalls may still fire during context destruction)
+   *   <li>Destroy native context and runtime
+   *   <li>Close arenas (now safe - no more upcalls possible)
+   * </ol>
    */
-  public void closeCatalogHandles() {
+  @Override
+  public void close() {
+    try {
+      // Close handles first
+      closeCatalogHandles();
+      closeFormatHandles();
+
+      // Destroy native objects
+      DataFusionBindings.CONTEXT_DESTROY.invokeExact(context);
+      DataFusionBindings.RUNTIME_DESTROY.invokeExact(runtime);
+
+      // Now safe to close arenas
+      catalogArena.close();
+      listingTableArena.close();
+
+      logger.debug("Closed SessionContext");
+    } catch (Throwable e) {
+      logger.error("Error closing SessionContext", e);
+    }
+  }
+
+  private void closeCatalogHandles() {
     for (CatalogProviderHandle handle : catalogHandles) {
       try {
         handle.close();
@@ -175,13 +336,7 @@ public final class SessionContextFfi implements AutoCloseable {
     catalogHandles.clear();
   }
 
-  /**
-   * Closes the format handles. Call this before destroying the native context.
-   *
-   * <p>Note: The listing table arena is not closed here because upcall stubs may still be invoked
-   * during context destruction. Call {@link #closeArenas()} after the native context is destroyed.
-   */
-  public void closeFormatHandles() {
+  private void closeFormatHandles() {
     for (FileFormatHandle handle : formatHandles) {
       try {
         handle.close();
@@ -190,18 +345,5 @@ public final class SessionContextFfi implements AutoCloseable {
       }
     }
     formatHandles.clear();
-  }
-
-  /** Closes all arenas. Call this after the native context is destroyed to free upcall stubs. */
-  public void closeArenas() {
-    catalogArena.close();
-    listingTableArena.close();
-  }
-
-  @Override
-  public void close() {
-    closeCatalogHandles();
-    closeFormatHandles();
-    closeArenas();
   }
 }

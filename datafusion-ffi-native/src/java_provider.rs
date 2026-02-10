@@ -106,6 +106,9 @@ pub struct JavaTableProviderCallbacks {
 
     /// Creates a scan (execution plan) for this table.
     ///
+    /// session: pointer to a boxed `*const dyn Session` fat pointer
+    /// filter_ptrs: array of pointers to Expr (borrowed from the filters slice)
+    /// filter_count: number of filters
     /// projection: array of column indices, or null for all columns
     /// projection_len: length of projection array
     /// limit: maximum rows, or -1 for no limit
@@ -114,6 +117,9 @@ pub struct JavaTableProviderCallbacks {
     /// Returns 0 on success, -1 on error.
     pub scan_fn: unsafe extern "C" fn(
         java_object: *mut c_void,
+        session: *mut c_void,
+        filter_ptrs: *const *const c_void,
+        filter_count: usize,
         projection: *const usize,
         projection_len: usize,
         limit: i64,

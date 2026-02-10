@@ -209,6 +209,94 @@ public final class DataFusionBindings {
               ValueLayout.ADDRESS // error_out
               ));
 
+  // Physical expression functions
+  public static final MethodHandle PHYSICAL_EXPR_DESTROY =
+      downcall("datafusion_physical_expr_destroy", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
+
+  // Session functions
+  public static final MethodHandle SESSION_CREATE_PHYSICAL_EXPR =
+      downcall(
+          "datafusion_session_create_physical_expr",
+          FunctionDescriptor.of(
+              ValueLayout.ADDRESS,
+              ValueLayout.ADDRESS, // session
+              ValueLayout.ADDRESS, // filter_ptrs
+              ValueLayout.JAVA_LONG, // filter_count
+              ValueLayout.ADDRESS, // schema_ffi
+              ValueLayout.ADDRESS // error_out
+              ));
+
+  // Literal guarantee functions
+  public static final MethodHandle LITERAL_GUARANTEE_ANALYZE =
+      downcall(
+          "datafusion_literal_guarantee_analyze",
+          FunctionDescriptor.of(
+              ValueLayout.ADDRESS,
+              ValueLayout.ADDRESS, // expr
+              ValueLayout.ADDRESS, // count_out
+              ValueLayout.ADDRESS // error_out
+              ));
+
+  public static final MethodHandle GUARANTEE_GET_INFO =
+      downcall(
+          "datafusion_guarantee_get_info",
+          FunctionDescriptor.of(
+              ValueLayout.JAVA_INT,
+              ValueLayout.ADDRESS, // handle
+              ValueLayout.JAVA_LONG, // idx
+              ValueLayout.ADDRESS, // name_out
+              ValueLayout.ADDRESS, // name_len_out
+              ValueLayout.ADDRESS, // rel_type_out
+              ValueLayout.ADDRESS, // rel_strs_out
+              ValueLayout.ADDRESS, // guarantee_type_out
+              ValueLayout.ADDRESS, // literal_count_out
+              ValueLayout.ADDRESS, // spans_count_out
+              ValueLayout.ADDRESS // error_out
+              ));
+
+  public static final MethodHandle GUARANTEE_GET_SPAN =
+      downcall(
+          "datafusion_guarantee_get_span",
+          FunctionDescriptor.of(
+              ValueLayout.JAVA_INT,
+              ValueLayout.ADDRESS, // handle
+              ValueLayout.JAVA_LONG, // g_idx
+              ValueLayout.JAVA_LONG, // s_idx
+              ValueLayout.ADDRESS, // start_line_out
+              ValueLayout.ADDRESS, // start_col_out
+              ValueLayout.ADDRESS, // end_line_out
+              ValueLayout.ADDRESS, // end_col_out
+              ValueLayout.ADDRESS // error_out
+              ));
+
+  public static final MethodHandle GUARANTEE_GET_LITERAL =
+      downcall(
+          "datafusion_guarantee_get_literal",
+          FunctionDescriptor.of(
+              ValueLayout.JAVA_INT,
+              ValueLayout.ADDRESS, // handle
+              ValueLayout.JAVA_LONG, // g_idx
+              ValueLayout.JAVA_LONG, // l_idx
+              ValueLayout.ADDRESS, // scalar_out
+              ValueLayout.ADDRESS // error_out
+              ));
+
+  public static final MethodHandle GUARANTEES_DESTROY =
+      downcall("datafusion_guarantees_destroy", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
+
+  public static final MethodHandle FFI_SCALAR_VALUE_SIZE =
+      downcall("datafusion_ffi_scalar_value_size", FunctionDescriptor.of(ValueLayout.JAVA_LONG));
+
+  public static final MethodHandle TEST_SCALAR_VALUE =
+      downcall(
+          "datafusion_test_scalar_value",
+          FunctionDescriptor.of(
+              ValueLayout.JAVA_INT,
+              ValueLayout.JAVA_INT, // type_tag
+              ValueLayout.ADDRESS, // scalar_out
+              ValueLayout.ADDRESS // error_out
+              ));
+
   private DataFusionBindings() {}
 
   /** Get the native linker for creating upcall stubs. */

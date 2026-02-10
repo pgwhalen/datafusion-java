@@ -22,7 +22,7 @@ import org.apache.arrow.vector.types.pojo.Schema;
  *     }
  *
  *     @Override
- *     public ExecutionPlan scan(int[] projection, Long limit) {
+ *     public ExecutionPlan scan(Session session, Expr[] filters, int[] projection, Long limit) {
  *         return new MyExecutionPlan(schema, data, projection, limit);
  *     }
  * }
@@ -50,19 +50,27 @@ public interface TableProvider {
   /**
    * Creates an execution plan to scan this table.
    *
+   * <p>The session parameter provides access to the DataFusion session state, which can be used to
+   * create physical expressions from the provided filters via {@link
+   * Session#createPhysicalExpr(Schema, Expr[])}.
+   *
+   * <p>The filters parameter contains the logical filter expressions that DataFusion wants to push
+   * down to this table provider. These can be analyzed for literal guarantees using {@link
+   * LiteralGuarantee#analyze(PhysicalExpr)}.
+   *
    * <p>The projection parameter specifies which columns should be read. If null, all columns should
    * be included. The indices correspond to the column positions in the schema.
    *
    * <p>The limit parameter specifies the maximum number of rows to return. If null, all rows should
    * be returned.
    *
-   * <p>Note: Filter pushdown is not yet implemented. When it is added, an additional filters
-   * parameter will be included in this method signature.
-   *
+   * @param session The session context for this scan (borrowed, valid only during this call)
+   * @param filters Filter expressions for potential pushdown (borrowed, valid only during this
+   *     call)
    * @param projection Column indices to include, or null for all columns
    * @param limit Maximum number of rows, or null for no limit
    * @return An execution plan that produces the requested data
    * @throws DataFusionException if creating the scan fails
    */
-  ExecutionPlan scan(int[] projection, Long limit);
+  ExecutionPlan scan(Session session, Expr[] filters, int[] projection, Long limit);
 }

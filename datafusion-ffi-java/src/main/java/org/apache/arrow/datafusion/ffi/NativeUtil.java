@@ -196,17 +196,7 @@ public final class NativeUtil {
     }
 
     try {
-      // Get the actual length of the error string
-      long len = (long) STRING_LEN.invokeExact(errorPtr);
-      if (len == 0) {
-        return "";
-      }
-
-      // Reinterpret with the exact size needed (length + 1 for null terminator)
-      return errorPtr.reinterpret(len + 1).getString(0);
-    } catch (Throwable e) {
-      // If we fail to read the message, return a fallback
-      return "(failed to read error message: " + e.getMessage() + ")";
+      return readNullTerminatedString(errorPtr);
     } finally {
       // Always free the error string
       try {
@@ -266,6 +256,31 @@ public final class NativeUtil {
     if (result < 0) {
       String message = extractAndFreeError(errorOut);
       throw new NativeErrorException(operation, message);
+    }
+  }
+
+  /**
+   * Reads a null-terminated C string from a native memory pointer.
+   *
+   * <p>Uses {@code datafusion_string_len} to determine the exact length of the string, avoiding
+   * hardcoded buffer sizes. Returns an empty string if the pointer is NULL.
+   *
+   * @param ptr the pointer to the null-terminated C string
+   * @return the Java string, or empty string if ptr is NULL
+   */
+  public static String readNullTerminatedString(MemorySegment ptr) {
+    if (ptr.equals(MemorySegment.NULL)) {
+      return "";
+    }
+
+    try {
+      long len = (long) STRING_LEN.invokeExact(ptr);
+      if (len == 0) {
+        return "";
+      }
+      return ptr.reinterpret(len + 1).getString(0);
+    } catch (Throwable e) {
+      return "(failed to read string: " + e.getMessage() + ")";
     }
   }
 

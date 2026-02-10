@@ -9,10 +9,11 @@ use async_trait::async_trait;
 use datafusion::catalog::Session;
 use datafusion::common::Result;
 use datafusion::datasource::{TableProvider, TableType};
+use datafusion::logical_expr::TableProviderFilterPushDown;
 use datafusion::logical_expr::Expr;
 use datafusion::physical_plan::ExecutionPlan;
 use std::any::Any;
-use std::ffi::c_char;
+use std::ffi::{c_char, c_void};
 use std::sync::Arc;
 
 /// A TableProvider that calls back into Java.
@@ -78,15 +79,41 @@ impl TableProvider for JavaBackedTableProvider {
         }
     }
 
+    fn supports_filters_pushdown(
+        &self,
+        filters: &[&Expr],
+    ) -> Result<Vec<TableProviderFilterPushDown>> {
+        // Report all filters as Inexact: DataFusion passes them to scan() but still applies them
+        Ok(filters
+            .iter()
+            .map(|_| TableProviderFilterPushDown::Inexact)
+            .collect())
+    }
+
     async fn scan(
         &self,
-        _state: &dyn Session,
+        state: &dyn Session,
         projection: Option<&Vec<usize>>,
-        _filters: &[Expr],
+        filters: &[Expr],
         limit: Option<usize>,
     ) -> Result<Arc<dyn ExecutionPlan>> {
         unsafe {
             let cb = &*self.callbacks;
+
+            // Box the session fat pointer so it can be passed as *mut c_void.
+            // Safety: The boxed pointer only lives for the duration of this scan() call.
+            // The session reference is only used within the Java callback, which returns
+            // before we reclaim the box. We transmute to erase the borrow lifetime.
+            let session_ptr: *const dyn Session =
+                std::mem::transmute::<*const dyn Session, *const dyn Session>(state);
+            let session_box = Box::new(session_ptr);
+            let session_handle = Box::into_raw(session_box) as *mut c_void;
+
+            // Create filter pointer array (pointers into the borrowed filters slice)
+            let filter_ptrs: Vec<*const c_void> = filters
+                .iter()
+                .map(|e| e as *const Expr as *const c_void)
+                .collect();
 
             // Convert projection to C array
             let (projection_ptr, projection_len) = match projection {
@@ -105,12 +132,18 @@ impl TableProvider for JavaBackedTableProvider {
 
             let result = (cb.scan_fn)(
                 cb.java_object,
+                session_handle,
+                filter_ptrs.as_ptr() as *const *const c_void,
+                filter_ptrs.len(),
                 projection_ptr,
                 projection_len,
                 limit_val,
                 &mut plan_out,
                 &mut error_out,
             );
+
+            // Reclaim and drop the boxed session pointer
+            let _ = Box::from_raw(session_handle as *mut *const dyn Session);
 
             check_callback_result(result, error_out, "scan Java TableProvider")?;
 
@@ -167,6 +200,9 @@ unsafe extern "C" fn dummy_table_type_fn(_java_object: *mut std::ffi::c_void) ->
 
 unsafe extern "C" fn dummy_scan_fn(
     _java_object: *mut std::ffi::c_void,
+    _session: *mut std::ffi::c_void,
+    _filter_ptrs: *const *const std::ffi::c_void,
+    _filter_count: usize,
     _projection: *const usize,
     _projection_len: usize,
     _limit: i64,

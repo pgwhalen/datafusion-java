@@ -1,6 +1,7 @@
 mod context;
 mod dataframe;
 mod error;
+mod guarantee;
 mod java_backed_catalog;
 mod java_backed_plan;
 mod java_backed_provider;
@@ -15,6 +16,7 @@ mod stream;
 pub use context::*;
 pub use dataframe::*;
 pub use error::*;
+pub use guarantee::*;
 pub use java_backed_catalog::*;
 pub use java_backed_plan::*;
 pub use java_backed_provider::*;

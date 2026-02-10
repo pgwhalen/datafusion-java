@@ -8,6 +8,8 @@ import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
 import org.apache.arrow.datafusion.DataFusionException;
 import org.apache.arrow.datafusion.ExecutionPlan;
+import org.apache.arrow.datafusion.Expr;
+import org.apache.arrow.datafusion.Session;
 import org.apache.arrow.datafusion.TableProvider;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.types.pojo.Schema;
@@ -46,12 +48,15 @@ final class TableProviderHandle implements TraitHandle {
   private static final FunctionDescriptor SCAN_DESC =
       FunctionDescriptor.of(
           ValueLayout.JAVA_INT,
-          ValueLayout.ADDRESS,
-          ValueLayout.ADDRESS,
-          ValueLayout.JAVA_LONG,
-          ValueLayout.JAVA_LONG,
-          ValueLayout.ADDRESS,
-          ValueLayout.ADDRESS);
+          ValueLayout.ADDRESS, // java_object
+          ValueLayout.ADDRESS, // scan_context
+          ValueLayout.ADDRESS, // filter_ptrs
+          ValueLayout.JAVA_LONG, // filter_count
+          ValueLayout.ADDRESS, // projection
+          ValueLayout.JAVA_LONG, // projection_len
+          ValueLayout.JAVA_LONG, // limit
+          ValueLayout.ADDRESS, // plan_out
+          ValueLayout.ADDRESS); // error_out
 
   private static final FunctionDescriptor RELEASE_DESC =
       FunctionDescriptor.ofVoid(ValueLayout.ADDRESS);
@@ -95,12 +100,15 @@ final class TableProviderHandle implements TraitHandle {
               "scan",
               MethodType.methodType(
                   int.class,
-                  MemorySegment.class,
-                  MemorySegment.class,
-                  long.class,
-                  long.class,
-                  MemorySegment.class,
-                  MemorySegment.class));
+                  MemorySegment.class, // java_object
+                  MemorySegment.class, // scan_context
+                  MemorySegment.class, // filter_ptrs
+                  long.class, // filter_count
+                  MemorySegment.class, // projection
+                  long.class, // projection_len
+                  long.class, // limit
+                  MemorySegment.class, // plan_out
+                  MemorySegment.class)); // error_out
     } catch (NoSuchMethodException | IllegalAccessException e) {
       throw new ExceptionInInitializerError(e);
     }
@@ -206,15 +214,31 @@ final class TableProviderHandle implements TraitHandle {
   }
 
   /** Callback: Create a scan (execution plan). */
-  @SuppressWarnings("unused")
+  @SuppressWarnings("unused") // Called via upcall stub
   int scan(
       MemorySegment javaObject,
+      MemorySegment sessionPtr,
+      MemorySegment filterPtrs,
+      long filterCount,
       MemorySegment projection,
       long projectionLen,
       long limit,
       MemorySegment planOut,
       MemorySegment errorOut) {
     try {
+      // Create Session from the session pointer
+      Session session = new Session(new SessionFfi(sessionPtr), allocator);
+
+      // Create Expr[] by reading filter pointer array
+      Expr[] filters = new Expr[(int) filterCount];
+      if (filterCount > 0 && !filterPtrs.equals(MemorySegment.NULL)) {
+        MemorySegment ptrsSegment = filterPtrs.reinterpret(filterCount * 8);
+        for (int i = 0; i < (int) filterCount; i++) {
+          MemorySegment exprPtr = ptrsSegment.getAtIndex(ValueLayout.ADDRESS, i);
+          filters[i] = new Expr(new ExprFfi(exprPtr));
+        }
+      }
+
       // Convert projection array
       int[] projectionArray = null;
       if (!projection.equals(MemorySegment.NULL) && projectionLen > 0) {
@@ -229,7 +253,7 @@ final class TableProviderHandle implements TraitHandle {
       Long limitValue = (limit >= 0) ? limit : null;
 
       // Create the execution plan
-      ExecutionPlan plan = provider.scan(projectionArray, limitValue);
+      ExecutionPlan plan = provider.scan(session, filters, projectionArray, limitValue);
 
       // Create a handle for the plan
       ExecutionPlanHandle planHandle =
