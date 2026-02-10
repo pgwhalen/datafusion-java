@@ -1,7 +1,5 @@
 package org.apache.arrow.datafusion;
 
-import org.apache.arrow.datafusion.ffi.SessionStateFfi;
-
 /**
  * A snapshot of a DataFusion session's state, capable of creating logical plans.
  *

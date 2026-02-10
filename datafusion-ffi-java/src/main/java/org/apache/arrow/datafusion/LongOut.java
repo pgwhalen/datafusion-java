@@ -1,4 +1,4 @@
-package org.apache.arrow.datafusion.ffi;
+package org.apache.arrow.datafusion;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
@@ -18,7 +18,7 @@ record LongOut(MemorySegment segment) {
    *
    * @param value the long value to write
    */
-  public void set(long value) {
+  void set(long value) {
     segment.reinterpret(8).set(ValueLayout.JAVA_LONG, 0, value);
   }
 }

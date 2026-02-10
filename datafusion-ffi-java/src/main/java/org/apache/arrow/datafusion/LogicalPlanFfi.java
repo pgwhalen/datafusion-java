@@ -1,4 +1,4 @@
-package org.apache.arrow.datafusion.ffi;
+package org.apache.arrow.datafusion;
 
 import java.lang.foreign.MemorySegment;
 import org.slf4j.Logger;
@@ -11,13 +11,13 @@ import org.slf4j.LoggerFactory;
  * package so that other FFI classes (e.g., {@link SessionStateFfi}) can create and manage logical
  * plans without exposing native pointers in the public API.
  */
-public final class LogicalPlanFfi implements AutoCloseable {
+final class LogicalPlanFfi implements AutoCloseable {
   private static final Logger logger = LoggerFactory.getLogger(LogicalPlanFfi.class);
 
   private final MemorySegment plan;
   private volatile boolean closed = false;
 
-  public LogicalPlanFfi(MemorySegment plan) {
+  LogicalPlanFfi(MemorySegment plan) {
     this.plan = plan;
   }
 

@@ -1,11 +1,10 @@
-package org.apache.arrow.datafusion.ffi;
+package org.apache.arrow.datafusion;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.MathContext;
-import org.apache.arrow.datafusion.ScalarValue;
 
 /**
  * FFI deserialization logic for {@link ScalarValue}.
@@ -13,61 +12,61 @@ import org.apache.arrow.datafusion.ScalarValue;
  * <p>This class owns all FFI struct layout constants and the {@code fromFfi} method that
  * deserializes an {@code FFI_ScalarValue} struct into a {@link ScalarValue} instance.
  */
-public final class ScalarValueFfi {
+final class ScalarValueFfi {
 
   private ScalarValueFfi() {}
 
   // -- FFI type tag constants --
   // These must match the Rust type_tag values in guarantee.rs
-  public static final int TAG_NULL = 0;
-  public static final int TAG_BOOLEAN = 1;
-  public static final int TAG_INT8 = 2;
-  public static final int TAG_INT16 = 3;
-  public static final int TAG_INT32 = 4;
-  public static final int TAG_INT64 = 5;
-  public static final int TAG_UINT8 = 6;
-  public static final int TAG_UINT16 = 7;
-  public static final int TAG_UINT32 = 8;
-  public static final int TAG_UINT64 = 9;
-  public static final int TAG_FLOAT16 = 10;
-  public static final int TAG_FLOAT32 = 11;
-  public static final int TAG_FLOAT64 = 12;
-  public static final int TAG_UTF8 = 13;
-  public static final int TAG_LARGE_UTF8 = 14;
-  public static final int TAG_UTF8_VIEW = 15;
-  public static final int TAG_BINARY = 16;
-  public static final int TAG_LARGE_BINARY = 17;
-  public static final int TAG_BINARY_VIEW = 18;
-  public static final int TAG_FIXED_SIZE_BINARY = 19;
-  public static final int TAG_DATE32 = 20;
-  public static final int TAG_DATE64 = 21;
-  public static final int TAG_TIME32_SECOND = 22;
-  public static final int TAG_TIME32_MILLISECOND = 23;
-  public static final int TAG_TIME64_MICROSECOND = 24;
-  public static final int TAG_TIME64_NANOSECOND = 25;
-  public static final int TAG_TIMESTAMP_SECOND = 26;
-  public static final int TAG_TIMESTAMP_MILLISECOND = 27;
-  public static final int TAG_TIMESTAMP_MICROSECOND = 28;
-  public static final int TAG_TIMESTAMP_NANOSECOND = 29;
-  public static final int TAG_DURATION_SECOND = 30;
-  public static final int TAG_DURATION_MILLISECOND = 31;
-  public static final int TAG_DURATION_MICROSECOND = 32;
-  public static final int TAG_DURATION_NANOSECOND = 33;
-  public static final int TAG_INTERVAL_YEAR_MONTH = 34;
-  public static final int TAG_INTERVAL_DAY_TIME = 35;
-  public static final int TAG_INTERVAL_MONTH_DAY_NANO = 36;
-  public static final int TAG_DECIMAL32 = 37;
-  public static final int TAG_DECIMAL64 = 38;
-  public static final int TAG_DECIMAL128 = 39;
-  public static final int TAG_DECIMAL256 = 40;
-  public static final int TAG_LIST = 41;
-  public static final int TAG_LARGE_LIST = 42;
-  public static final int TAG_FIXED_SIZE_LIST = 43;
-  public static final int TAG_STRUCT = 44;
-  public static final int TAG_MAP = 45;
-  public static final int TAG_UNION = 46;
-  public static final int TAG_DICTIONARY = 47;
-  public static final int TAG_RUN_END_ENCODED = 48;
+  static final int TAG_NULL = 0;
+  static final int TAG_BOOLEAN = 1;
+  static final int TAG_INT8 = 2;
+  static final int TAG_INT16 = 3;
+  static final int TAG_INT32 = 4;
+  static final int TAG_INT64 = 5;
+  static final int TAG_UINT8 = 6;
+  static final int TAG_UINT16 = 7;
+  static final int TAG_UINT32 = 8;
+  static final int TAG_UINT64 = 9;
+  static final int TAG_FLOAT16 = 10;
+  static final int TAG_FLOAT32 = 11;
+  static final int TAG_FLOAT64 = 12;
+  static final int TAG_UTF8 = 13;
+  static final int TAG_LARGE_UTF8 = 14;
+  static final int TAG_UTF8_VIEW = 15;
+  static final int TAG_BINARY = 16;
+  static final int TAG_LARGE_BINARY = 17;
+  static final int TAG_BINARY_VIEW = 18;
+  static final int TAG_FIXED_SIZE_BINARY = 19;
+  static final int TAG_DATE32 = 20;
+  static final int TAG_DATE64 = 21;
+  static final int TAG_TIME32_SECOND = 22;
+  static final int TAG_TIME32_MILLISECOND = 23;
+  static final int TAG_TIME64_MICROSECOND = 24;
+  static final int TAG_TIME64_NANOSECOND = 25;
+  static final int TAG_TIMESTAMP_SECOND = 26;
+  static final int TAG_TIMESTAMP_MILLISECOND = 27;
+  static final int TAG_TIMESTAMP_MICROSECOND = 28;
+  static final int TAG_TIMESTAMP_NANOSECOND = 29;
+  static final int TAG_DURATION_SECOND = 30;
+  static final int TAG_DURATION_MILLISECOND = 31;
+  static final int TAG_DURATION_MICROSECOND = 32;
+  static final int TAG_DURATION_NANOSECOND = 33;
+  static final int TAG_INTERVAL_YEAR_MONTH = 34;
+  static final int TAG_INTERVAL_DAY_TIME = 35;
+  static final int TAG_INTERVAL_MONTH_DAY_NANO = 36;
+  static final int TAG_DECIMAL32 = 37;
+  static final int TAG_DECIMAL64 = 38;
+  static final int TAG_DECIMAL128 = 39;
+  static final int TAG_DECIMAL256 = 40;
+  static final int TAG_LIST = 41;
+  static final int TAG_LARGE_LIST = 42;
+  static final int TAG_FIXED_SIZE_LIST = 43;
+  static final int TAG_STRUCT = 44;
+  static final int TAG_MAP = 45;
+  static final int TAG_UNION = 46;
+  static final int TAG_DICTIONARY = 47;
+  static final int TAG_RUN_END_ENCODED = 48;
 
   // FFI_ScalarValue struct layout:
   //   offset  0: type_tag (i32, 4 bytes)
@@ -81,9 +80,9 @@ public final class ScalarValueFfi {
   //   offset 60: fixed_size (i32, 4 bytes)
   //   Total: 64 bytes
 
-  public static final long FFI_STRUCT_SIZE = 64;
-  public static final long OFFSET_TYPE_TAG = 0;
-  public static final long OFFSET_IS_NULL = 4;
+  static final long FFI_STRUCT_SIZE = 64;
+  static final long OFFSET_TYPE_TAG = 0;
+  static final long OFFSET_IS_NULL = 4;
   static final long OFFSET_DATA = 8;
   static final long OFFSET_DATA_PTR = 40;
   static final long OFFSET_DATA_LEN = 48;
@@ -97,7 +96,7 @@ public final class ScalarValueFfi {
    * @param struct the memory segment pointing to the FFI_ScalarValue
    * @return the deserialized ScalarValue
    */
-  public static ScalarValue fromFfi(MemorySegment struct) {
+  static ScalarValue fromFfi(MemorySegment struct) {
     int typeTag = struct.get(ValueLayout.JAVA_INT, OFFSET_TYPE_TAG);
     int isNull = struct.get(ValueLayout.JAVA_INT, OFFSET_IS_NULL);
 

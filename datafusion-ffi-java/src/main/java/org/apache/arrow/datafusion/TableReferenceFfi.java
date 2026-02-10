@@ -1,9 +1,7 @@
-package org.apache.arrow.datafusion.ffi;
+package org.apache.arrow.datafusion;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
-import org.apache.arrow.datafusion.DataFusionException;
-import org.apache.arrow.datafusion.TableReference;
 
 /**
  * FFI utilities for reading {@link TableReference} values from native memory.
@@ -11,7 +9,7 @@ import org.apache.arrow.datafusion.TableReference;
  * <p>This is separated from {@link TableReference} so it can be reused wherever table references
  * appear in FFI structs (e.g., literal guarantees, column references).
  */
-public final class TableReferenceFfi {
+final class TableReferenceFfi {
 
   private TableReferenceFfi() {}
 
@@ -23,7 +21,7 @@ public final class TableReferenceFfi {
    * @return the table reference, or null if relType is 0
    * @throws DataFusionException if relType is unknown
    */
-  public static TableReference readTableReference(int relType, MemorySegment relStrsOut) {
+  static TableReference readTableReference(int relType, MemorySegment relStrsOut) {
     return switch (relType) {
       case 0 -> null;
       case 1 -> {

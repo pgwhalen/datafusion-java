@@ -1,7 +1,6 @@
-package org.apache.arrow.datafusion.ffi;
+package org.apache.arrow.datafusion;
 
 import java.lang.foreign.MemorySegment;
-import org.apache.arrow.datafusion.DataFusionException;
 
 /**
  * Wraps a MemorySegment containing a null-terminated C string.
@@ -22,7 +21,7 @@ record NativeString(MemorySegment segment) {
    *
    * @return the Java string value, or empty string if the segment is null or empty
    */
-  public String value() {
+  String value() {
     if (segment.equals(MemorySegment.NULL)) {
       return "";
     }

@@ -1,4 +1,4 @@
-package org.apache.arrow.datafusion.ffi;
+package org.apache.arrow.datafusion;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -7,7 +7,6 @@ import org.apache.arrow.c.ArrowArray;
 import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.CDataDictionaryProvider;
 import org.apache.arrow.c.Data;
-import org.apache.arrow.datafusion.DataFusionException;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.dictionary.Dictionary;
@@ -21,7 +20,7 @@ import org.slf4j.LoggerFactory;
  * <p>This class owns the native stream pointers and contains all native call logic. The public
  * {@code RecordBatchStream} class delegates to this.
  */
-public final class RecordBatchStreamFfi implements AutoCloseable {
+final class RecordBatchStreamFfi implements AutoCloseable {
   private static final Logger logger = LoggerFactory.getLogger(RecordBatchStreamFfi.class);
 
   // Size of FFI_ArrowSchema and FFI_ArrowArray structures
@@ -48,7 +47,7 @@ public final class RecordBatchStreamFfi implements AutoCloseable {
    *
    * @return The VectorSchemaRoot
    */
-  public VectorSchemaRoot getVectorSchemaRoot() {
+  VectorSchemaRoot getVectorSchemaRoot() {
     ensureInitialized();
     return vectorSchemaRoot;
   }
@@ -59,7 +58,7 @@ public final class RecordBatchStreamFfi implements AutoCloseable {
    * @return true if a batch was loaded, false if the stream is exhausted
    * @throws DataFusionException if loading fails
    */
-  public boolean loadNextBatch() {
+  boolean loadNextBatch() {
     checkNotClosed();
     ensureInitialized();
 
@@ -99,7 +98,7 @@ public final class RecordBatchStreamFfi implements AutoCloseable {
    * @param id The dictionary ID
    * @return The Dictionary, or null if not found
    */
-  public Dictionary lookup(long id) {
+  Dictionary lookup(long id) {
     return dictionaryProvider.lookup(id);
   }
 
@@ -108,7 +107,7 @@ public final class RecordBatchStreamFfi implements AutoCloseable {
    *
    * @return Set of dictionary IDs
    */
-  public Set<Long> getDictionaryIds() {
+  Set<Long> getDictionaryIds() {
     return dictionaryProvider.getDictionaryIds();
   }
 

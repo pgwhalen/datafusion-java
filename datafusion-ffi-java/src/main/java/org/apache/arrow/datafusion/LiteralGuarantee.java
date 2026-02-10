@@ -2,7 +2,6 @@ package org.apache.arrow.datafusion;
 
 import java.util.List;
 import java.util.Set;
-import org.apache.arrow.datafusion.ffi.LiteralGuaranteeFfi;
 
 /**
  * A guarantee about the values of a column derived from analyzing filter expressions.

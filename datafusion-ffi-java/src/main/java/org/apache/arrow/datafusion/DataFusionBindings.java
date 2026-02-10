@@ -1,4 +1,4 @@
-package org.apache.arrow.datafusion.ffi;
+package org.apache.arrow.datafusion;
 
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
@@ -9,22 +9,22 @@ import java.lang.invoke.MethodHandle;
  * <p>This class provides low-level bindings to the native C-FFI library. Higher-level wrappers like
  * {@link FfiSessionContext} should be used instead for most purposes.
  */
-public final class DataFusionBindings {
+final class DataFusionBindings {
   private static final Linker LINKER = Linker.nativeLinker();
   private static final SymbolLookup LOOKUP = NativeLoader.get();
 
   // Runtime functions
-  public static final MethodHandle RUNTIME_CREATE =
+  static final MethodHandle RUNTIME_CREATE =
       downcall("datafusion_runtime_create", FunctionDescriptor.of(ValueLayout.ADDRESS));
 
-  public static final MethodHandle RUNTIME_DESTROY =
+  static final MethodHandle RUNTIME_DESTROY =
       downcall("datafusion_runtime_destroy", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
 
   // Context functions
-  public static final MethodHandle CONTEXT_CREATE =
+  static final MethodHandle CONTEXT_CREATE =
       downcall("datafusion_context_create", FunctionDescriptor.of(ValueLayout.ADDRESS));
 
-  public static final MethodHandle CONTEXT_CREATE_WITH_CONFIG =
+  static final MethodHandle CONTEXT_CREATE_WITH_CONFIG =
       downcall(
           "datafusion_context_create_with_config",
           FunctionDescriptor.of(
@@ -35,10 +35,10 @@ public final class DataFusionBindings {
               ValueLayout.ADDRESS // error_out
               ));
 
-  public static final MethodHandle CONTEXT_DESTROY =
+  static final MethodHandle CONTEXT_DESTROY =
       downcall("datafusion_context_destroy", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
 
-  public static final MethodHandle CONTEXT_REGISTER_RECORD_BATCH =
+  static final MethodHandle CONTEXT_REGISTER_RECORD_BATCH =
       downcall(
           "datafusion_context_register_record_batch",
           FunctionDescriptor.of(
@@ -50,7 +50,7 @@ public final class DataFusionBindings {
               ValueLayout.ADDRESS // error_out
               ));
 
-  public static final MethodHandle CONTEXT_SQL =
+  static final MethodHandle CONTEXT_SQL =
       downcall(
           "datafusion_context_sql",
           FunctionDescriptor.of(
@@ -62,10 +62,10 @@ public final class DataFusionBindings {
               ));
 
   // DataFrame functions
-  public static final MethodHandle DATAFRAME_DESTROY =
+  static final MethodHandle DATAFRAME_DESTROY =
       downcall("datafusion_dataframe_destroy", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
 
-  public static final MethodHandle DATAFRAME_EXECUTE_STREAM =
+  static final MethodHandle DATAFRAME_EXECUTE_STREAM =
       downcall(
           "datafusion_dataframe_execute_stream",
           FunctionDescriptor.of(
@@ -76,10 +76,10 @@ public final class DataFusionBindings {
               ));
 
   // Stream functions
-  public static final MethodHandle STREAM_DESTROY =
+  static final MethodHandle STREAM_DESTROY =
       downcall("datafusion_stream_destroy", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
 
-  public static final MethodHandle STREAM_SCHEMA =
+  static final MethodHandle STREAM_SCHEMA =
       downcall(
           "datafusion_stream_schema",
           FunctionDescriptor.of(
@@ -89,7 +89,7 @@ public final class DataFusionBindings {
               ValueLayout.ADDRESS // error_out
               ));
 
-  public static final MethodHandle STREAM_NEXT =
+  static final MethodHandle STREAM_NEXT =
       downcall(
           "datafusion_stream_next",
           FunctionDescriptor.of(
@@ -102,10 +102,10 @@ public final class DataFusionBindings {
               ));
 
   // Memory functions
-  public static final MethodHandle FREE_STRING =
+  static final MethodHandle FREE_STRING =
       downcall("datafusion_free_string", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
 
-  public static final MethodHandle FREE_STRING_ARRAY =
+  static final MethodHandle FREE_STRING_ARRAY =
       downcall(
           "datafusion_free_string_array",
           FunctionDescriptor.ofVoid(
@@ -114,7 +114,7 @@ public final class DataFusionBindings {
               ));
 
   // Catalog registration functions
-  public static final MethodHandle CONTEXT_REGISTER_CATALOG =
+  static final MethodHandle CONTEXT_REGISTER_CATALOG =
       downcall(
           "datafusion_context_register_catalog",
           FunctionDescriptor.of(
@@ -126,45 +126,45 @@ public final class DataFusionBindings {
               ));
 
   // Callback allocation functions
-  public static final MethodHandle ALLOC_CATALOG_PROVIDER_CALLBACKS =
+  static final MethodHandle ALLOC_CATALOG_PROVIDER_CALLBACKS =
       downcall(
           "datafusion_alloc_catalog_provider_callbacks",
           FunctionDescriptor.of(ValueLayout.ADDRESS));
 
-  public static final MethodHandle ALLOC_SCHEMA_PROVIDER_CALLBACKS =
+  static final MethodHandle ALLOC_SCHEMA_PROVIDER_CALLBACKS =
       downcall(
           "datafusion_alloc_schema_provider_callbacks", FunctionDescriptor.of(ValueLayout.ADDRESS));
 
-  public static final MethodHandle ALLOC_TABLE_PROVIDER_CALLBACKS =
+  static final MethodHandle ALLOC_TABLE_PROVIDER_CALLBACKS =
       downcall(
           "datafusion_alloc_table_provider_callbacks", FunctionDescriptor.of(ValueLayout.ADDRESS));
 
-  public static final MethodHandle ALLOC_EXECUTION_PLAN_CALLBACKS =
+  static final MethodHandle ALLOC_EXECUTION_PLAN_CALLBACKS =
       downcall(
           "datafusion_alloc_execution_plan_callbacks", FunctionDescriptor.of(ValueLayout.ADDRESS));
 
-  public static final MethodHandle ALLOC_RECORD_BATCH_READER_CALLBACKS =
+  static final MethodHandle ALLOC_RECORD_BATCH_READER_CALLBACKS =
       downcall(
           "datafusion_alloc_record_batch_reader_callbacks",
           FunctionDescriptor.of(ValueLayout.ADDRESS));
 
   // File format callback allocation
-  public static final MethodHandle ALLOC_FILE_FORMAT_CALLBACKS =
+  static final MethodHandle ALLOC_FILE_FORMAT_CALLBACKS =
       downcall(
           "datafusion_alloc_file_format_callbacks", FunctionDescriptor.of(ValueLayout.ADDRESS));
 
   // File source callback allocation
-  public static final MethodHandle ALLOC_FILE_SOURCE_CALLBACKS =
+  static final MethodHandle ALLOC_FILE_SOURCE_CALLBACKS =
       downcall(
           "datafusion_alloc_file_source_callbacks", FunctionDescriptor.of(ValueLayout.ADDRESS));
 
   // File opener callback allocation
-  public static final MethodHandle ALLOC_FILE_OPENER_CALLBACKS =
+  static final MethodHandle ALLOC_FILE_OPENER_CALLBACKS =
       downcall(
           "datafusion_alloc_file_opener_callbacks", FunctionDescriptor.of(ValueLayout.ADDRESS));
 
   // Session state functions
-  public static final MethodHandle CONTEXT_STATE =
+  static final MethodHandle CONTEXT_STATE =
       downcall(
           "datafusion_context_state",
           FunctionDescriptor.of(
@@ -173,10 +173,10 @@ public final class DataFusionBindings {
               ValueLayout.ADDRESS // error_out
               ));
 
-  public static final MethodHandle SESSION_STATE_DESTROY =
+  static final MethodHandle SESSION_STATE_DESTROY =
       downcall("datafusion_session_state_destroy", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
 
-  public static final MethodHandle SESSION_STATE_CREATE_LOGICAL_PLAN =
+  static final MethodHandle SESSION_STATE_CREATE_LOGICAL_PLAN =
       downcall(
           "datafusion_session_state_create_logical_plan",
           FunctionDescriptor.of(
@@ -187,11 +187,11 @@ public final class DataFusionBindings {
               ));
 
   // Logical plan functions
-  public static final MethodHandle LOGICAL_PLAN_DESTROY =
+  static final MethodHandle LOGICAL_PLAN_DESTROY =
       downcall("datafusion_logical_plan_destroy", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
 
   // Listing table registration (all-in-one)
-  public static final MethodHandle CONTEXT_REGISTER_LISTING_TABLE =
+  static final MethodHandle CONTEXT_REGISTER_LISTING_TABLE =
       downcall(
           "datafusion_context_register_listing_table",
           FunctionDescriptor.of(
@@ -210,11 +210,11 @@ public final class DataFusionBindings {
               ));
 
   // Physical expression functions
-  public static final MethodHandle PHYSICAL_EXPR_DESTROY =
+  static final MethodHandle PHYSICAL_EXPR_DESTROY =
       downcall("datafusion_physical_expr_destroy", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
 
   // Session functions
-  public static final MethodHandle SESSION_CREATE_PHYSICAL_EXPR =
+  static final MethodHandle SESSION_CREATE_PHYSICAL_EXPR =
       downcall(
           "datafusion_session_create_physical_expr",
           FunctionDescriptor.of(
@@ -227,7 +227,7 @@ public final class DataFusionBindings {
               ));
 
   // Literal guarantee functions
-  public static final MethodHandle LITERAL_GUARANTEE_ANALYZE =
+  static final MethodHandle LITERAL_GUARANTEE_ANALYZE =
       downcall(
           "datafusion_literal_guarantee_analyze",
           FunctionDescriptor.of(
@@ -237,7 +237,7 @@ public final class DataFusionBindings {
               ValueLayout.ADDRESS // error_out
               ));
 
-  public static final MethodHandle GUARANTEE_GET_INFO =
+  static final MethodHandle GUARANTEE_GET_INFO =
       downcall(
           "datafusion_guarantee_get_info",
           FunctionDescriptor.of(
@@ -254,7 +254,7 @@ public final class DataFusionBindings {
               ValueLayout.ADDRESS // error_out
               ));
 
-  public static final MethodHandle GUARANTEE_GET_SPAN =
+  static final MethodHandle GUARANTEE_GET_SPAN =
       downcall(
           "datafusion_guarantee_get_span",
           FunctionDescriptor.of(
@@ -269,7 +269,7 @@ public final class DataFusionBindings {
               ValueLayout.ADDRESS // error_out
               ));
 
-  public static final MethodHandle GUARANTEE_GET_LITERAL =
+  static final MethodHandle GUARANTEE_GET_LITERAL =
       downcall(
           "datafusion_guarantee_get_literal",
           FunctionDescriptor.of(
@@ -281,13 +281,13 @@ public final class DataFusionBindings {
               ValueLayout.ADDRESS // error_out
               ));
 
-  public static final MethodHandle GUARANTEES_DESTROY =
+  static final MethodHandle GUARANTEES_DESTROY =
       downcall("datafusion_guarantees_destroy", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
 
-  public static final MethodHandle FFI_SCALAR_VALUE_SIZE =
+  static final MethodHandle FFI_SCALAR_VALUE_SIZE =
       downcall("datafusion_ffi_scalar_value_size", FunctionDescriptor.of(ValueLayout.JAVA_LONG));
 
-  public static final MethodHandle TEST_SCALAR_VALUE =
+  static final MethodHandle TEST_SCALAR_VALUE =
       downcall(
           "datafusion_test_scalar_value",
           FunctionDescriptor.of(
@@ -300,7 +300,7 @@ public final class DataFusionBindings {
   private DataFusionBindings() {}
 
   /** Get the native linker for creating upcall stubs. */
-  public static Linker getLinker() {
+  static Linker getLinker() {
     return LINKER;
   }
 

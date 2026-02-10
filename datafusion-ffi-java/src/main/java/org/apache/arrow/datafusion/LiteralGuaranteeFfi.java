@@ -1,4 +1,4 @@
-package org.apache.arrow.datafusion.ffi;
+package org.apache.arrow.datafusion;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -8,23 +8,13 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
-import org.apache.arrow.datafusion.Column;
-import org.apache.arrow.datafusion.DataFusionException;
-import org.apache.arrow.datafusion.Guarantee;
-import org.apache.arrow.datafusion.LiteralGuarantee;
-import org.apache.arrow.datafusion.Location;
-import org.apache.arrow.datafusion.PhysicalExpr;
-import org.apache.arrow.datafusion.ScalarValue;
-import org.apache.arrow.datafusion.Span;
-import org.apache.arrow.datafusion.Spans;
-import org.apache.arrow.datafusion.TableReference;
 
 /**
  * FFI implementation for analyzing physical expressions to extract {@link LiteralGuarantee}s.
  *
  * <p>This class contains the native interop code that was previously in {@link LiteralGuarantee}.
  */
-public final class LiteralGuaranteeFfi {
+final class LiteralGuaranteeFfi {
 
   private LiteralGuaranteeFfi() {}
 
@@ -37,7 +27,7 @@ public final class LiteralGuaranteeFfi {
    * @return the list of literal guarantees extracted from the expression
    * @throws DataFusionException if analysis fails
    */
-  public static List<LiteralGuarantee> analyze(PhysicalExpr expr) {
+  static List<LiteralGuarantee> analyze(PhysicalExpr expr) {
     try (Arena arena = Arena.ofConfined()) {
       MemorySegment countOut = arena.allocate(ValueLayout.JAVA_LONG);
       countOut.set(ValueLayout.JAVA_LONG, 0, 0);

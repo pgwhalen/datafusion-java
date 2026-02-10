@@ -1,4 +1,4 @@
-package org.apache.arrow.datafusion.ffi;
+package org.apache.arrow.datafusion;
 
 import java.io.File;
 import java.io.IOException;
@@ -22,7 +22,7 @@ import org.slf4j.LoggerFactory;
  *   <li><b>System path fallback</b> - Try System.loadLibrary() + SymbolLookup.loaderLookup()
  * </ol>
  */
-public final class NativeLoader {
+final class NativeLoader {
   private static final Logger logger = LoggerFactory.getLogger(NativeLoader.class);
   private static final String LIB_NAME = "datafusion_ffi_native";
   private static volatile SymbolLookup lookup;
@@ -34,7 +34,7 @@ public final class NativeLoader {
    *
    * @return The symbol lookup instance
    */
-  public static synchronized SymbolLookup get() {
+  static synchronized SymbolLookup get() {
     if (lookup == null) {
       lookup = loadLibrary();
     }

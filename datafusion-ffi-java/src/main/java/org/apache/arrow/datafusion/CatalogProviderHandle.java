@@ -1,4 +1,4 @@
-package org.apache.arrow.datafusion.ffi;
+package org.apache.arrow.datafusion;
 
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
@@ -6,34 +6,29 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.util.List;
 import java.util.Optional;
-import org.apache.arrow.datafusion.DataFusionException;
-import org.apache.arrow.datafusion.SchemaProvider;
-import org.apache.arrow.datafusion.TableProvider;
 import org.apache.arrow.memory.BufferAllocator;
 
 /**
- * Internal FFI bridge for SchemaProvider.
+ * Internal FFI bridge for CatalogProvider.
  *
- * <p>This class creates upcall stubs that Rust can invoke to access a Java {@link SchemaProvider}.
+ * <p>This class creates upcall stubs that Rust can invoke to access a Java {@link CatalogProvider}.
  * It manages the lifecycle of the callback struct and upcall stubs.
  */
-final class SchemaProviderHandle implements TraitHandle {
+final class CatalogProviderHandle implements TraitHandle {
   // Callback struct field offsets
-  // struct JavaSchemaProviderCallbacks {
+  // struct JavaCatalogProviderCallbacks {
   //   java_object: *mut c_void,         // offset 0
-  //   table_names_fn: fn,               // offset 8
-  //   table_fn: fn,                     // offset 16
-  //   table_exists_fn: fn,              // offset 24
-  //   release_fn: fn,                   // offset 32
+  //   schema_names_fn: fn,              // offset 8
+  //   schema_fn: fn,                    // offset 16
+  //   release_fn: fn,                   // offset 24
   // }
   private static final long OFFSET_JAVA_OBJECT = 0;
-  private static final long OFFSET_TABLE_NAMES_FN = 8;
-  private static final long OFFSET_TABLE_FN = 16;
-  private static final long OFFSET_TABLE_EXISTS_FN = 24;
-  private static final long OFFSET_RELEASE_FN = 32;
+  private static final long OFFSET_SCHEMA_NAMES_FN = 8;
+  private static final long OFFSET_SCHEMA_FN = 16;
+  private static final long OFFSET_RELEASE_FN = 24;
 
   // Static FunctionDescriptors - define the FFI signatures once at class load
-  private static final FunctionDescriptor TABLE_NAMES_DESC =
+  private static final FunctionDescriptor SCHEMA_NAMES_DESC =
       FunctionDescriptor.of(
           ValueLayout.JAVA_INT,
           ValueLayout.ADDRESS,
@@ -41,32 +36,28 @@ final class SchemaProviderHandle implements TraitHandle {
           ValueLayout.ADDRESS,
           ValueLayout.ADDRESS);
 
-  private static final FunctionDescriptor TABLE_DESC =
+  private static final FunctionDescriptor SCHEMA_DESC =
       FunctionDescriptor.of(
           ValueLayout.JAVA_INT,
           ValueLayout.ADDRESS,
           ValueLayout.ADDRESS,
           ValueLayout.ADDRESS,
           ValueLayout.ADDRESS);
-
-  private static final FunctionDescriptor TABLE_EXISTS_DESC =
-      FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS);
 
   private static final FunctionDescriptor RELEASE_DESC =
       FunctionDescriptor.ofVoid(ValueLayout.ADDRESS);
 
   // Static MethodHandles - looked up once at class load
-  private static final MethodHandle TABLE_NAMES_MH = initTableNamesMethodHandle();
-  private static final MethodHandle TABLE_MH = initTableMethodHandle();
-  private static final MethodHandle TABLE_EXISTS_MH = initTableExistsMethodHandle();
+  private static final MethodHandle SCHEMA_NAMES_MH = initSchemaNamesMethodHandle();
+  private static final MethodHandle SCHEMA_MH = initSchemaMethodHandle();
   private static final MethodHandle RELEASE_MH = initReleaseMethodHandle();
 
-  private static MethodHandle initTableNamesMethodHandle() {
+  private static MethodHandle initSchemaNamesMethodHandle() {
     try {
       return MethodHandles.lookup()
           .findVirtual(
-              SchemaProviderHandle.class,
-              "getTableNames",
+              CatalogProviderHandle.class,
+              "getSchemaNames",
               MethodType.methodType(
                   int.class,
                   MemorySegment.class,
@@ -78,30 +69,18 @@ final class SchemaProviderHandle implements TraitHandle {
     }
   }
 
-  private static MethodHandle initTableMethodHandle() {
+  private static MethodHandle initSchemaMethodHandle() {
     try {
       return MethodHandles.lookup()
           .findVirtual(
-              SchemaProviderHandle.class,
-              "getTable",
+              CatalogProviderHandle.class,
+              "getSchema",
               MethodType.methodType(
                   int.class,
                   MemorySegment.class,
                   MemorySegment.class,
                   MemorySegment.class,
                   MemorySegment.class));
-    } catch (NoSuchMethodException | IllegalAccessException e) {
-      throw new ExceptionInInitializerError(e);
-    }
-  }
-
-  private static MethodHandle initTableExistsMethodHandle() {
-    try {
-      return MethodHandles.lookup()
-          .findVirtual(
-              SchemaProviderHandle.class,
-              "tableExists",
-              MethodType.methodType(int.class, MemorySegment.class, MemorySegment.class));
     } catch (NoSuchMethodException | IllegalAccessException e) {
       throw new ExceptionInInitializerError(e);
     }
@@ -111,7 +90,7 @@ final class SchemaProviderHandle implements TraitHandle {
     try {
       return MethodHandles.lookup()
           .findVirtual(
-              SchemaProviderHandle.class,
+              CatalogProviderHandle.class,
               "release",
               MethodType.methodType(void.class, MemorySegment.class));
     } catch (NoSuchMethodException | IllegalAccessException e) {
@@ -120,19 +99,18 @@ final class SchemaProviderHandle implements TraitHandle {
   }
 
   private final Arena arena;
-  private final SchemaProvider provider;
+  private final CatalogProvider provider;
   private final BufferAllocator allocator;
   private final boolean fullStackTrace;
   private final MemorySegment callbackStruct;
 
   // Keep references to upcall stubs to prevent GC
-  private final UpcallStub tableNamesStub;
-  private final UpcallStub tableStub;
-  private final UpcallStub tableExistsStub;
+  private final UpcallStub schemaNamesStub;
+  private final UpcallStub schemaStub;
   private final UpcallStub releaseStub;
 
-  SchemaProviderHandle(
-      SchemaProvider provider, BufferAllocator allocator, Arena arena, boolean fullStackTrace) {
+  CatalogProviderHandle(
+      CatalogProvider provider, BufferAllocator allocator, Arena arena, boolean fullStackTrace) {
     this.arena = arena;
     this.provider = provider;
     this.allocator = allocator;
@@ -141,29 +119,27 @@ final class SchemaProviderHandle implements TraitHandle {
     try {
       // Allocate the callback struct from Rust
       this.callbackStruct =
-          (MemorySegment) DataFusionBindings.ALLOC_SCHEMA_PROVIDER_CALLBACKS.invokeExact();
+          (MemorySegment) DataFusionBindings.ALLOC_CATALOG_PROVIDER_CALLBACKS.invokeExact();
 
       if (callbackStruct.equals(MemorySegment.NULL)) {
-        throw new DataFusionException("Failed to allocate SchemaProvider callbacks");
+        throw new DataFusionException("Failed to allocate CatalogProvider callbacks");
       }
 
       // Create upcall stubs - only the stubs are per-instance
-      this.tableNamesStub = UpcallStub.create(TABLE_NAMES_MH.bindTo(this), TABLE_NAMES_DESC, arena);
-      this.tableStub = UpcallStub.create(TABLE_MH.bindTo(this), TABLE_DESC, arena);
-      this.tableExistsStub =
-          UpcallStub.create(TABLE_EXISTS_MH.bindTo(this), TABLE_EXISTS_DESC, arena);
+      this.schemaNamesStub =
+          UpcallStub.create(SCHEMA_NAMES_MH.bindTo(this), SCHEMA_NAMES_DESC, arena);
+      this.schemaStub = UpcallStub.create(SCHEMA_MH.bindTo(this), SCHEMA_DESC, arena);
       this.releaseStub = UpcallStub.create(RELEASE_MH.bindTo(this), RELEASE_DESC, arena);
 
       // Set up the callback struct
-      MemorySegment struct = callbackStruct.reinterpret(40); // struct size
+      MemorySegment struct = callbackStruct.reinterpret(32); // struct size
       struct.set(ValueLayout.ADDRESS, OFFSET_JAVA_OBJECT, MemorySegment.NULL);
-      struct.set(ValueLayout.ADDRESS, OFFSET_TABLE_NAMES_FN, tableNamesStub.segment());
-      struct.set(ValueLayout.ADDRESS, OFFSET_TABLE_FN, tableStub.segment());
-      struct.set(ValueLayout.ADDRESS, OFFSET_TABLE_EXISTS_FN, tableExistsStub.segment());
+      struct.set(ValueLayout.ADDRESS, OFFSET_SCHEMA_NAMES_FN, schemaNamesStub.segment());
+      struct.set(ValueLayout.ADDRESS, OFFSET_SCHEMA_FN, schemaStub.segment());
       struct.set(ValueLayout.ADDRESS, OFFSET_RELEASE_FN, releaseStub.segment());
 
     } catch (Throwable e) {
-      throw new DataFusionException("Failed to create SchemaProviderHandle", e);
+      throw new DataFusionException("Failed to create CatalogProviderHandle", e);
     }
   }
 
@@ -172,15 +148,15 @@ final class SchemaProviderHandle implements TraitHandle {
     return callbackStruct;
   }
 
-  /** Callback: Get table names. */
+  /** Callback: Get schema names. */
   @SuppressWarnings("unused")
-  int getTableNames(
+  int getSchemaNames(
       MemorySegment javaObject,
       MemorySegment namesOut,
       MemorySegment namesLenOut,
       MemorySegment errorOut) {
     try {
-      List<String> names = provider.tableNames();
+      List<String> names = provider.schemaNames();
       PointerOut namesOutPtr = new PointerOut(namesOut);
       LongOut namesLenOutVal = new LongOut(namesLenOut);
 
@@ -207,44 +183,33 @@ final class SchemaProviderHandle implements TraitHandle {
     }
   }
 
-  /** Callback: Get a table by name. */
+  /** Callback: Get a schema by name. */
   @SuppressWarnings("unused")
-  int getTable(
+  int getSchema(
       MemorySegment javaObject,
       MemorySegment name,
-      MemorySegment tableOut,
+      MemorySegment schemaOut,
       MemorySegment errorOut) {
     try {
-      String tableName = new NativeString(name).value();
-      Optional<TableProvider> table = provider.table(tableName);
-      PointerOut tableOutPtr = new PointerOut(tableOut);
+      String schemaName = new NativeString(name).value();
+      Optional<SchemaProvider> schema = provider.schema(schemaName);
+      PointerOut schemaOutPtr = new PointerOut(schemaOut);
 
-      if (table.isEmpty()) {
-        tableOutPtr.setNull();
+      if (schema.isEmpty()) {
+        schemaOutPtr.setNull();
         return Errors.SUCCESS;
       }
 
-      // Create a handle for the table
-      TableProviderHandle tableHandle =
-          new TableProviderHandle(table.get(), allocator, arena, fullStackTrace);
+      // Create a handle for the schema
+      SchemaProviderHandle schemaHandle =
+          new SchemaProviderHandle(schema.get(), allocator, arena, fullStackTrace);
 
       // Return the callback struct pointer
-      tableHandle.setToPointer(tableOut);
+      schemaHandle.setToPointer(schemaOut);
 
       return Errors.SUCCESS;
     } catch (Exception e) {
       return Errors.fromException(errorOut, e, arena, fullStackTrace);
-    }
-  }
-
-  /** Callback: Check if a table exists. */
-  @SuppressWarnings("unused")
-  int tableExists(MemorySegment javaObject, MemorySegment name) {
-    try {
-      String tableName = new NativeString(name).value();
-      return provider.tableExists(tableName) ? 1 : 0;
-    } catch (Exception e) {
-      return 0;
     }
   }
 

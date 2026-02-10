@@ -1,4 +1,4 @@
-package org.apache.arrow.datafusion.ffi;
+package org.apache.arrow.datafusion;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -9,10 +9,6 @@ import java.util.Map;
 import org.apache.arrow.c.ArrowArray;
 import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
-import org.apache.arrow.datafusion.CatalogProvider;
-import org.apache.arrow.datafusion.DataFusionException;
-import org.apache.arrow.datafusion.ListingTable;
-import org.apache.arrow.datafusion.ListingTableUrl;
 import org.apache.arrow.datafusion.config.SessionConfig;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
@@ -27,7 +23,7 @@ import org.slf4j.LoggerFactory;
  * creation, table registration, SQL execution, and lifecycle management of native resources. It
  * exists in the ffi package to access package-private classes like {@link CatalogProviderHandle}.
  */
-public final class SessionContextFfi implements AutoCloseable {
+final class SessionContextFfi implements AutoCloseable {
   private static final Logger logger = LoggerFactory.getLogger(SessionContextFfi.class);
 
   private final MemorySegment runtime;
@@ -50,7 +46,7 @@ public final class SessionContextFfi implements AutoCloseable {
    * @param config The session configuration
    * @throws DataFusionException if runtime or context creation fails
    */
-  public SessionContextFfi(SessionConfig config) {
+  SessionContextFfi(SessionConfig config) {
     this.config = config;
     try {
       runtime = (MemorySegment) DataFusionBindings.RUNTIME_CREATE.invokeExact();
@@ -112,7 +108,7 @@ public final class SessionContextFfi implements AutoCloseable {
    * @param allocator The buffer allocator
    * @throws DataFusionException if registration fails
    */
-  public void registerTable(
+  void registerTable(
       String name, VectorSchemaRoot root, DictionaryProvider provider, BufferAllocator allocator) {
     try (Arena arena = Arena.ofConfined();
         ArrowSchema ffiSchema = ArrowSchema.allocateNew(allocator);
@@ -151,7 +147,7 @@ public final class SessionContextFfi implements AutoCloseable {
    * @return A DataFrameFfi wrapping the native runtime and dataframe pointers
    * @throws DataFusionException if query execution fails
    */
-  public DataFrameFfi sql(String query) {
+  DataFrameFfi sql(String query) {
     try (Arena arena = Arena.ofConfined()) {
       MemorySegment querySegment = arena.allocateFrom(query);
 
@@ -179,7 +175,7 @@ public final class SessionContextFfi implements AutoCloseable {
    * @return a SessionStateFfi wrapping the native state pointer
    * @throws DataFusionException if the state cannot be created
    */
-  public SessionStateFfi state() {
+  SessionStateFfi state() {
     try (Arena arena = Arena.ofConfined()) {
       MemorySegment statePtr =
           NativeUtil.callForPointer(
@@ -204,7 +200,7 @@ public final class SessionContextFfi implements AutoCloseable {
    * @param allocator The buffer allocator to use for Arrow data transfers
    * @throws DataFusionException if registration fails
    */
-  public void registerCatalog(String name, CatalogProvider catalog, BufferAllocator allocator) {
+  void registerCatalog(String name, CatalogProvider catalog, BufferAllocator allocator) {
     try (Arena arena = Arena.ofConfined()) {
       // Create a handle for the catalog (uses the shared catalog arena)
       CatalogProviderHandle handle =
@@ -238,7 +234,7 @@ public final class SessionContextFfi implements AutoCloseable {
    * @param allocator The buffer allocator to use for Arrow data transfers
    * @throws DataFusionException if registration fails
    */
-  public void registerListingTable(String name, ListingTable table, BufferAllocator allocator) {
+  void registerListingTable(String name, ListingTable table, BufferAllocator allocator) {
     try (Arena arena = Arena.ofConfined()) {
       // Create a handle for the format (uses the shared listing table arena)
       FileFormatHandle handle =

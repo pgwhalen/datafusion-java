@@ -1,4 +1,4 @@
-package org.apache.arrow.datafusion.ffi;
+package org.apache.arrow.datafusion;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.FunctionDescriptor;
@@ -15,7 +15,7 @@ import java.lang.invoke.MethodHandle;
  *
  * @param segment the memory segment containing the upcall stub
  */
-public record UpcallStub(MemorySegment segment) {
+record UpcallStub(MemorySegment segment) {
 
   /**
    * Creates an upcall stub for a method handle bound to a specific instance.
@@ -35,8 +35,7 @@ public record UpcallStub(MemorySegment segment) {
    * @param arena the arena that manages the stub's lifetime
    * @return a new UpcallStub wrapping the created native function pointer
    */
-  public static UpcallStub create(
-      MethodHandle boundHandle, FunctionDescriptor descriptor, Arena arena) {
+  static UpcallStub create(MethodHandle boundHandle, FunctionDescriptor descriptor, Arena arena) {
     Linker linker = DataFusionBindings.getLinker();
     return new UpcallStub(linker.upcallStub(boundHandle, descriptor, arena));
   }

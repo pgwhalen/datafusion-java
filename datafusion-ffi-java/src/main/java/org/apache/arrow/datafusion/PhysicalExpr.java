@@ -1,7 +1,5 @@
 package org.apache.arrow.datafusion;
 
-import org.apache.arrow.datafusion.ffi.PhysicalExprFfi;
-
 /**
  * An opaque handle to a DataFusion physical expression.
  *
@@ -13,7 +11,7 @@ public class PhysicalExpr implements AutoCloseable {
 
   private final PhysicalExprFfi ffi;
 
-  public PhysicalExpr(PhysicalExprFfi ffi) {
+  PhysicalExpr(PhysicalExprFfi ffi) {
     this.ffi = ffi;
   }
 
@@ -22,7 +20,7 @@ public class PhysicalExpr implements AutoCloseable {
    *
    * @return the FFI helper
    */
-  public PhysicalExprFfi ffi() {
+  PhysicalExprFfi ffi() {
     return ffi;
   }
 

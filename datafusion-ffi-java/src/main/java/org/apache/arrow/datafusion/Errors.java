@@ -1,4 +1,4 @@
-package org.apache.arrow.datafusion.ffi;
+package org.apache.arrow.datafusion;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -7,10 +7,10 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 
 /** Utility methods for error handling in FFI callbacks. */
-public final class Errors {
+final class Errors {
 
   /** The standard success return code for upcall callbacks. */
-  public static final int SUCCESS = 0;
+  static final int SUCCESS = 0;
 
   private Errors() {}
 
@@ -31,7 +31,7 @@ public final class Errors {
    * @param fullStackTrace when true, includes the full stack trace; otherwise just the message
    * @return -1 (the standard error return code)
    */
-  public static int fromException(
+  static int fromException(
       MemorySegment errorOut, Exception e, Arena arena, boolean fullStackTrace) {
     String message;
     if (fullStackTrace) {

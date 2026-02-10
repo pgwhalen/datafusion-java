@@ -34,8 +34,8 @@ The new FFM-based bindings (`datafusion-ffi-java`) were created to:
 |-----------|---------|
 | `datafusion-ffi-native/` | Rust crate exposing C-compatible FFI functions |
 | `datafusion-ffi-java/` | Java module using FFM API to call native functions |
-| `NativeLoader.java` | Loads native library via `SymbolLookup` |
-| `DataFusionBindings.java` | Method handles for all native functions |
+| `NativeLoader.java` | Loads native library via `SymbolLookup` (package-private) |
+| `DataFusionBindings.java` | Method handles for all native functions (package-private) |
 | `SessionContext.java` | Main entry point - create sessions, register tables, execute SQL |
 | `DataFrame.java` | Query result wrapper |
 | `RecordBatchStream.java` | Zero-copy Arrow data streaming |
@@ -49,7 +49,7 @@ The FFM bindings support bidirectional FFI: Java can call into DataFusion, and D
 1. **Enable Java-implemented data sources** - Allow Java code to implement `TableProvider`, `SchemaProvider`, and `CatalogProvider` that DataFusion can query via SQL
 2. **Use FFI callbacks (upcalls)** - Java creates function pointers using `Linker.upcallStub()` that Rust stores and invokes
 3. **Mirror DataFusion's trait hierarchy** - Java interfaces match Rust traits: `CatalogProvider` → `SchemaProvider` → `TableProvider` → `ExecutionPlan`
-4. **Hide FFI complexity** - Internal `*Handle` classes manage upcall stubs; public API is clean interfaces
+4. **Hide FFI complexity** - Package-private `*Handle` classes manage upcall stubs; public API is clean interfaces
 
 ### Callback Architecture
 
@@ -258,15 +258,15 @@ pub unsafe extern "C" fn datafusion_new_function(
 **Java:**
 ```java
 // In DataFusionBindings.java
-public static final MethodHandle NEW_FUNCTION =
+static final MethodHandle NEW_FUNCTION =
     downcall("datafusion_new_function",
         FunctionDescriptor.of(ValueLayout.JAVA_INT,
             ValueLayout.ADDRESS,  // ctx
             ValueLayout.ADDRESS   // error_out
         ));
 
-// In wrapper class
-public void newFunction() {
+// In wrapper class (package-private *Ffi class)
+void newFunction() {
     try (Arena arena = Arena.ofConfined()) {
         MemorySegment errorOut = arena.allocate(ValueLayout.ADDRESS);
         errorOut.set(ValueLayout.ADDRESS, 0, MemorySegment.NULL);

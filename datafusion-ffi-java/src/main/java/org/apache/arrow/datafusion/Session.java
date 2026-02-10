@@ -1,6 +1,5 @@
 package org.apache.arrow.datafusion;
 
-import org.apache.arrow.datafusion.ffi.SessionFfi;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.types.pojo.Schema;
 
@@ -17,7 +16,7 @@ public class Session {
   private final BufferAllocator allocator;
 
   /** Internal constructor. Users should not create Session instances directly. */
-  public Session(SessionFfi ffi, BufferAllocator allocator) {
+  Session(SessionFfi ffi, BufferAllocator allocator) {
     this.ffi = ffi;
     this.allocator = allocator;
   }

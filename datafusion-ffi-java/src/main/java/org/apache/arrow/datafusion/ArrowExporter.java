@@ -1,4 +1,4 @@
-package org.apache.arrow.datafusion.ffi;
+package org.apache.arrow.datafusion;
 
 import java.lang.foreign.MemorySegment;
 import org.apache.arrow.c.ArrowArray;
@@ -13,7 +13,7 @@ import org.apache.arrow.vector.VectorSchemaRoot;
  * <p>This class provides a bridge between Arrow Java's VectorSchemaRoot and the memory addresses
  * needed for the Foreign Function and Memory API.
  */
-public final class ArrowExporter {
+final class ArrowExporter {
 
   private ArrowExporter() {}
 
@@ -24,7 +24,7 @@ public final class ArrowExporter {
    * @param root The VectorSchemaRoot to export
    * @return An ExportResult containing the FFI structures and their memory addresses
    */
-  public static ExportResult export(BufferAllocator allocator, VectorSchemaRoot root) {
+  static ExportResult export(BufferAllocator allocator, VectorSchemaRoot root) {
     ArrowSchema schema = ArrowSchema.allocateNew(allocator);
     ArrowArray array = ArrowArray.allocateNew(allocator);
 
@@ -38,7 +38,7 @@ public final class ArrowExporter {
   }
 
   /** Result of exporting Arrow data to C Data Interface. */
-  public static class ExportResult implements AutoCloseable {
+  static class ExportResult implements AutoCloseable {
     private final MemorySegment schemaAddress;
     private final MemorySegment arrayAddress;
     private final ArrowSchema schema;
@@ -60,7 +60,7 @@ public final class ArrowExporter {
      *
      * @return The schema memory segment
      */
-    public MemorySegment getSchemaAddress() {
+    MemorySegment getSchemaAddress() {
       return schemaAddress;
     }
 
@@ -69,7 +69,7 @@ public final class ArrowExporter {
      *
      * @return The array memory segment
      */
-    public MemorySegment getArrayAddress() {
+    MemorySegment getArrayAddress() {
       return arrayAddress;
     }
 

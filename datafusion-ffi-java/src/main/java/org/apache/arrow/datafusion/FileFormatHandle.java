@@ -1,12 +1,9 @@
-package org.apache.arrow.datafusion.ffi;
+package org.apache.arrow.datafusion;
 
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
-import org.apache.arrow.datafusion.DataFusionException;
-import org.apache.arrow.datafusion.FileFormat;
-import org.apache.arrow.datafusion.FileSource;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.types.pojo.Schema;
 

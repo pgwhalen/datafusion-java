@@ -1,4 +1,4 @@
-package org.apache.arrow.datafusion.ffi;
+package org.apache.arrow.datafusion;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
@@ -18,12 +18,12 @@ record PointerOut(MemorySegment segment) {
    *
    * @param value the pointer to write
    */
-  public void set(MemorySegment value) {
+  void set(MemorySegment value) {
     segment.reinterpret(8).set(ValueLayout.ADDRESS, 0, value);
   }
 
   /** Writes a null pointer to the output segment. */
-  public void setNull() {
+  void setNull() {
     set(MemorySegment.NULL);
   }
 }

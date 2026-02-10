@@ -1,4 +1,4 @@
-package org.apache.arrow.datafusion.ffi;
+package org.apache.arrow.datafusion;
 
 import java.lang.foreign.MemorySegment;
 
@@ -12,14 +12,14 @@ import java.lang.foreign.MemorySegment;
  * <p>Unlike {@link PhysicalExprFfi}, this is a borrowed pointer that does not own the underlying
  * memory and has no lifecycle management.
  */
-public final class ExprFfi {
+final class ExprFfi {
   private final MemorySegment pointer;
 
-  public ExprFfi(MemorySegment pointer) {
+  ExprFfi(MemorySegment pointer) {
     this.pointer = pointer;
   }
 
-  public MemorySegment nativeHandle() {
+  MemorySegment nativeHandle() {
     return pointer;
   }
 }

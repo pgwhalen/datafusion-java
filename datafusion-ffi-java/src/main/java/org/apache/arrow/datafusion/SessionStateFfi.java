@@ -1,8 +1,7 @@
-package org.apache.arrow.datafusion.ffi;
+package org.apache.arrow.datafusion;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import org.apache.arrow.datafusion.DataFusionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -13,7 +12,7 @@ import org.slf4j.LoggerFactory;
  * call logic. It exists in the ffi package to keep {@code java.lang.foreign} and {@link
  * DataFusionBindings} usage out of the public API.
  */
-public final class SessionStateFfi implements AutoCloseable {
+final class SessionStateFfi implements AutoCloseable {
   private static final Logger logger = LoggerFactory.getLogger(SessionStateFfi.class);
 
   private final MemorySegment stateWithRuntime;
@@ -30,7 +29,7 @@ public final class SessionStateFfi implements AutoCloseable {
    * @return a LogicalPlanFfi wrapping the native plan pointer
    * @throws DataFusionException if the SQL is invalid or planning fails
    */
-  public LogicalPlanFfi createLogicalPlan(String sql) {
+  LogicalPlanFfi createLogicalPlan(String sql) {
     checkNotClosed();
 
     try (Arena arena = Arena.ofConfined()) {

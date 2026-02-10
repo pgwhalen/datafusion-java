@@ -1,6 +1,5 @@
 package org.apache.arrow.datafusion;
 
-import org.apache.arrow.datafusion.ffi.DataFrameFfi;
 import org.apache.arrow.memory.BufferAllocator;
 
 /**

@@ -1,7 +1,5 @@
 package org.apache.arrow.datafusion;
 
-import org.apache.arrow.datafusion.ffi.LogicalPlanFfi;
-
 /**
  * An opaque handle to a DataFusion logical plan.
  *

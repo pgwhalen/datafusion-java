@@ -1,9 +1,7 @@
-package org.apache.arrow.datafusion.ffi;
+package org.apache.arrow.datafusion;
 
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
-import org.apache.arrow.datafusion.DataFusionException;
-import org.apache.arrow.datafusion.NativeErrorException;
 
 /**
  * Utility class for handling errors from native DataFusion functions.
@@ -25,7 +23,7 @@ import org.apache.arrow.datafusion.NativeErrorException;
  *     (int) DataFusionBindings.STREAM_NEXT.invokeExact(stream, errorOut));
  * }</pre>
  */
-public final class NativeUtil {
+final class NativeUtil {
   private static final Linker LINKER = Linker.nativeLinker();
   private static final SymbolLookup LOOKUP = NativeLoader.get();
 
@@ -49,7 +47,7 @@ public final class NativeUtil {
    * <p>Used with {@link #call} and {@link #callForStreamResult}.
    */
   @FunctionalInterface
-  public interface NativeIntCall {
+  interface NativeIntCall {
     /**
      * Invokes the native function.
      *
@@ -66,7 +64,7 @@ public final class NativeUtil {
    * <p>Used with {@link #callForPointer}.
    */
   @FunctionalInterface
-  public interface NativePointerCall {
+  interface NativePointerCall {
     /**
      * Invokes the native function.
      *
@@ -93,7 +91,7 @@ public final class NativeUtil {
    * @throws NativeErrorException if the native function returns a non-zero result
    * @throws DataFusionException if the invocation fails unexpectedly
    */
-  public static void call(Arena arena, String operation, NativeIntCall call) {
+  static void call(Arena arena, String operation, NativeIntCall call) {
     MemorySegment errorOut = allocateErrorOut(arena);
     try {
       int result = call.invoke(errorOut);
@@ -118,8 +116,7 @@ public final class NativeUtil {
    * @throws NativeErrorException if the native function returns a null pointer
    * @throws DataFusionException if the invocation fails unexpectedly
    */
-  public static MemorySegment callForPointer(
-      Arena arena, String operation, NativePointerCall call) {
+  static MemorySegment callForPointer(Arena arena, String operation, NativePointerCall call) {
     MemorySegment errorOut = allocateErrorOut(arena);
     try {
       MemorySegment pointer = call.invoke(errorOut);
@@ -146,7 +143,7 @@ public final class NativeUtil {
    * @throws NativeErrorException if the native function returns a negative result
    * @throws DataFusionException if the invocation fails unexpectedly
    */
-  public static int callForStreamResult(Arena arena, String operation, NativeIntCall call) {
+  static int callForStreamResult(Arena arena, String operation, NativeIntCall call) {
     MemorySegment errorOut = allocateErrorOut(arena);
     try {
       int result = call.invoke(errorOut);
@@ -173,7 +170,7 @@ public final class NativeUtil {
    * @param arena The arena to allocate from
    * @return A memory segment initialized to NULL, suitable for error output
    */
-  public static MemorySegment allocateErrorOut(Arena arena) {
+  static MemorySegment allocateErrorOut(Arena arena) {
     MemorySegment errorOut = arena.allocate(ValueLayout.ADDRESS);
     errorOut.set(ValueLayout.ADDRESS, 0, MemorySegment.NULL);
     return errorOut;
@@ -189,7 +186,7 @@ public final class NativeUtil {
    * @param errorOut The error output pointer from a native function call
    * @return The error message, or null if no error was set
    */
-  public static String extractAndFreeError(MemorySegment errorOut) {
+  static String extractAndFreeError(MemorySegment errorOut) {
     MemorySegment errorPtr = errorOut.get(ValueLayout.ADDRESS, 0);
     if (errorPtr.equals(MemorySegment.NULL)) {
       return null;
@@ -217,7 +214,7 @@ public final class NativeUtil {
    * @param operation A description of the operation for error messages
    * @throws NativeErrorException if result is non-zero
    */
-  public static void checkResult(int result, MemorySegment errorOut, String operation) {
+  static void checkResult(int result, MemorySegment errorOut, String operation) {
     if (result != 0) {
       String message = extractAndFreeError(errorOut);
       throw new NativeErrorException(operation, message);
@@ -234,7 +231,7 @@ public final class NativeUtil {
    * @param operation A description of the operation for error messages
    * @throws NativeErrorException if pointer is NULL
    */
-  public static void checkPointer(MemorySegment pointer, MemorySegment errorOut, String operation) {
+  static void checkPointer(MemorySegment pointer, MemorySegment errorOut, String operation) {
     if (pointer.equals(MemorySegment.NULL)) {
       String message = extractAndFreeError(errorOut);
       throw new NativeErrorException(operation, message);
@@ -252,7 +249,7 @@ public final class NativeUtil {
    * @param operation A description of the operation for error messages
    * @throws NativeErrorException if result is negative
    */
-  public static void checkStreamResult(int result, MemorySegment errorOut, String operation) {
+  static void checkStreamResult(int result, MemorySegment errorOut, String operation) {
     if (result < 0) {
       String message = extractAndFreeError(errorOut);
       throw new NativeErrorException(operation, message);
@@ -268,7 +265,7 @@ public final class NativeUtil {
    * @param ptr the pointer to the null-terminated C string
    * @return the Java string, or empty string if ptr is NULL
    */
-  public static String readNullTerminatedString(MemorySegment ptr) {
+  static String readNullTerminatedString(MemorySegment ptr) {
     if (ptr.equals(MemorySegment.NULL)) {
       return "";
     }

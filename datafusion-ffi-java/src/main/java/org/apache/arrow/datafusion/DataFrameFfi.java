@@ -1,9 +1,7 @@
-package org.apache.arrow.datafusion.ffi;
+package org.apache.arrow.datafusion;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import org.apache.arrow.datafusion.DataFusionException;
-import org.apache.arrow.datafusion.RecordBatchStream;
 import org.apache.arrow.memory.BufferAllocator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,7 +12,7 @@ import org.slf4j.LoggerFactory;
  * <p>This class owns the native DataFrame pointer and contains all native call logic. The public
  * {@code DataFrame} class delegates to this.
  */
-public final class DataFrameFfi implements AutoCloseable {
+final class DataFrameFfi implements AutoCloseable {
   private static final Logger logger = LoggerFactory.getLogger(DataFrameFfi.class);
 
   private final MemorySegment runtime;
@@ -33,7 +31,7 @@ public final class DataFrameFfi implements AutoCloseable {
    * @return A RecordBatchStream for iterating over results
    * @throws DataFusionException if execution fails
    */
-  public RecordBatchStream executeStream(BufferAllocator allocator) {
+  RecordBatchStream executeStream(BufferAllocator allocator) {
     checkNotClosed();
 
     try (Arena arena = Arena.ofConfined()) {

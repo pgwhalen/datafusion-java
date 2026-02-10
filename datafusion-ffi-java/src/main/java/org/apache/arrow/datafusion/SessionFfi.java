@@ -1,13 +1,10 @@
-package org.apache.arrow.datafusion.ffi;
+package org.apache.arrow.datafusion;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
-import org.apache.arrow.datafusion.DataFusionException;
-import org.apache.arrow.datafusion.Expr;
-import org.apache.arrow.datafusion.PhysicalExpr;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.types.pojo.Schema;
@@ -22,12 +19,12 @@ import org.apache.arrow.vector.types.pojo.Schema;
  * <p>This is a borrowed pointer that does not own the underlying memory and has no lifecycle
  * management.
  */
-public final class SessionFfi {
+final class SessionFfi {
   private static final long ARROW_SCHEMA_SIZE = 72;
 
   private final MemorySegment pointer;
 
-  public SessionFfi(MemorySegment pointer) {
+  SessionFfi(MemorySegment pointer) {
     this.pointer = pointer;
   }
 
@@ -40,7 +37,7 @@ public final class SessionFfi {
    * @return a new PhysicalExpr wrapping the created native physical expression
    * @throws DataFusionException if the physical expression cannot be created
    */
-  public PhysicalExprFfi createPhysicalExpr(
+  PhysicalExprFfi createPhysicalExpr(
       BufferAllocator allocator, Schema tableSchema, Expr[] filters) {
     try (Arena arena = Arena.ofConfined()) {
       // Build the filter pointer array

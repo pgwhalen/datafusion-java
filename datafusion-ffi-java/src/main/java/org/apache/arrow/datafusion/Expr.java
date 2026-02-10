@@ -1,7 +1,5 @@
 package org.apache.arrow.datafusion;
 
-import org.apache.arrow.datafusion.ffi.ExprFfi;
-
 /**
  * An opaque handle to a DataFusion logical expression.
  *
@@ -13,7 +11,7 @@ public class Expr {
   private final ExprFfi ffi;
 
   /** Internal constructor. Users should not create Expr instances directly. */
-  public Expr(ExprFfi ffi) {
+  Expr(ExprFfi ffi) {
     this.ffi = ffi;
   }
 
@@ -22,7 +20,7 @@ public class Expr {
    *
    * @return the FFI helper
    */
-  public ExprFfi ffi() {
+  ExprFfi ffi() {
     return ffi;
   }
 }

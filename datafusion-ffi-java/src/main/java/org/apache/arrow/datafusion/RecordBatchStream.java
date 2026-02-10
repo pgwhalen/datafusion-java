@@ -1,7 +1,6 @@
 package org.apache.arrow.datafusion;
 
 import java.util.Set;
-import org.apache.arrow.datafusion.ffi.RecordBatchStreamFfi;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.dictionary.Dictionary;
 import org.apache.arrow.vector.dictionary.DictionaryProvider;
@@ -20,7 +19,7 @@ public class RecordBatchStream implements RecordBatchReader, DictionaryProvider 
    *
    * @param ffi the FFI wrapper holding native pointers and allocator
    */
-  public RecordBatchStream(RecordBatchStreamFfi ffi) {
+  RecordBatchStream(RecordBatchStreamFfi ffi) {
     this.ffi = ffi;
   }
 

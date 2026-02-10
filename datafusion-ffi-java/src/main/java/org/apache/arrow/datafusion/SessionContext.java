@@ -1,7 +1,6 @@
 package org.apache.arrow.datafusion;
 
 import org.apache.arrow.datafusion.config.SessionConfig;
-import org.apache.arrow.datafusion.ffi.SessionContextFfi;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.dictionary.DictionaryProvider;

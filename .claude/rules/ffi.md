@@ -315,7 +315,7 @@ This keeps FFI encoding details out of the public API. Library users see clean e
 
 ### Handle Class Pattern
 
-Every Java interface that maps to a DataFusion Rust trait MUST have a corresponding `*Handle` class in the `ffi` package (e.g., `TableProvider` -> `TableProviderHandle`, `FileSource` -> `FileSourceHandle`). The Handle is the internal FFI bridge that creates upcall stubs so Rust can call back into the Java interface implementation. Users never see Handle classes; they only implement the public interface.
+Every Java interface that maps to a DataFusion Rust trait MUST have a corresponding package-private `*Handle` class (e.g., `TableProvider` -> `TableProviderHandle`, `FileSource` -> `FileSourceHandle`). The Handle is the internal FFI bridge that creates upcall stubs so Rust can call back into the Java interface implementation. Users never see Handle classes; they only implement the public interface.
 
 Current pairs:
 
@@ -374,22 +374,32 @@ Current pairs:
 
 ## FFI Encapsulation Rules
 
-All native call logic and `java.lang.foreign` API usage MUST be confined to the `ffi` package (`org.apache.arrow.datafusion.ffi`). Public API classes in `org.apache.arrow.datafusion` must never leak FFI implementation details.
+All FFI implementation classes live in `org.apache.arrow.datafusion` but are **package-private** (no `public` modifier), making them invisible to library consumers.
 
 ### Rules
 
-1. **No native calls outside `ffi/`** -- Only classes in the `ffi` package may invoke `DataFusionBindings` method handles (`.invokeExact()`). Public API classes must delegate to a corresponding `*Ffi` class in the `ffi` package instead.
+1. **FFI classes are package-private** -- `DataFusionBindings`, `NativeUtil`, `NativeLoader`, `Errors`,
+   `UpcallStub`, `ArrowExporter`, all `*Ffi` classes, all `*Handle` classes, `TraitHandle`, and utility
+   records (`NativeString`, `PointerOut`, `LongOut`) must have no `public` modifier on their class
+   declaration.
 
-2. **No `java.lang.foreign` imports outside `ffi/`** -- Classes in `org.apache.arrow.datafusion` must NOT import `java.lang.foreign.MemorySegment`, `Arena`, `ValueLayout`, `FunctionDescriptor`, `Linker`, or any other type from `java.lang.foreign`. These are internal FFI plumbing.
+2. **No `java.lang.foreign` in public classes** -- Public API classes (e.g., `SessionContext`, `DataFrame`)
+   must NOT import `java.lang.foreign.MemorySegment`, `Arena`, `ValueLayout`, or any other FFM type.
+   These may only appear in package-private FFI classes.
 
-3. **No `MemorySegment` in public API signatures** -- No public constructor, method, or field in `org.apache.arrow.datafusion` may use `MemorySegment` as a parameter type, return type, or field type. Native pointers must be wrapped in an `*Ffi` class in the `ffi` package.
+3. **No `MemorySegment` in public API signatures** -- No public constructor, method, or field may use
+   `MemorySegment` as a parameter type, return type, or field type.
 
-4. **No `ffi` package imports outside `ffi/`** -- Classes in `org.apache.arrow.datafusion` must NOT import `DataFusionBindings` or `NativeUtil`. The only `ffi` types they may reference are their corresponding `*Ffi` wrapper (e.g., `PhysicalExprFfi`) to delegate lifecycle and native operations.
+4. **`DataFusionBindings` and `NativeUtil` confined to FFI classes** -- Only `*Ffi` and `*Handle` classes
+   may reference `DataFusionBindings` or `NativeUtil`.
 
-5. **Delegation pattern** -- When a public API class wraps a native pointer, it must follow this pattern:
-   - Create a `*Ffi` class in the `ffi` package that owns the `MemorySegment` and contains all native call logic
-   - The public API class holds a `*Ffi` instance and delegates to it
-   - Example: `PhysicalExpr` wraps `PhysicalExprFfi`; `LiteralGuarantee.analyze()` delegates to `LiteralGuaranteeFfi.analyze()`
+5. **Delegation pattern** -- Public API classes that wrap native pointers delegate to a package-private
+   `*Ffi` class. The public class holds a `*Ffi` instance field and forwards method calls to it.
+   Example: `SessionContext` delegates to `SessionContextFfi`.
+
+6. **Constructors taking FFI types are package-private** -- If a public class has a constructor that
+   accepts a `*Ffi` parameter, that constructor must be package-private. Example: `Expr(ExprFfi ffi)`
+   is package-private.
 
 ### Existing violations
 

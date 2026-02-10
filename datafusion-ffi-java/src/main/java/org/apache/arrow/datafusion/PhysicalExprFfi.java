@@ -1,4 +1,4 @@
-package org.apache.arrow.datafusion.ffi;
+package org.apache.arrow.datafusion;
 
 import java.lang.foreign.MemorySegment;
 import org.slf4j.Logger;
@@ -11,13 +11,13 @@ import org.slf4j.LoggerFactory;
  * ffi package so that other FFI classes (e.g., {@link LiteralGuaranteeFfi}) can access the native
  * handle without exposing it in the public API.
  */
-public final class PhysicalExprFfi implements AutoCloseable {
+final class PhysicalExprFfi implements AutoCloseable {
   private static final Logger logger = LoggerFactory.getLogger(PhysicalExprFfi.class);
 
   private final MemorySegment pointer;
   private volatile boolean closed = false;
 
-  public PhysicalExprFfi(MemorySegment pointer) {
+  PhysicalExprFfi(MemorySegment pointer) {
     this.pointer = pointer;
   }
 
