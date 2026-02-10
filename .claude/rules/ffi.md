@@ -376,6 +376,8 @@ Current pairs:
 
 All FFI implementation classes live in `org.apache.arrow.datafusion` but are **package-private** (no `public` modifier), making them invisible to library consumers.
 
+Rules 1--4 are enforced at build time by `FfiEncapsulationTest` (ArchUnit). When adding or changing a rule here, update the corresponding ArchUnit test, and vice versa.
+
 ### Rules
 
 1. **FFI classes are package-private** -- `DataFusionBindings`, `NativeUtil`, `NativeLoader`, `Errors`,
