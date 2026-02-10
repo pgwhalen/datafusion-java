@@ -58,9 +58,7 @@ pub unsafe extern "C" fn datafusion_context_state(
 #[no_mangle]
 pub unsafe extern "C" fn datafusion_session_state_destroy(state_with_rt: *mut c_void) {
     if !state_with_rt.is_null() {
-        drop(Box::from_raw(
-            state_with_rt as *mut SessionStateWithRuntime,
-        ));
+        drop(Box::from_raw(state_with_rt as *mut SessionStateWithRuntime));
     }
 }
 
@@ -92,9 +90,7 @@ pub unsafe extern "C" fn datafusion_session_state_create_logical_plan(
 
     let sql_str = match CStr::from_ptr(sql).to_str() {
         Ok(s) => s,
-        Err(e) => {
-            return set_error_return_null(error_out, &format!("Invalid SQL string: {}", e))
-        }
+        Err(e) => return set_error_return_null(error_out, &format!("Invalid SQL string: {}", e)),
     };
 
     match sw
@@ -102,9 +98,8 @@ pub unsafe extern "C" fn datafusion_session_state_create_logical_plan(
         .block_on(async { sw.state.create_logical_plan(sql_str).await })
     {
         Ok(plan) => Box::into_raw(Box::new(plan)) as *mut c_void,
-        Err(e) => set_error_return_null(
-            error_out,
-            &format!("Failed to create logical plan: {}", e),
-        ),
+        Err(e) => {
+            set_error_return_null(error_out, &format!("Failed to create logical plan: {}", e))
+        }
     }
 }

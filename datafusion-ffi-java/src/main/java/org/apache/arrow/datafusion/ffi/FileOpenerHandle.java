@@ -5,6 +5,8 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import org.apache.arrow.datafusion.DataFusionException;
 import org.apache.arrow.datafusion.FileOpener;
 import org.apache.arrow.datafusion.PartitionedFile;
@@ -32,7 +34,7 @@ final class FileOpenerHandle implements TraitHandle {
 
   // open_fn: (ADDRESS, ADDRESS, LONG, LONG, INT, LONG, LONG, ADDRESS, ADDRESS) -> INT
   //   java_object, file_path, file_path_len, file_size, has_range, range_start, range_end,
-  //   reader_out, error_out -> result
+  //   stream_out, error_out -> result
   private static final FunctionDescriptor OPEN_DESC =
       FunctionDescriptor.of(
           ValueLayout.JAVA_INT,
@@ -98,6 +100,10 @@ final class FileOpenerHandle implements TraitHandle {
   private final UpcallStub openStub;
   private final UpcallStub releaseStub;
 
+  // Keep references to reader handles created during open() to prevent GC
+  // while Rust holds pointers to the FFI_RecordBatchStream structs
+  private final List<RecordBatchReaderHandle> readerHandles = new ArrayList<>();
+
   FileOpenerHandle(
       FileOpener opener, BufferAllocator allocator, Arena arena, boolean fullStackTrace) {
     this.arena = arena;
@@ -134,7 +140,7 @@ final class FileOpenerHandle implements TraitHandle {
     return callbackStruct;
   }
 
-  /** Callback: Open a file and return a RecordBatchReader. */
+  /** Callback: Open a file. Writes FFI_RecordBatchStream into streamOut. */
   @SuppressWarnings("unused") // Called via upcall stub
   int open(
       MemorySegment javaObject,
@@ -144,7 +150,7 @@ final class FileOpenerHandle implements TraitHandle {
       int hasRange,
       long rangeStart,
       long rangeEnd,
-      MemorySegment readerOut,
+      MemorySegment streamOut,
       MemorySegment errorOut) {
     try {
       // Convert native UTF-8 bytes to Java String
@@ -160,12 +166,15 @@ final class FileOpenerHandle implements TraitHandle {
       // Call Java FileOpener implementation
       RecordBatchReader reader = opener.open(partitionedFile);
 
-      // Wrap the reader using RecordBatchReaderHandle (reuse existing FFI bridge)
+      // Create a handle that constructs FFI_RecordBatchStream
       RecordBatchReaderHandle readerHandle =
           new RecordBatchReaderHandle(reader, allocator, arena, fullStackTrace);
 
-      // Return the callback struct pointer
-      readerHandle.setToPointer(readerOut);
+      // Copy the 32-byte FFI_RecordBatchStream struct into Rust's output buffer
+      readerHandle.copyStructTo(streamOut);
+
+      // Prevent GC while Rust holds pointers to the stream's upcall stubs
+      readerHandles.add(readerHandle);
 
       return Errors.SUCCESS;
     } catch (Exception e) {

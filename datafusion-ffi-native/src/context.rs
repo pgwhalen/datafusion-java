@@ -50,7 +50,10 @@ pub unsafe extern "C" fn datafusion_context_create_with_config(
     clear_error(error_out);
 
     if len > 0 && (keys.is_null() || values.is_null()) {
-        return set_error_return_null(error_out, "Null keys or values pointer with non-zero length");
+        return set_error_return_null(
+            error_out,
+            "Null keys or values pointer with non-zero length",
+        );
     }
 
     let mut settings = HashMap::with_capacity(len);
@@ -59,10 +62,7 @@ pub unsafe extern "C" fn datafusion_context_create_with_config(
         let value_ptr = *values.add(i);
 
         if key_ptr.is_null() || value_ptr.is_null() {
-            return set_error_return_null(
-                error_out,
-                &format!("Null key or value at index {}", i),
-            );
+            return set_error_return_null(error_out, &format!("Null key or value at index {}", i));
         }
 
         let key = match CStr::from_ptr(key_ptr).to_str() {

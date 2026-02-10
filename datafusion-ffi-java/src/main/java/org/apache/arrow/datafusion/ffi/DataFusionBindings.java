@@ -139,14 +139,66 @@ public final class DataFusionBindings {
       downcall(
           "datafusion_alloc_table_provider_callbacks", FunctionDescriptor.of(ValueLayout.ADDRESS));
 
-  public static final MethodHandle ALLOC_EXECUTION_PLAN_CALLBACKS =
-      downcall(
-          "datafusion_alloc_execution_plan_callbacks", FunctionDescriptor.of(ValueLayout.ADDRESS));
+  // FFI_RecordBatchStream layout helpers (Java constructs the stream struct directly)
+  public static final MethodHandle POLL_RESULT_SIZE =
+      downcall("datafusion_poll_result_size", FunctionDescriptor.of(ValueLayout.JAVA_LONG));
 
-  public static final MethodHandle ALLOC_RECORD_BATCH_READER_CALLBACKS =
+  public static final MethodHandle POLL_RESULT_ALIGN =
+      downcall("datafusion_poll_result_align", FunctionDescriptor.of(ValueLayout.JAVA_LONG));
+
+  public static final MethodHandle WRAPPED_SCHEMA_SIZE =
+      downcall("datafusion_wrapped_schema_size", FunctionDescriptor.of(ValueLayout.JAVA_LONG));
+
+  public static final MethodHandle FFI_RECORD_BATCH_STREAM_SIZE =
       downcall(
-          "datafusion_alloc_record_batch_reader_callbacks",
-          FunctionDescriptor.of(ValueLayout.ADDRESS));
+          "datafusion_ffi_record_batch_stream_size", FunctionDescriptor.of(ValueLayout.JAVA_LONG));
+
+  public static final MethodHandle RSTRING_SIZE =
+      downcall("datafusion_rstring_size", FunctionDescriptor.of(ValueLayout.JAVA_LONG));
+
+  public static final MethodHandle CREATE_RSTRING =
+      downcall(
+          "datafusion_create_rstring",
+          FunctionDescriptor.ofVoid(
+              ValueLayout.ADDRESS, // ptr (UTF-8 bytes)
+              ValueLayout.JAVA_LONG, // len
+              ValueLayout.ADDRESS // out (RString buffer)
+              ));
+
+  // FFI_ExecutionPlan layout helpers (Java constructs the plan struct directly)
+  public static final MethodHandle FFI_EXECUTION_PLAN_SIZE =
+      downcall("datafusion_ffi_execution_plan_size", FunctionDescriptor.of(ValueLayout.JAVA_LONG));
+
+  public static final MethodHandle FFI_PLAN_PROPERTIES_SIZE =
+      downcall("datafusion_ffi_plan_properties_size", FunctionDescriptor.of(ValueLayout.JAVA_LONG));
+
+  public static final MethodHandle RVEC_PLAN_SIZE =
+      downcall("datafusion_rvec_plan_size", FunctionDescriptor.of(ValueLayout.JAVA_LONG));
+
+  public static final MethodHandle FFI_RESULT_STREAM_SIZE =
+      downcall("datafusion_ffi_result_stream_size", FunctionDescriptor.of(ValueLayout.JAVA_LONG));
+
+  public static final MethodHandle FFI_TASK_CONTEXT_SIZE =
+      downcall("datafusion_ffi_task_context_size", FunctionDescriptor.of(ValueLayout.JAVA_LONG));
+
+  public static final MethodHandle CREATE_FFI_PLAN_PROPERTIES =
+      downcall(
+          "datafusion_create_ffi_plan_properties",
+          FunctionDescriptor.of(
+              ValueLayout.JAVA_INT,
+              ValueLayout.JAVA_INT, // partitioning_count
+              ValueLayout.JAVA_INT, // emission_type
+              ValueLayout.JAVA_INT, // boundedness
+              ValueLayout.ADDRESS, // schema_ptr (FFI_ArrowSchema*)
+              ValueLayout.ADDRESS // out (FFI_PlanProperties buffer)
+              ));
+
+  public static final MethodHandle CREATE_EMPTY_RVEC_PLAN =
+      downcall(
+          "datafusion_create_empty_rvec_plan",
+          FunctionDescriptor.ofVoid(
+              ValueLayout.ADDRESS // out (RVec<FFI_ExecutionPlan> buffer)
+              ));
 
   // File format callback allocation
   public static final MethodHandle ALLOC_FILE_FORMAT_CALLBACKS =

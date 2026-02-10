@@ -1,8 +1,7 @@
 //! Rust TableProvider implementation that calls back into Java.
 
 use crate::error::{check_callback_result, set_error_return};
-use crate::java_backed_plan::JavaBackedExecutionPlan;
-use crate::java_provider::{JavaExecutionPlanCallbacks, JavaTableProviderCallbacks};
+use crate::java_provider::JavaTableProviderCallbacks;
 use arrow::datatypes::SchemaRef;
 use arrow::ffi::FFI_ArrowSchema;
 use async_trait::async_trait;
@@ -11,6 +10,7 @@ use datafusion::common::Result;
 use datafusion::datasource::{TableProvider, TableType};
 use datafusion::logical_expr::Expr;
 use datafusion::physical_plan::ExecutionPlan;
+use datafusion_ffi::execution_plan::FFI_ExecutionPlan;
 use std::any::Any;
 use std::ffi::c_char;
 use std::sync::Arc;
@@ -45,7 +45,12 @@ impl JavaBackedTableProvider {
         // Convert FFI schema to Arrow schema
         let schema = match arrow::datatypes::Schema::try_from(&schema_out) {
             Ok(s) => Arc::new(s),
-            Err(e) => return Err(datafusion::error::DataFusionError::ArrowError(Box::new(e), None)),
+            Err(e) => {
+                return Err(datafusion::error::DataFusionError::ArrowError(
+                    Box::new(e),
+                    None,
+                ))
+            }
         };
 
         Ok(Self { callbacks, schema })
@@ -100,7 +105,8 @@ impl TableProvider for JavaBackedTableProvider {
                 None => -1,
             };
 
-            let mut plan_out: *mut JavaExecutionPlanCallbacks = std::ptr::null_mut();
+            // Java writes FFI_ExecutionPlan (64 bytes) into plan_out
+            let mut plan_out = std::mem::MaybeUninit::<FFI_ExecutionPlan>::uninit();
             let mut error_out: *mut c_char = std::ptr::null_mut();
 
             let result = (cb.scan_fn)(
@@ -108,20 +114,20 @@ impl TableProvider for JavaBackedTableProvider {
                 projection_ptr,
                 projection_len,
                 limit_val,
-                &mut plan_out,
+                plan_out.as_mut_ptr(),
                 &mut error_out,
             );
 
             check_callback_result(result, error_out, "scan Java TableProvider")?;
 
-            if plan_out.is_null() {
-                return Err(datafusion::error::DataFusionError::Execution(
-                    "Java TableProvider.scan returned null plan".to_string(),
-                ));
-            }
-
-            let plan = JavaBackedExecutionPlan::new(plan_out)?;
-            Ok(Arc::new(plan))
+            let ffi_plan = plan_out.assume_init();
+            let plan: Arc<dyn ExecutionPlan> = (&ffi_plan).try_into().map_err(|e| {
+                datafusion::error::DataFusionError::Execution(format!(
+                    "Failed to convert FFI_ExecutionPlan: {}",
+                    e
+                ))
+            })?;
+            Ok(plan)
         }
     }
 }
@@ -170,7 +176,7 @@ unsafe extern "C" fn dummy_scan_fn(
     _projection: *const usize,
     _projection_len: usize,
     _limit: i64,
-    _plan_out: *mut *mut JavaExecutionPlanCallbacks,
+    _plan_out: *mut FFI_ExecutionPlan,
     error_out: *mut *mut c_char,
 ) -> i32 {
     set_error_return(error_out, "TableProvider callbacks not initialized")

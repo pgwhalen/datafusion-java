@@ -33,8 +33,7 @@ use std::sync::Arc;
 use tokio::runtime::Runtime;
 
 use crate::error::{check_callback_result, clear_error, set_error_return};
-use crate::java_backed_plan::JavaBackedRecordBatchStream;
-use crate::java_provider::JavaRecordBatchReaderCallbacks;
+use datafusion_ffi::record_batch_stream::FFI_RecordBatchStream;
 
 // ============================================================================
 // Callback structs
@@ -102,7 +101,7 @@ pub struct JavaFileOpenerCallbacks {
     /// Opaque pointer to the Java object.
     pub java_object: *mut c_void,
 
-    /// Open a file, returning a RecordBatchReaderCallbacks pointer.
+    /// Open a file, writing an FFI_RecordBatchStream into the output.
     ///
     /// Parameters:
     /// - java_object: opaque pointer
@@ -112,7 +111,7 @@ pub struct JavaFileOpenerCallbacks {
     /// - has_range: 1 if byte range present, 0 if not
     /// - range_start: start of byte range (0 if no range)
     /// - range_end: end of byte range (0 if no range)
-    /// - reader_out: receives a `*mut JavaRecordBatchReaderCallbacks`
+    /// - stream_out: receives an FFI_RecordBatchStream struct (32 bytes)
     /// - error_out: receives error message on failure
     ///
     /// Returns 0 on success, -1 on error.
@@ -124,7 +123,7 @@ pub struct JavaFileOpenerCallbacks {
         has_range: i32,
         range_start: i64,
         range_end: i64,
-        reader_out: *mut *mut JavaRecordBatchReaderCallbacks,
+        stream_out: *mut FFI_RecordBatchStream,
         error_out: *mut *mut c_char,
     ) -> i32,
 
@@ -343,7 +342,6 @@ impl FileSource for JavaBackedFileSource {
 
         Ok(Arc::new(JavaBackedFileOpener {
             callbacks: Arc::new(OpenerCallbacksHolder { ptr: opener_out }),
-            schema: Arc::clone(&self.schema),
         }))
     }
 
@@ -454,11 +452,9 @@ impl ExecutionPlan for JavaBackedFileExec {
             .runtime_env()
             .object_store(&self.base_config.object_store_url)?;
 
-        let opener = self.file_source.create_file_opener(
-            object_store,
-            &self.base_config,
-            partition,
-        )?;
+        let opener =
+            self.file_source
+                .create_file_opener(object_store, &self.base_config, partition)?;
 
         let stream = FileStream::new(&self.base_config, partition, opener, &self.metrics)?;
         Ok(Box::pin(stream) as SendableRecordBatchStream)
@@ -502,11 +498,9 @@ impl Drop for OpenerCallbacksHolder {
 ///
 /// Owns a `JavaFileOpenerCallbacks` pointer (via `OpenerCallbacksHolder`).
 /// When `open()` is called, it extracts the file path from the metadata and calls
-/// `open_fn` to get a `JavaRecordBatchReaderCallbacks`, which is used to create
-/// a `JavaBackedRecordBatchStream`.
+/// `open_fn`, which writes an `FFI_RecordBatchStream` directly from Java.
 struct JavaBackedFileOpener {
     callbacks: Arc<OpenerCallbacksHolder>,
-    schema: SchemaRef,
 }
 
 impl Unpin for JavaBackedFileOpener {}
@@ -533,7 +527,6 @@ impl FileOpener for JavaBackedFileOpener {
         >,
     > {
         let callbacks = Arc::clone(&self.callbacks);
-        let schema = Arc::clone(&self.schema);
 
         Ok(Box::pin(async move {
             // 1. Extract fields from PartitionedFile
@@ -545,9 +538,10 @@ impl FileOpener for JavaBackedFileOpener {
                 None => (0i32, 0i64, 0i64),
             };
 
-            // 2. Call Java callback to open file
+            // 2. Call Java callback to open file — Java writes FFI_RecordBatchStream directly
             let cb = unsafe { &*callbacks.ptr };
-            let mut reader_out: *mut JavaRecordBatchReaderCallbacks = std::ptr::null_mut();
+            let mut stream_out =
+                std::mem::MaybeUninit::<FFI_RecordBatchStream>::uninit();
             let mut error_out: *mut c_char = std::ptr::null_mut();
             let result = unsafe {
                 (cb.open_fn)(
@@ -558,7 +552,7 @@ impl FileOpener for JavaBackedFileOpener {
                     has_range,
                     range_start,
                     range_end,
-                    &mut reader_out,
+                    stream_out.as_mut_ptr(),
                     &mut error_out,
                 )
             };
@@ -566,14 +560,8 @@ impl FileOpener for JavaBackedFileOpener {
                 check_callback_result(result, error_out, "open file from Java FileOpener")?;
             }
 
-            if reader_out.is_null() {
-                return Err(datafusion::error::DataFusionError::Execution(
-                    "Java FileOpener.open returned null reader".to_string(),
-                ));
-            }
-
-            // 3. Wrap reader as stream (DataFusion 52+ uses DataFusionError, not ArrowError)
-            let stream = JavaBackedRecordBatchStream::new(reader_out, schema);
+            // 3. stream_out is an FFI_RecordBatchStream (implements Stream<Item = Result<RecordBatch>>)
+            let stream = unsafe { stream_out.assume_init() };
             Ok(Box::pin(stream)
                 as BoxStream<
                     'static,
@@ -612,7 +600,7 @@ unsafe extern "C" fn dummy_open_fn(
     _has_range: i32,
     _range_start: i64,
     _range_end: i64,
-    _reader_out: *mut *mut JavaRecordBatchReaderCallbacks,
+    _stream_out: *mut FFI_RecordBatchStream,
     error_out: *mut *mut c_char,
 ) -> i32 {
     set_error_return(error_out, "FileOpener callbacks not initialized")
@@ -756,17 +744,12 @@ pub unsafe extern "C" fn datafusion_context_register_listing_table(
         for &url_ptr in urls_slice {
             let url_str = match CStr::from_ptr(url_ptr).to_str() {
                 Ok(s) => s.to_string(),
-                Err(e) => {
-                    return set_error_return(error_out, &format!("Invalid URL: {}", e))
-                }
+                Err(e) => return set_error_return(error_out, &format!("Invalid URL: {}", e)),
             };
             let table_url = match ListingTableUrl::parse(&url_str) {
                 Ok(u) => u,
                 Err(e) => {
-                    return set_error_return(
-                        error_out,
-                        &format!("Failed to parse URL: {}", e),
-                    )
+                    return set_error_return(error_out, &format!("Failed to parse URL: {}", e))
                 }
             };
             table_urls.push(table_url);

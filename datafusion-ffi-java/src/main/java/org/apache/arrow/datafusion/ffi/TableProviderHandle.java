@@ -231,12 +231,10 @@ final class TableProviderHandle implements TraitHandle {
       // Create the execution plan
       ExecutionPlan plan = provider.scan(projectionArray, limitValue);
 
-      // Create a handle for the plan
+      // Create a handle for the plan and copy its FFI_ExecutionPlan into planOut
       ExecutionPlanHandle planHandle =
           new ExecutionPlanHandle(plan, allocator, arena, fullStackTrace);
-
-      // Return the callback struct pointer
-      planHandle.setToPointer(planOut);
+      planHandle.copyStructTo(planOut);
 
       return Errors.SUCCESS;
     } catch (Exception e) {
