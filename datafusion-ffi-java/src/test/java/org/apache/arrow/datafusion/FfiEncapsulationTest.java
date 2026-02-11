@@ -107,6 +107,39 @@ public class FfiEncapsulationTest {
           .because(
               "NativeUtil should only be used" + " by FFI implementation classes (ffi.md rule 4)");
 
+  /** Rule 6: Constructors taking *Ffi parameters must be package-private. */
+  @ArchTest
+  static final ArchRule publicConstructorsShouldNotAcceptFfiTypes =
+      classes()
+          .that()
+          .arePublic()
+          .should(notHavePublicConstructorsAcceptingFfiTypes())
+          .because("constructors taking *Ffi types must be package-private (ffi.md rule 6)");
+
+  /** Handle class rule: Handle classes must implement TraitHandle. */
+  @ArchTest
+  static final ArchRule handleClassesShouldImplementTraitHandle =
+      classes()
+          .that()
+          .haveSimpleNameEndingWith("Handle")
+          .and()
+          .areNotInterfaces()
+          .should()
+          .implement(TraitHandle.class)
+          .because("every Handle class must implement TraitHandle (ffi.md Handle class rules)");
+
+  /** Handle class rule: Handle classes must be final. */
+  @ArchTest
+  static final ArchRule handleClassesShouldBeFinal =
+      classes()
+          .that()
+          .haveSimpleNameEndingWith("Handle")
+          .and()
+          .areNotInterfaces()
+          .should()
+          .haveModifier(JavaModifier.FINAL)
+          .because("Handle classes must be final (ffi.md Handle class rules)");
+
   private static ArchCondition<JavaClass> notHavePublicMembersUsingMemorySegment() {
     return new ArchCondition<>("not have public members using MemorySegment") {
       @Override
@@ -142,6 +175,31 @@ public class FfiEncapsulationTest {
                   String.format(
                       "%s in %s has MemorySegment as %s",
                       member.getDescription(), member.getOwner().getName(), kind)));
+        }
+      }
+    };
+  }
+
+  private static ArchCondition<JavaClass> notHavePublicConstructorsAcceptingFfiTypes() {
+    return new ArchCondition<>("not have public constructors accepting *Ffi types") {
+      @Override
+      public void check(JavaClass javaClass, ConditionEvents events) {
+        for (JavaConstructor constructor : javaClass.getConstructors()) {
+          if (!constructor.getModifiers().contains(JavaModifier.PUBLIC)) {
+            continue;
+          }
+          for (JavaClass paramType : constructor.getRawParameterTypes()) {
+            if (paramType.getSimpleName().endsWith("Ffi")) {
+              events.add(
+                  SimpleConditionEvent.violated(
+                      constructor,
+                      String.format(
+                          "%s in %s has public constructor accepting FFI type %s",
+                          constructor.getDescription(),
+                          javaClass.getName(),
+                          paramType.getSimpleName())));
+            }
+          }
         }
       }
     };
