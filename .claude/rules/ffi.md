@@ -381,7 +381,7 @@ Rules 1--4, 6, and the Handle class structural rules (implements `TraitHandle`, 
 ### Rules
 
 1. **FFI classes are package-private** -- `DataFusionBindings`, `NativeUtil`, `NativeLoader`, `Errors`,
-   `UpcallStub`, `ArrowExporter`, all `*Ffi` classes, all `*Handle` classes, `TraitHandle`, and utility
+   `UpcallStub`, all `*Ffi` classes, all `*Handle` classes, `TraitHandle`, and utility
    records (`NativeString`, `PointerOut`, `LongOut`) must have no `public` modifier on their class
    declaration.
 

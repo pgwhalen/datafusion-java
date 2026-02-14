@@ -34,7 +34,6 @@ public class FfiEncapsulationTest {
               NativeLoader.class,
               Errors.class,
               UpcallStub.class,
-              ArrowExporter.class,
               TraitHandle.class,
               NativeString.class,
               PointerOut.class,
