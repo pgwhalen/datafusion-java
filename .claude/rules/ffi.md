@@ -359,25 +359,21 @@ private static final FunctionDescriptor CALLBACK_DESC =
     FunctionDescriptor.of(RESULT_LAYOUT, ValueLayout.ADDRESS, ValueLayout.ADDRESS);
 ```
 
-The callback Java method returns `MemorySegment` (pointing to a pre-allocated buffer).
+The callback Java method returns `MemorySegment` (pointing to a buffer allocated in the callback).
 
-### Pre-allocated Return Buffers
+### Return Buffer Allocation
 
-Allocate return buffers once in the constructor to avoid per-call allocation:
+**Do NOT pre-allocate return buffers as instance fields in Handle classes.** Allocate them inside each callback method instead. The shared arena keeps the memory alive for Rust to consume, and per-call allocation avoids subtle aliasing bugs if Rust holds a reference to a previous return value when the callback is invoked again.
 
 ```java
-private final MemorySegment resultBuffer;
-
-Handle(Arena arena) {
-    this.resultBuffer = arena.allocate(RESULT_SIZE, 8);
-}
-
 MemorySegment callback(MemorySegment arg) {
-    resultBuffer.fill((byte) 0);
+    MemorySegment buffer = arena.allocate(RESULT_LAYOUT);
     // ... populate buffer ...
-    return resultBuffer;
+    return buffer;
 }
 ```
+
+The only exception is the `FFI_*` trait struct itself (e.g., `ffiProvider`, `ffiPlan`, `propertiesBuffer`) which must persist for the lifetime of the Handle. These are populated once in the constructor with upcall stub pointers and are never overwritten.
 
 ### copyStructTo
 
@@ -544,12 +540,12 @@ All Handle classes allocate their structs in Java arena memory and use `StructLa
 - `SchemaProviderHandle` → constructs `FFI_SchemaProvider` directly
 - `TableProviderHandle` → constructs `FFI_TableProvider` directly
 
-**Java-arena FFI structs** (project-defined `FFI_File*` struct, upstream-compatible naming but no upstream equivalent yet):
+**Java-arena FFI structs** (project-defined `FFI_File*` struct with `#[derive(Debug, StableAbi)]`, upstream-compatible naming but no upstream equivalent yet):
 - `FileFormatHandle` → allocates `FFI_FileFormat` in Java arena, Rust copies via `ptr::read`
 - `FileSourceHandle` → allocates `FFI_FileSource` in Java arena, Rust copies via `ptr::read`/`MaybeUninit`
 - `FileOpenerHandle` → allocates `FFI_FileOpener` in Java arena, Rust copies via `ptr::read`/`MaybeUninit`
 
-These follow the same 6-field convention as upstream structs (`trait_fn`, `clone`, `release`, `version`, `private_data`, `library_marker_id`), use `JavaBacked*` Rust wrapper structs, and allocate struct memory in the Java arena. The Rust `ALLOC_*` functions have been removed; Java owns struct memory.
+These follow the same 6-field convention as upstream structs (`trait_fn`, `clone`, `release`, `version`, `private_data`, `library_marker_id`), use `Foreign*` Rust wrapper structs (matching upstream `datafusion-ffi` naming), and allocate struct memory in the Java arena. Each `FFI_File*` struct derives `StableAbi` for compile-time ABI validation and implements `Clone`/`Drop` (delegating to its `clone`/`release` fn pointers), eliminating the need for intermediate holder structs.
 
 ## Naming Conventions
 

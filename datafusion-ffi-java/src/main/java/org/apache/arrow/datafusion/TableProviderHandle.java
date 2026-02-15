@@ -23,7 +23,7 @@ import org.apache.arrow.vector.types.pojo.Schema;
  * offset   0: schema fn ptr                 (ADDRESS)
  * offset   8: scan fn ptr                   (ADDRESS)
  * offset  16: table_type fn ptr             (ADDRESS)
- * offset  24: supports_filters_pushdown     (ADDRESS) — NULL (Option::None)
+ * offset  24: supports_filters_pushdown     (ADDRESS) — upcall stub
  * offset  32: insert_into fn ptr            (ADDRESS) — Rust stub
  * offset  40: logical_codec                 (144 bytes) — via Rust helper
  * offset 184: clone fn ptr                  (ADDRESS)
@@ -63,6 +63,11 @@ final class TableProviderHandle implements TraitHandle {
   private static final MethodHandle WRAPPED_SCHEMA_SIZE_MH =
       NativeUtil.downcall(
           "datafusion_ffi_wrapped_schema_size", FunctionDescriptor.of(ValueLayout.JAVA_LONG));
+
+  private static final MethodHandle FILTER_PUSHDOWN_RESULT_SIZE_MH =
+      NativeUtil.downcall(
+          "datafusion_ffi_filter_pushdown_result_size",
+          FunctionDescriptor.of(ValueLayout.JAVA_LONG));
 
   // ======== Downcall handles for Rust helpers (table_provider.rs) ========
 
@@ -107,13 +112,26 @@ final class TableProviderHandle implements TraitHandle {
       NativeUtil.downcall(
           "datafusion_table_free_session_handle", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
 
+  private static final MethodHandle CREATE_FILTER_PUSHDOWN_OK =
+      NativeUtil.downcall(
+          "datafusion_table_create_filter_pushdown_ok",
+          FunctionDescriptor.ofVoid(
+              ValueLayout.ADDRESS.withName("discriminants"),
+              ValueLayout.JAVA_LONG.withName("count"),
+              ValueLayout.ADDRESS.withName("out")));
+
+  private static final MethodHandle CREATE_FILTER_PUSHDOWN_ERROR =
+      NativeUtil.downcall(
+          "datafusion_table_create_filter_pushdown_error",
+          FunctionDescriptor.ofVoid(
+              ValueLayout.ADDRESS.withName("ptr"),
+              ValueLayout.JAVA_LONG.withName("len"),
+              ValueLayout.ADDRESS.withName("out")));
+
   // ======== Rust symbol lookups (table_provider.rs only) ========
 
   private static final MemorySegment STUB_INSERT_INTO =
       NativeLoader.get().find("datafusion_table_provider_stub_insert_into").orElseThrow();
-
-  private static final MemorySegment SUPPORTS_FILTERS_FN =
-      NativeLoader.get().find("datafusion_table_provider_supports_filters_pushdown").orElseThrow();
 
   private static final MemorySegment CLONE_FN =
       NativeLoader.get().find("datafusion_table_provider_clone").orElseThrow();
@@ -217,6 +235,14 @@ final class TableProviderHandle implements TraitHandle {
   private static final StructLayout SCAN_FUTURE_LAYOUT =
       MemoryLayout.structLayout(MemoryLayout.sequenceLayout(3, ValueLayout.JAVA_LONG));
 
+  // FFIResult<RVec<FFI_TableProviderFilterPushDown>> — supports_filters_pushdown callback return
+  private static final long FILTER_PUSHDOWN_RESULT_SIZE = querySize(FILTER_PUSHDOWN_RESULT_SIZE_MH);
+
+  private static final StructLayout FILTER_PUSHDOWN_RESULT_LAYOUT =
+      MemoryLayout.structLayout(
+          MemoryLayout.sequenceLayout(FILTER_PUSHDOWN_RESULT_SIZE / 8, ValueLayout.JAVA_LONG)
+              .withName("ffi_result"));
+
   // ======== Callback descriptors ========
 
   // schema: (&Self) -> WrappedSchema (72 bytes)
@@ -226,6 +252,11 @@ final class TableProviderHandle implements TraitHandle {
   // table_type: (&Self) -> FFI_TableType (i32)
   private static final FunctionDescriptor TABLE_TYPE_DESC =
       FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS);
+
+  // supports_filters_pushdown: (&Self, RVec<u8>) ->
+  // FFIResult<RVec<FFI_TableProviderFilterPushDown>>
+  private static final FunctionDescriptor SUPPORTS_FILTERS_DESC =
+      FunctionDescriptor.of(FILTER_PUSHDOWN_RESULT_LAYOUT, ValueLayout.ADDRESS, RVEC_U8_LAYOUT);
 
   // scan: (&Self, FFI_SessionRef, RVec<usize>, RVec<u8>, ROption<usize>)
   //       -> FfiFuture<FFIResult<FFI_ExecutionPlan>>
@@ -243,6 +274,7 @@ final class TableProviderHandle implements TraitHandle {
   private static final MethodHandle SCHEMA_MH = initSchemaMethodHandle();
   private static final MethodHandle TABLE_TYPE_MH = initTableTypeMethodHandle();
   private static final MethodHandle SCAN_MH = initScanMethodHandle();
+  private static final MethodHandle SUPPORTS_FILTERS_MH = initSupportsFiltersMethodHandle();
 
   private static MethodHandle initSchemaMethodHandle() {
     try {
@@ -287,6 +319,22 @@ final class TableProviderHandle implements TraitHandle {
     }
   }
 
+  private static MethodHandle initSupportsFiltersMethodHandle() {
+    try {
+      return MethodHandles.lookup()
+          .findVirtual(
+              TableProviderHandle.class,
+              "supportsFiltersPushdown",
+              MethodType.methodType(
+                  MemorySegment.class,
+                  MemorySegment.class, // selfRef
+                  MemorySegment.class // filtersSerialized (RVec<u8>)
+                  ));
+    } catch (NoSuchMethodException | IllegalAccessException e) {
+      throw new ExceptionInInitializerError(e);
+    }
+  }
+
   // ======== Runtime size validation ========
 
   static void validateSizes() {
@@ -302,6 +350,10 @@ final class TableProviderHandle implements TraitHandle {
     NativeUtil.validateSize(SESSION_REF_SIZE, SESSION_REF_SIZE_MH, "FFI_SessionRef");
     NativeUtil.validateSize(FFI_TABLE_TYPE_SIZE, TABLE_TYPE_SIZE_MH, "FFI_TableType");
     NativeUtil.validateSize(ARROW_SCHEMA_SIZE, WRAPPED_SCHEMA_SIZE_MH, "WrappedSchema");
+    NativeUtil.validateSize(
+        FILTER_PUSHDOWN_RESULT_LAYOUT.byteSize(),
+        FILTER_PUSHDOWN_RESULT_SIZE_MH,
+        "FFIResult<RVec<FFI_TableProviderFilterPushDown>>");
   }
 
   // ======== Instance fields ========
@@ -312,14 +364,11 @@ final class TableProviderHandle implements TraitHandle {
   private final boolean fullStackTrace;
   private final MemorySegment ffiProvider;
 
-  // Pre-allocated return buffers
-  private final MemorySegment schemaBuffer;
-  private final MemorySegment scanBuffer;
-
   // Keep references to upcall stubs to prevent GC
   private final UpcallStub schemaStub;
   private final UpcallStub tableTypeStub;
   private final UpcallStub scanStub;
+  private final UpcallStub supportsFiltersStub;
 
   // Keep references to child handles to prevent GC while Rust holds pointers
   private ExecutionPlanHandle lastPlanHandle;
@@ -332,14 +381,12 @@ final class TableProviderHandle implements TraitHandle {
     this.fullStackTrace = fullStackTrace;
 
     try {
-      // Pre-allocate return buffers
-      this.schemaBuffer = arena.allocate(WRAPPED_SCHEMA_LAYOUT);
-      this.scanBuffer = arena.allocate(SCAN_FUTURE_LAYOUT);
-
       // Create upcall stubs
       this.schemaStub = UpcallStub.create(SCHEMA_MH.bindTo(this), SCHEMA_DESC, arena);
       this.tableTypeStub = UpcallStub.create(TABLE_TYPE_MH.bindTo(this), TABLE_TYPE_DESC, arena);
       this.scanStub = UpcallStub.create(SCAN_MH.bindTo(this), SCAN_DESC, arena);
+      this.supportsFiltersStub =
+          UpcallStub.create(SUPPORTS_FILTERS_MH.bindTo(this), SUPPORTS_FILTERS_DESC, arena);
 
       // Allocate FFI_TableProvider struct in Java arena memory
       this.ffiProvider = arena.allocate(FFI_TABLE_PROVIDER_LAYOUT);
@@ -348,7 +395,7 @@ final class TableProviderHandle implements TraitHandle {
       VH_SCHEMA.set(ffiProvider, 0L, schemaStub.segment());
       VH_SCAN.set(ffiProvider, 0L, scanStub.segment());
       VH_TABLE_TYPE.set(ffiProvider, 0L, tableTypeStub.segment());
-      VH_SUPPORTS_FILTERS.set(ffiProvider, 0L, SUPPORTS_FILTERS_FN); // Inexact for all
+      VH_SUPPORTS_FILTERS.set(ffiProvider, 0L, supportsFiltersStub.segment());
       VH_INSERT_INTO.set(ffiProvider, 0L, STUB_INSERT_INTO);
       VH_CLONE.set(ffiProvider, 0L, CLONE_FN);
       VH_RELEASE.set(ffiProvider, 0L, RELEASE_FN);
@@ -385,7 +432,7 @@ final class TableProviderHandle implements TraitHandle {
   /** Callback: schema. Returns a 72-byte WrappedSchema (= FFI_ArrowSchema). */
   @SuppressWarnings("unused") // Called via upcall stub
   MemorySegment getSchema(MemorySegment selfRef) {
-    schemaBuffer.fill((byte) 0);
+    MemorySegment buffer = arena.allocate(WRAPPED_SCHEMA_LAYOUT);
     try {
       Schema schema = provider.schema();
       try (ArrowSchema ffiSchema = ArrowSchema.allocateNew(allocator)) {
@@ -393,17 +440,17 @@ final class TableProviderHandle implements TraitHandle {
 
         MemorySegment srcSchema =
             MemorySegment.ofAddress(ffiSchema.memoryAddress()).reinterpret(ARROW_SCHEMA_SIZE);
-        schemaBuffer.copyFrom(srcSchema);
+        buffer.copyFrom(srcSchema);
 
         // Clear release in source — dest (Rust copy) has it
         srcSchema.set(ValueLayout.ADDRESS, 64, MemorySegment.NULL);
       }
-      return schemaBuffer;
+      return buffer;
     } catch (Throwable e) {
       // Cannot propagate errors from schema() — upstream FFI_TableProvider has no error channel.
       // Return a valid empty struct schema (format="+s", release=NULL makes Drop a no-op).
-      schemaBuffer.set(ValueLayout.ADDRESS, 0, EMPTY_STRUCT_FORMAT);
-      return schemaBuffer;
+      buffer.set(ValueLayout.ADDRESS, 0, EMPTY_STRUCT_FORMAT);
+      return buffer;
     }
   }
 
@@ -428,7 +475,7 @@ final class TableProviderHandle implements TraitHandle {
       MemorySegment projections,
       MemorySegment filters,
       MemorySegment limit) {
-    scanBuffer.fill((byte) 0);
+    MemorySegment buffer = arena.allocate(SCAN_FUTURE_LAYOUT);
     try {
       // Read projections from RVec<usize>
       // RVec layout: { buf: *mut T, length: usize, capacity: usize, vtable: *const }
@@ -498,8 +545,8 @@ final class TableProviderHandle implements TraitHandle {
         planHandle.copyStructTo(planStruct);
 
         // Create FfiFuture wrapping the plan
-        CREATE_SCAN_FUTURE_OK.invokeExact(planStruct, scanBuffer);
-        return scanBuffer;
+        CREATE_SCAN_FUTURE_OK.invokeExact(planStruct, buffer);
+        return buffer;
       } finally {
         // Free native handles
         FREE_SESSION_HANDLE.invokeExact(sessionHandle);
@@ -509,7 +556,7 @@ final class TableProviderHandle implements TraitHandle {
       }
     } catch (Throwable e) {
       // Create FfiFuture wrapping error
-      scanBuffer.fill((byte) 0);
+      buffer.fill((byte) 0);
       String errorMsg;
       if (fullStackTrace) {
         java.io.StringWriter sw = new java.io.StringWriter();
@@ -521,11 +568,90 @@ final class TableProviderHandle implements TraitHandle {
       byte[] errorBytes = errorMsg.getBytes(java.nio.charset.StandardCharsets.UTF_8);
       MemorySegment errorSegment = arena.allocateFrom(ValueLayout.JAVA_BYTE, errorBytes);
       try {
-        CREATE_SCAN_FUTURE_ERROR.invokeExact(errorSegment, (long) errorBytes.length, scanBuffer);
+        CREATE_SCAN_FUTURE_ERROR.invokeExact(errorSegment, (long) errorBytes.length, buffer);
       } catch (Throwable ignored) {
         // Best effort
       }
-      return scanBuffer;
+      return buffer;
+    }
+  }
+
+  /**
+   * Callback: supports_filters_pushdown. Takes serialized filters (RVec&lt;u8&gt;). Returns
+   * FFIResult&lt;RVec&lt;FFI_TableProviderFilterPushDown&gt;&gt;.
+   */
+  @SuppressWarnings("unused") // Called via upcall stub
+  MemorySegment supportsFiltersPushdown(MemorySegment selfRef, MemorySegment filtersSerialized) {
+    MemorySegment buffer = arena.allocate(FILTER_PUSHDOWN_RESULT_LAYOUT);
+    MemorySegment filterHandle = MemorySegment.NULL;
+    try {
+      // Read filter bytes from RVec<u8>
+      MemorySegment filterReinterpreted = filtersSerialized.reinterpret(RVEC_U8_LAYOUT.byteSize());
+      MemorySegment filterBuf = filterReinterpreted.get(ValueLayout.ADDRESS, 0);
+      long filterLen = filterReinterpreted.get(ValueLayout.JAVA_LONG, 8);
+
+      FilterPushDown[] pushdowns;
+      if (filterLen > 0 && !filterBuf.equals(MemorySegment.NULL)) {
+        // Deserialize filters
+        MemorySegment countOut = arena.allocate(ValueLayout.JAVA_LONG);
+        MemorySegment errorOut = NativeUtil.allocateErrorOut(arena);
+        filterHandle =
+            (MemorySegment)
+                DESERIALIZE_FILTERS.invokeExact(filterBuf, filterLen, countOut, errorOut);
+        NativeUtil.checkResult(
+            filterHandle.equals(MemorySegment.NULL) ? -1 : 0, errorOut, "Deserialize filters");
+        long filterCount = countOut.get(ValueLayout.JAVA_LONG, 0);
+
+        Expr[] filterExprs = new Expr[(int) filterCount];
+        for (int i = 0; i < filterCount; i++) {
+          MemorySegment exprPtr = (MemorySegment) FILTER_PTR.invokeExact(filterHandle, (long) i);
+          filterExprs[i] = new Expr(new ExprFfi(exprPtr));
+        }
+
+        // Call Java provider
+        pushdowns = provider.supportsFiltersPushdown(filterExprs);
+      } else {
+        pushdowns = provider.supportsFiltersPushdown(new Expr[0]);
+      }
+
+      // Convert to int discriminants
+      MemorySegment discriminants = arena.allocate(ValueLayout.JAVA_INT, pushdowns.length);
+      for (int i = 0; i < pushdowns.length; i++) {
+        int disc =
+            switch (pushdowns[i]) {
+              case UNSUPPORTED -> 0;
+              case INEXACT -> 1;
+              case EXACT -> 2;
+            };
+        discriminants.setAtIndex(ValueLayout.JAVA_INT, i, disc);
+      }
+
+      // Construct FFIResult via Rust helper
+      CREATE_FILTER_PUSHDOWN_OK.invokeExact(discriminants, (long) pushdowns.length, buffer);
+      return buffer;
+    } catch (Throwable e) {
+      buffer.fill((byte) 0);
+      String errorMsg =
+          fullStackTrace
+              ? NativeUtil.getStackTrace(
+                  e instanceof Exception ? (Exception) e : new RuntimeException(e))
+              : (e.getMessage() != null ? e.getMessage() : e.getClass().getName());
+      byte[] errorBytes = errorMsg.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+      MemorySegment errorSegment = arena.allocateFrom(ValueLayout.JAVA_BYTE, errorBytes);
+      try {
+        CREATE_FILTER_PUSHDOWN_ERROR.invokeExact(errorSegment, (long) errorBytes.length, buffer);
+      } catch (Throwable ignored) {
+        // Best effort
+      }
+      return buffer;
+    } finally {
+      if (!filterHandle.equals(MemorySegment.NULL)) {
+        try {
+          FREE_FILTERS.invokeExact(filterHandle);
+        } catch (Throwable ignored) {
+          // Best effort
+        }
+      }
     }
   }
 

@@ -453,6 +453,150 @@ public class CustomTableProviderTest {
     }
   }
 
+  @Test
+  void testExactFilterPushdown() {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+
+      Schema schema = createUsersSchema();
+
+      // Create a table provider that returns EXACT for "id" column filters, INEXACT for others
+      AtomicReference<FilterPushDown[]> capturedPushdowns = new AtomicReference<>();
+      TableProvider filterTable =
+          new TableProvider() {
+            @Override
+            public Schema schema() {
+              return schema;
+            }
+
+            @Override
+            public FilterPushDown[] supportsFiltersPushdown(Expr[] filters) {
+              FilterPushDown[] result = new FilterPushDown[filters.length];
+              // Return EXACT for all filters (we can't inspect Expr contents easily,
+              // but we can verify the callback is invoked with the right count)
+              Arrays.fill(result, FilterPushDown.EXACT);
+              capturedPushdowns.set(result);
+              return result;
+            }
+
+            @Override
+            public ExecutionPlan scan(
+                Session session, Expr[] filters, int[] projection, Long limit) {
+              return new TestExecutionPlan(schema, List.of(usersDataBatch()));
+            }
+          };
+
+      SchemaProvider mySchema = new SimpleSchemaProvider(Map.of("filter_test", filterTable));
+      CatalogProvider myCatalog = new SimpleCatalogProvider(Map.of("test", mySchema));
+
+      ctx.registerCatalog("filter_catalog", myCatalog, allocator);
+
+      // Query with WHERE clause - filters are pushed down
+      try (DataFrame df = ctx.sql("SELECT * FROM filter_catalog.test.filter_test WHERE id > 1");
+          RecordBatchStream stream = df.executeStream(allocator)) {
+
+        VectorSchemaRoot root = stream.getVectorSchemaRoot();
+        assertTrue(stream.loadNextBatch());
+        // With EXACT pushdown, DataFusion trusts our provider to handle the filter.
+        // Since our provider returns all data, we get all 3 rows.
+        assertEquals(3, root.getRowCount());
+        assertFalse(stream.loadNextBatch());
+      }
+
+      // Verify the callback was invoked
+      assertNotNull(capturedPushdowns.get(), "supportsFiltersPushdown should have been called");
+      assertTrue(capturedPushdowns.get().length > 0, "Should have received at least one filter");
+    }
+  }
+
+  @Test
+  void testUnsupportedFilterPushdown() {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+
+      Schema schema = createUsersSchema();
+
+      // Create a table provider that returns UNSUPPORTED for all filters
+      TableProvider unsupportedTable =
+          new TableProvider() {
+            @Override
+            public Schema schema() {
+              return schema;
+            }
+
+            @Override
+            public FilterPushDown[] supportsFiltersPushdown(Expr[] filters) {
+              FilterPushDown[] result = new FilterPushDown[filters.length];
+              Arrays.fill(result, FilterPushDown.UNSUPPORTED);
+              return result;
+            }
+
+            @Override
+            public ExecutionPlan scan(
+                Session session, Expr[] filters, int[] projection, Long limit) {
+              return new TestExecutionPlan(schema, List.of(usersDataBatch()));
+            }
+          };
+
+      SchemaProvider mySchema =
+          new SimpleSchemaProvider(Map.of("unsupported_test", unsupportedTable));
+      CatalogProvider myCatalog = new SimpleCatalogProvider(Map.of("test", mySchema));
+
+      ctx.registerCatalog("unsupported_catalog", myCatalog, allocator);
+
+      // Query with WHERE clause
+      try (DataFrame df =
+              ctx.sql("SELECT * FROM unsupported_catalog.test.unsupported_test WHERE id > 1");
+          RecordBatchStream stream = df.executeStream(allocator)) {
+
+        VectorSchemaRoot root = stream.getVectorSchemaRoot();
+        assertTrue(stream.loadNextBatch());
+        // DataFusion applies the filter post-scan since provider said UNSUPPORTED
+        assertEquals(2, root.getRowCount());
+
+        BigIntVector idVector = (BigIntVector) root.getVector("id");
+        assertEquals(2, idVector.get(0));
+        assertEquals(3, idVector.get(1));
+
+        assertFalse(stream.loadNextBatch());
+      }
+    }
+  }
+
+  @Test
+  void testDefaultFilterPushdownIsInexact() {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+
+      Schema schema = createUsersSchema();
+
+      // Use the default supportsFiltersPushdown (does NOT override it)
+      // This tests backward compatibility — the default returns INEXACT for all filters
+      TableProvider defaultTable = new TestTableProvider(schema, usersDataBatch());
+
+      SchemaProvider mySchema = new SimpleSchemaProvider(Map.of("default_test", defaultTable));
+      CatalogProvider myCatalog = new SimpleCatalogProvider(Map.of("test", mySchema));
+
+      ctx.registerCatalog("default_catalog", myCatalog, allocator);
+
+      // Query with WHERE clause — INEXACT means DataFusion re-applies filter post-scan
+      try (DataFrame df = ctx.sql("SELECT * FROM default_catalog.test.default_test WHERE id > 1");
+          RecordBatchStream stream = df.executeStream(allocator)) {
+
+        VectorSchemaRoot root = stream.getVectorSchemaRoot();
+        assertTrue(stream.loadNextBatch());
+        // DataFusion applies filter, so only id=2 and id=3
+        assertEquals(2, root.getRowCount());
+
+        BigIntVector idVector = (BigIntVector) root.getVector("id");
+        assertEquals(2, idVector.get(0));
+        assertEquals(3, idVector.get(1));
+
+        assertFalse(stream.loadNextBatch());
+      }
+    }
+  }
+
   // Helper methods to create test schemas
 
   private Schema createUsersSchema() {

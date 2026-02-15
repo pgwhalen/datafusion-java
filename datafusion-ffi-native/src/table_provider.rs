@@ -100,6 +100,14 @@ pub extern "C" fn datafusion_ffi_wrapped_schema_size() -> usize {
     72
 }
 
+/// Return sizeof(FFIResult<RVec<FFI_TableProviderFilterPushDown>>) for Java validation.
+///
+/// This is the return type of the `supports_filters_pushdown` callback.
+#[no_mangle]
+pub extern "C" fn datafusion_ffi_filter_pushdown_result_size() -> usize {
+    std::mem::size_of::<FFIResult<RVec<FFI_TableProviderFilterPushDown>>>()
+}
+
 // ============================================================================
 // Clone and release callbacks
 // ============================================================================
@@ -194,6 +202,65 @@ pub unsafe extern "C" fn datafusion_table_provider_supports_filters_pushdown(
         .map(|_| FFI_TableProviderFilterPushDown::Inexact)
         .collect();
     FFIResult::ROk(pushdowns)
+}
+
+// ============================================================================
+// FFIResult construction helpers for the `supports_filters_pushdown` callback
+// ============================================================================
+
+/// Create an FFIResult::ROk(RVec<FFI_TableProviderFilterPushDown>) from i32 discriminants.
+///
+/// `discriminants` must point to `count` valid i32 values:
+///   0 = Unsupported, 1 = Inexact, 2 = Exact
+/// `out` must point to a buffer of at least
+/// `datafusion_ffi_filter_pushdown_result_size()` bytes.
+///
+/// # Safety
+/// All pointers must be valid and properly aligned.
+#[no_mangle]
+pub unsafe extern "C" fn datafusion_table_create_filter_pushdown_ok(
+    discriminants: *const i32,
+    count: usize,
+    out: *mut c_void,
+) {
+    let slice = std::slice::from_raw_parts(discriminants, count);
+    let pushdowns: RVec<FFI_TableProviderFilterPushDown> = slice
+        .iter()
+        .map(|&d| match d {
+            2 => FFI_TableProviderFilterPushDown::Exact,
+            0 => FFI_TableProviderFilterPushDown::Unsupported,
+            _ => FFI_TableProviderFilterPushDown::Inexact,
+        })
+        .collect();
+    let result: FFIResult<RVec<FFI_TableProviderFilterPushDown>> = FFIResult::ROk(pushdowns);
+    std::ptr::write(
+        out as *mut FFIResult<RVec<FFI_TableProviderFilterPushDown>>,
+        result,
+    );
+}
+
+/// Create an FFIResult::RErr for supports_filters_pushdown from UTF-8 bytes.
+///
+/// `ptr` must point to `len` valid UTF-8 bytes.
+/// `out` must point to a buffer of at least
+/// `datafusion_ffi_filter_pushdown_result_size()` bytes.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn datafusion_table_create_filter_pushdown_error(
+    ptr: *const u8,
+    len: usize,
+    out: *mut c_void,
+) {
+    let bytes = std::slice::from_raw_parts(ptr, len);
+    let s = std::str::from_utf8_unchecked(bytes);
+    let result: FFIResult<RVec<FFI_TableProviderFilterPushDown>> =
+        FFIResult::RErr(RString::from(s));
+    std::ptr::write(
+        out as *mut FFIResult<RVec<FFI_TableProviderFilterPushDown>>,
+        result,
+    );
 }
 
 // ============================================================================
@@ -599,6 +666,69 @@ mod tests {
 
             // Clean up
             datafusion_table_free_filters(handle);
+        }
+    }
+
+    #[test]
+    fn test_filter_pushdown_result_size() {
+        let size = datafusion_ffi_filter_pushdown_result_size();
+        // FFIResult<RVec<T>> = discriminant(8) + max(RVec(32), RString) = 40 bytes
+        assert!(size > 0, "Size should be positive");
+        // Verify it matches the actual Rust type
+        assert_eq!(
+            size,
+            std::mem::size_of::<FFIResult<RVec<FFI_TableProviderFilterPushDown>>>()
+        );
+    }
+
+    #[test]
+    fn test_filter_pushdown_ok() {
+        let discriminants = [0i32, 1, 2]; // Unsupported, Inexact, Exact
+        let mut out: std::mem::MaybeUninit<
+            FFIResult<RVec<FFI_TableProviderFilterPushDown>>,
+        > = std::mem::MaybeUninit::uninit();
+        unsafe {
+            datafusion_table_create_filter_pushdown_ok(
+                discriminants.as_ptr(),
+                discriminants.len(),
+                out.as_mut_ptr() as *mut c_void,
+            );
+            let result = out.assume_init();
+            match result {
+                FFIResult::ROk(pushdowns) => {
+                    assert_eq!(pushdowns.len(), 3);
+                    assert!(
+                        matches!(pushdowns[0], FFI_TableProviderFilterPushDown::Unsupported)
+                    );
+                    assert!(
+                        matches!(pushdowns[1], FFI_TableProviderFilterPushDown::Inexact)
+                    );
+                    assert!(
+                        matches!(pushdowns[2], FFI_TableProviderFilterPushDown::Exact)
+                    );
+                }
+                FFIResult::RErr(e) => panic!("Expected ROk, got RErr: {}", e),
+            }
+        }
+    }
+
+    #[test]
+    fn test_filter_pushdown_error() {
+        let msg = "filter error";
+        let mut out: std::mem::MaybeUninit<
+            FFIResult<RVec<FFI_TableProviderFilterPushDown>>,
+        > = std::mem::MaybeUninit::uninit();
+        unsafe {
+            datafusion_table_create_filter_pushdown_error(
+                msg.as_ptr(),
+                msg.len(),
+                out.as_mut_ptr() as *mut c_void,
+            );
+            let result = out.assume_init();
+            match result {
+                FFIResult::RErr(e) => assert_eq!(e.as_str(), "filter error"),
+                FFIResult::ROk(_) => panic!("Expected RErr, got ROk"),
+            }
         }
     }
 

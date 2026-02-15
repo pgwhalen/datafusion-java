@@ -1,5 +1,6 @@
 package org.apache.arrow.datafusion;
 
+import java.util.Arrays;
 import org.apache.arrow.vector.types.pojo.Schema;
 
 /**
@@ -73,4 +74,24 @@ public interface TableProvider {
    * @throws DataFusionException if creating the scan fails
    */
   ExecutionPlan scan(Session session, Expr[] filters, int[] projection, Long limit);
+
+  /**
+   * Returns the filter pushdown support for each filter expression.
+   *
+   * <p>DataFusion calls this method to determine which filters the provider can handle natively.
+   * The returned array must have the same length as the input filters array, with one {@link
+   * FilterPushDown} value per filter.
+   *
+   * <p>The default implementation returns {@link FilterPushDown#INEXACT} for all filters, meaning
+   * all filters are passed to {@link #scan} but DataFusion will also re-apply them after scan to
+   * ensure correctness.
+   *
+   * @param filters the filter expressions to evaluate (borrowed, valid only during this call)
+   * @return an array of pushdown support values, one per filter
+   */
+  default FilterPushDown[] supportsFiltersPushdown(Expr[] filters) {
+    FilterPushDown[] result = new FilterPushDown[filters.length];
+    Arrays.fill(result, FilterPushDown.INEXACT);
+    return result;
+  }
 }
