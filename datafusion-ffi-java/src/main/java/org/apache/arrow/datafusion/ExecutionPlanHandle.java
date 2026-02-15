@@ -458,20 +458,9 @@ final class ExecutionPlanHandle implements TraitHandle {
   // Caching here ensures errors propagate cleanly through the scan() callback's error path.
   private final Schema cachedSchema;
 
-  // Pre-allocated buffers for FFI_ExecutionPlan callback return values
+  // FFI_PlanProperties struct: built once with upcall stub pointers, only read in getProperties().
+  // Concurrent reads are safe, so this is kept as a pre-allocated field.
   private final MemorySegment propertiesBuffer;
-  private final MemorySegment childrenBuffer;
-  private final MemorySegment nameBuffer;
-  private final MemorySegment executeResultBuffer;
-  private final MemorySegment cloneBuffer;
-
-  // Pre-allocated buffers for FFI_PlanProperties callback return values
-  private final MemorySegment partitioningBuffer;
-  private final MemorySegment boundednessBuffer;
-  private final MemorySegment outputOrderingBuffer;
-  private final MemorySegment propsSchemaBuffer;
-  // emission_type returns scalar JAVA_INT — no buffer needed
-  // release returns void — no buffer needed
 
   // Keep references to upcall stubs to prevent GC (FFI_ExecutionPlan)
   private final UpcallStub propertiesStub;
@@ -503,18 +492,6 @@ final class ExecutionPlanHandle implements TraitHandle {
     try {
       // Cache schema eagerly — see field comment for rationale
       this.cachedSchema = plan.schema();
-
-      // Pre-allocate return buffers for FFI_ExecutionPlan callbacks
-      this.childrenBuffer = arena.allocate(RVEC_PLAN_LAYOUT);
-      this.nameBuffer = arena.allocate(RSTRING_LAYOUT);
-      this.executeResultBuffer = arena.allocate(FFI_RESULT_STREAM_LAYOUT);
-      this.cloneBuffer = arena.allocate(FFI_EXECUTION_PLAN_LAYOUT);
-
-      // Pre-allocate return buffers for FFI_PlanProperties callbacks
-      this.partitioningBuffer = arena.allocate(FFI_PARTITIONING_LAYOUT);
-      this.boundednessBuffer = arena.allocate(FFI_BOUNDEDNESS_LAYOUT);
-      this.outputOrderingBuffer = arena.allocate(ROPTION_SORT_LAYOUT);
-      this.propsSchemaBuffer = arena.allocate(WRAPPED_SCHEMA_LAYOUT);
 
       // Create upcall stubs for FFI_PlanProperties callbacks
       this.partitioningStub =
@@ -612,16 +589,16 @@ final class ExecutionPlanHandle implements TraitHandle {
    */
   @SuppressWarnings("unused") // Called via upcall stub
   MemorySegment getPartitioning(MemorySegment selfPtr) {
-    partitioningBuffer.fill((byte) 0);
+    MemorySegment buffer = arena.allocate(FFI_PARTITIONING_LAYOUT);
     int partitionCount;
     try {
       partitionCount = plan.properties().outputPartitioning();
     } catch (Exception e) {
       partitionCount = 1; // safe default — no error channel in this callback
     }
-    VH_PART_DISC.set(partitioningBuffer, 0L, 2); // UnknownPartitioning
-    VH_PART_COUNT.set(partitioningBuffer, 0L, (long) partitionCount);
-    return partitioningBuffer;
+    VH_PART_DISC.set(buffer, 0L, 2); // UnknownPartitioning
+    VH_PART_COUNT.set(buffer, 0L, (long) partitionCount);
+    return buffer;
   }
 
   /**
@@ -649,7 +626,7 @@ final class ExecutionPlanHandle implements TraitHandle {
    */
   @SuppressWarnings("unused") // Called via upcall stub
   MemorySegment getBoundedness(MemorySegment selfPtr) {
-    boundednessBuffer.fill((byte) 0);
+    MemorySegment buffer = arena.allocate(FFI_BOUNDEDNESS_LAYOUT);
     Boundedness b;
     try {
       b = plan.properties().boundedness();
@@ -661,8 +638,8 @@ final class ExecutionPlanHandle implements TraitHandle {
           case BOUNDED -> 0;
           case UNBOUNDED -> 1;
         };
-    VH_BOUND_DISC.set(boundednessBuffer, 0L, boundedness);
-    return boundednessBuffer;
+    VH_BOUND_DISC.set(buffer, 0L, boundedness);
+    return buffer;
   }
 
   /**
@@ -670,26 +647,26 @@ final class ExecutionPlanHandle implements TraitHandle {
    */
   @SuppressWarnings("unused") // Called via upcall stub
   MemorySegment getOutputOrdering(MemorySegment selfPtr) {
-    outputOrderingBuffer.fill((byte) 0);
-    VH_SORT_DISC.set(outputOrderingBuffer, 0L, 1L); // RNone
-    return outputOrderingBuffer;
+    MemorySegment buffer = arena.allocate(ROPTION_SORT_LAYOUT);
+    VH_SORT_DISC.set(buffer, 0L, 1L); // RNone
+    return buffer;
   }
 
   /** Callback: schema. Returns a 72-byte WrappedSchema (= FFI_ArrowSchema) with fresh export. */
   @SuppressWarnings("unused") // Called via upcall stub
   MemorySegment getPropsSchema(MemorySegment selfPtr) {
-    propsSchemaBuffer.fill((byte) 0);
+    MemorySegment buffer = arena.allocate(WRAPPED_SCHEMA_LAYOUT);
     try (ArrowSchema ffiSchema = ArrowSchema.allocateNew(allocator)) {
       Data.exportSchema(allocator, cachedSchema, null, ffiSchema);
 
       MemorySegment srcSchema =
           MemorySegment.ofAddress(ffiSchema.memoryAddress()).reinterpret(ARROW_SCHEMA_SIZE);
-      propsSchemaBuffer.copyFrom(srcSchema);
+      buffer.copyFrom(srcSchema);
 
       // Clear release in source — dest (Rust copy) has it
       srcSchema.set(ValueLayout.ADDRESS, 64, MemorySegment.NULL);
     }
-    return propsSchemaBuffer;
+    return buffer;
   }
 
   /** Callback: release (FFI_PlanProperties). No-op — arena owns the memory. */
@@ -715,21 +692,21 @@ final class ExecutionPlanHandle implements TraitHandle {
    */
   @SuppressWarnings("unused") // Called via upcall stub
   MemorySegment getChildren(MemorySegment planRef) {
-    childrenBuffer.fill((byte) 0);
+    MemorySegment buffer = arena.allocate(RVEC_PLAN_LAYOUT);
     try {
-      CREATE_EMPTY_RVEC_PLAN.invokeExact(childrenBuffer);
+      CREATE_EMPTY_RVEC_PLAN.invokeExact(buffer);
     } catch (Throwable e) {
       // Best effort — return zeroed buffer
     }
-    return childrenBuffer;
+    return buffer;
   }
 
   /** Callback: name. Returns an RString with the plan name. */
   @SuppressWarnings("unused") // Called via upcall stub
   MemorySegment getName(MemorySegment planRef) {
-    nameBuffer.fill((byte) 0);
-    NativeUtil.writeRString("JavaBackedExecutionPlan", nameBuffer, 0, arena);
-    return nameBuffer;
+    MemorySegment buffer = arena.allocate(RSTRING_LAYOUT);
+    NativeUtil.writeRString("JavaBackedExecutionPlan", buffer, 0, arena);
+    return buffer;
   }
 
   /**
@@ -744,7 +721,7 @@ final class ExecutionPlanHandle implements TraitHandle {
    */
   @SuppressWarnings("unused") // Called via upcall stub
   MemorySegment execute(MemorySegment planRef, long partition, MemorySegment context) {
-    executeResultBuffer.fill((byte) 0);
+    MemorySegment buffer = arena.allocate(FFI_RESULT_STREAM_LAYOUT);
     try {
       RecordBatchReader reader = plan.execute((int) partition, allocator);
 
@@ -753,30 +730,29 @@ final class ExecutionPlanHandle implements TraitHandle {
           new RecordBatchReaderHandle(reader, allocator, arena, fullStackTrace);
 
       // FFIResult::ROk(stream)
-      VH_RESULT_DISC.set(executeResultBuffer, 0L, 0L); // ROk
+      VH_RESULT_DISC.set(buffer, 0L, 0L); // ROk
 
       // Copy the FFI_RecordBatchStream into the payload area
       MemorySegment payload =
-          executeResultBuffer.asSlice(
-              RESULT_PAYLOAD_OFFSET, RecordBatchReaderHandle.streamStructSize());
+          buffer.asSlice(RESULT_PAYLOAD_OFFSET, RecordBatchReaderHandle.streamStructSize());
       readerHandle.copyStructTo(payload);
 
       // Prevent GC while Rust holds pointers to the stream's upcall stubs
       readerHandles.add(readerHandle);
 
-      return executeResultBuffer;
+      return buffer;
     } catch (Exception e) {
       // FFIResult::RErr(rstring)
-      executeResultBuffer.fill((byte) 0);
-      VH_RESULT_DISC.set(executeResultBuffer, 0L, 1L); // RErr
+      buffer.fill((byte) 0);
+      VH_RESULT_DISC.set(buffer, 0L, 1L); // RErr
 
-      String errorMsg = fullStackTrace ? getStackTrace(e) : e.getMessage();
+      String errorMsg = fullStackTrace ? NativeUtil.getStackTrace(e) : e.getMessage();
       if (errorMsg == null) {
         errorMsg = e.getClass().getName();
       }
-      NativeUtil.writeRString(errorMsg, executeResultBuffer, RESULT_PAYLOAD_OFFSET, arena);
+      NativeUtil.writeRString(errorMsg, buffer, RESULT_PAYLOAD_OFFSET, arena);
 
-      return executeResultBuffer;
+      return buffer;
     }
   }
 
@@ -787,8 +763,9 @@ final class ExecutionPlanHandle implements TraitHandle {
    */
   @SuppressWarnings("unused") // Called via upcall stub
   MemorySegment clonePlan(MemorySegment planRef) {
-    cloneBuffer.copyFrom(ffiPlan);
-    return cloneBuffer;
+    MemorySegment buffer = arena.allocate(FFI_EXECUTION_PLAN_LAYOUT);
+    buffer.copyFrom(ffiPlan);
+    return buffer;
   }
 
   /** Callback: release. Called by Rust when done with the plan (or a clone). */
@@ -804,9 +781,4 @@ final class ExecutionPlanHandle implements TraitHandle {
     // The arena will clean up the upcall stubs.
   }
 
-  private static String getStackTrace(Exception e) {
-    java.io.StringWriter sw = new java.io.StringWriter();
-    e.printStackTrace(new java.io.PrintWriter(sw));
-    return sw.toString();
-  }
 }

@@ -286,7 +286,7 @@ final class RecordBatchReaderHandle implements TraitHandle {
       VH_RESULT_DISC.set(pollResultBuffer, 0L, 1L); // RErr
 
       // Write error RString at payload offset using Rust helper
-      String errorMsg = fullStackTrace ? getStackTrace(e) : e.getMessage();
+      String errorMsg = fullStackTrace ? NativeUtil.getStackTrace(e) : e.getMessage();
       if (errorMsg == null) {
         errorMsg = e.getClass().getName();
       }
@@ -336,9 +336,4 @@ final class RecordBatchReaderHandle implements TraitHandle {
     // The arena will clean up the upcall stubs.
   }
 
-  private static String getStackTrace(Exception e) {
-    java.io.StringWriter sw = new java.io.StringWriter();
-    e.printStackTrace(new java.io.PrintWriter(sw));
-    return sw.toString();
-  }
 }
