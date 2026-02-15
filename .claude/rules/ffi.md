@@ -495,27 +495,21 @@ Every Java interface that maps to a DataFusion Rust trait MUST have a correspond
 
 11. **Child Handle creation** -- When a callback returns a sub-object, the callback method creates the next Handle in the chain and writes its struct to the output. **Callback pattern**: uses `setToPointer` (e.g., `SchemaProviderHandle.getTable()` creates a `TableProviderHandle` and calls `tableHandle.setToPointer(tableOut)`). **Direct struct pattern**: uses `copyStructTo` (e.g., `TableProviderHandle.scan()` creates an `ExecutionPlanHandle` and calls `planHandle.copyStructTo(planOut)`).
 
-#### Existing violations (callback pattern)
+#### Handle class allocation patterns
 
-The following Handle classes still use the callback pattern with intermediate `Java*Callbacks` structs and `JavaBacked*` Rust wrappers. New Handle classes should use direct struct construction. These should be migrated when feasible.
+All Handle classes allocate their structs in Java arena memory and use `StructLayout`/`VarHandle` for field access, with build-time size validation via `FfiSizeValidationTest`.
 
-| Handle | Rust Callback Struct | Rust Wrapper | Rust Files |
-|--------|---------------------|--------------|------------|
-| `FileFormatHandle` | `JavaFileFormatCallbacks` | `JavaBackedFileFormat` | `file_format.rs` |
-| `FileSourceHandle` | `JavaFileSourceCallbacks` | `JavaBackedFileSource` | `file_source.rs` |
-| `FileOpenerHandle` | `JavaFileOpenerCallbacks` | `JavaBackedFileOpener` | `file_opener.rs` |
-
-The following have been migrated to direct struct construction:
+**Direct struct construction** (upstream `FFI_*` struct available in `datafusion-ffi`):
 - `CatalogProviderHandle` → constructs `FFI_CatalogProvider` directly
 - `SchemaProviderHandle` → constructs `FFI_SchemaProvider` directly
 - `TableProviderHandle` → constructs `FFI_TableProvider` directly
 
-Migration involves:
-1. Defining the struct layout in Java (field offsets, `StructLayout` for complex returns)
-2. Constructing the `FFI_*` struct in Java arena memory with upcall stub function pointers
-3. Adding Rust-side size helpers for runtime validation
-4. Replacing `setToPointer`/`getTraitStruct` with `copyStructTo`
-5. Removing the `Java*Callbacks` struct, `JavaBacked*` wrapper, and `ALLOC_*_CALLBACKS` downcall from Rust
+**Java-arena callback structs** (project-defined `Java*Callbacks` struct, no upstream `FFI_*` equivalent):
+- `FileFormatHandle` → allocates `JavaFileFormatCallbacks` in Java arena, Rust copies via `ptr::read`
+- `FileSourceHandle` → allocates `JavaFileSourceCallbacks` in Java arena, Rust copies via `ptr::read`/`MaybeUninit`
+- `FileOpenerHandle` → allocates `JavaFileOpenerCallbacks` in Java arena, Rust copies via `ptr::read`/`MaybeUninit`
+
+These still use `JavaBacked*` Rust wrapper structs but no longer use Rust-side `Box` allocation. The Rust `ALLOC_*` functions have been removed; Java owns struct memory.
 
 ## Naming Conventions
 

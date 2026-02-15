@@ -17,32 +17,30 @@ use std::any::Any;
 use std::ffi::{c_char, c_void};
 use std::sync::Arc;
 
-use crate::error::set_error_return;
 use crate::file_source::{
     JavaBackedFileExec, JavaBackedFileSource, JavaFileSourceCallbacks, SourceCallbacksHolder,
 };
 
 /// C-compatible callback struct for a Java-backed FileFormat.
 ///
-/// Java creates upcall stubs and populates this struct. Rust stores it and
-/// invokes the `file_source_fn` callback when DataFusion needs to create a
-/// physical plan for scanning files.
+/// Java allocates this struct in arena memory and populates the fields.
+/// Rust copies it via `ptr::read` when constructing a `JavaBackedFileFormat`.
 #[repr(C)]
 pub struct JavaFileFormatCallbacks {
     /// Opaque pointer to the Java object (unused, for consistency with other callback structs).
     pub java_object: *mut c_void,
 
-    /// Create a FileSource, returning a JavaFileSourceCallbacks pointer.
+    /// Create a FileSource, writing a `JavaFileSourceCallbacks` struct to `source_out`.
     ///
     /// Parameters:
     /// - java_object: opaque pointer (same as above)
-    /// - source_out: receives a `*mut JavaFileSourceCallbacks`
+    /// - source_out: pointer to a `JavaFileSourceCallbacks` buffer (Java writes struct bytes)
     /// - error_out: receives error message on failure
     ///
     /// Returns 0 on success, -1 on error.
     pub file_source_fn: unsafe extern "C" fn(
         java_object: *mut c_void,
-        source_out: *mut *mut JavaFileSourceCallbacks,
+        source_out: *mut JavaFileSourceCallbacks,
         error_out: *mut *mut c_char,
     ) -> i32,
 
@@ -58,7 +56,7 @@ unsafe impl Sync for JavaFileFormatCallbacks {}
 /// When DataFusion calls `file_source()`, this format calls `file_source_fn`
 /// to get a `JavaFileSourceCallbacks`, which is used to create a `JavaBackedFileSource`.
 pub(crate) struct JavaBackedFileFormat {
-    pub(crate) callbacks: *mut JavaFileFormatCallbacks,
+    pub(crate) callbacks: JavaFileFormatCallbacks,
     pub(crate) schema: SchemaRef,
     pub(crate) extension: String,
 }
@@ -77,9 +75,7 @@ impl std::fmt::Debug for JavaBackedFileFormat {
 impl Drop for JavaBackedFileFormat {
     fn drop(&mut self) {
         unsafe {
-            let cb = &*self.callbacks;
-            (cb.release_fn)(cb.java_object);
-            drop(Box::from_raw(self.callbacks));
+            (self.callbacks.release_fn)(self.callbacks.java_object);
         }
     }
 }
@@ -112,23 +108,31 @@ impl FileFormat for JavaBackedFileFormat {
 
     fn file_source(&self, table_schema: TableSchema) -> Arc<dyn FileSource> {
         // Call Java to get a FileSource
-        let cb = unsafe { &*self.callbacks };
-        let mut source_out: *mut JavaFileSourceCallbacks = std::ptr::null_mut();
+        let mut source_callbacks = std::mem::MaybeUninit::<JavaFileSourceCallbacks>::uninit();
         let mut error_out: *mut c_char = std::ptr::null_mut();
 
-        let result =
-            unsafe { (cb.file_source_fn)(cb.java_object, &mut source_out, &mut error_out) };
+        let result = unsafe {
+            (self.callbacks.file_source_fn)(
+                self.callbacks.java_object,
+                source_callbacks.as_mut_ptr(),
+                &mut error_out,
+            )
+        };
 
         // Note: file_source() cannot return an error, so we panic on failure.
         // This matches how other FileFormat impls handle infallible initialization.
-        if result != 0 || source_out.is_null() {
+        if result != 0 {
             panic!("Java FileFormat.fileSource failed");
         }
+
+        let source_callbacks = unsafe { source_callbacks.assume_init() };
 
         let projection =
             datafusion_datasource::projection::SplitProjection::unprojected(&table_schema);
         Arc::new(JavaBackedFileSource {
-            callbacks: Arc::new(SourceCallbacksHolder { ptr: source_out }),
+            callbacks: Arc::new(SourceCallbacksHolder {
+                callbacks: source_callbacks,
+            }),
             table_schema,
             schema: Arc::clone(&self.schema),
             projection,
@@ -185,30 +189,8 @@ impl FileFormat for JavaBackedFileFormat {
     }
 }
 
-// Dummy functions for initialization
-unsafe extern "C" fn dummy_file_source_fn(
-    _java_object: *mut c_void,
-    _source_out: *mut *mut JavaFileSourceCallbacks,
-    error_out: *mut *mut c_char,
-) -> i32 {
-    set_error_return(error_out, "FileFormat callbacks not initialized")
-}
-
-unsafe extern "C" fn dummy_release_fn(_java_object: *mut c_void) {
-    // Do nothing
-}
-
-/// Allocate a JavaFileFormatCallbacks struct.
-///
-/// Java fills in the function pointers after allocation.
-///
-/// # Safety
-/// The returned pointer is owned by Rust and freed when the format is dropped.
+/// Return the size of `JavaFileFormatCallbacks` for Java-side validation.
 #[no_mangle]
-pub extern "C" fn datafusion_alloc_file_format_callbacks() -> *mut JavaFileFormatCallbacks {
-    Box::into_raw(Box::new(JavaFileFormatCallbacks {
-        java_object: std::ptr::null_mut(),
-        file_source_fn: dummy_file_source_fn,
-        release_fn: dummy_release_fn,
-    }))
+pub extern "C" fn datafusion_ffi_file_format_callbacks_size() -> usize {
+    std::mem::size_of::<JavaFileFormatCallbacks>()
 }

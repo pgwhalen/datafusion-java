@@ -32,4 +32,19 @@ class FfiSizeValidationTest {
   void catalogProviderSizes() {
     CatalogProviderHandle.validateSizes();
   }
+
+  @Test
+  void fileFormatCallbacksSizes() {
+    FileFormatHandle.validateSizes();
+  }
+
+  @Test
+  void fileSourceCallbacksSizes() {
+    FileSourceHandle.validateSizes();
+  }
+
+  @Test
+  void fileOpenerCallbacksSizes() {
+    FileOpenerHandle.validateSizes();
+  }
 }

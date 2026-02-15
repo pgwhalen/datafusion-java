@@ -404,7 +404,7 @@ pub unsafe extern "C" fn datafusion_context_register_listing_table(
     urls_len: usize,
     file_extension: *const c_char,
     schema: *mut FFI_ArrowSchema,
-    format_callbacks: *mut JavaFileFormatCallbacks,
+    format_callbacks: *const JavaFileFormatCallbacks,
     collect_stat: i32,
     target_partitions: usize,
     error_out: *mut *mut c_char,
@@ -445,9 +445,9 @@ pub unsafe extern "C" fn datafusion_context_register_listing_table(
     };
     // ffi_schema is dropped here, calling the release callback
 
-    // Create the JavaBackedFileFormat (takes ownership of callbacks)
+    // Create the JavaBackedFileFormat (copies the callback struct from Java arena memory)
     let format = Arc::new(JavaBackedFileFormat {
-        callbacks: format_callbacks,
+        callbacks: std::ptr::read(format_callbacks),
         schema: Arc::clone(&arrow_schema),
         extension: ext_str.clone(),
     });

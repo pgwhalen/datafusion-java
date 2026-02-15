@@ -1,37 +1,59 @@
 package org.apache.arrow.datafusion;
 
 import java.lang.foreign.*;
+import java.lang.foreign.MemoryLayout.PathElement;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
+import java.lang.invoke.VarHandle;
 import java.nio.charset.StandardCharsets;
 import org.apache.arrow.memory.BufferAllocator;
 
 /**
  * Internal FFI bridge for FileOpener.
  *
- * <p>This class creates upcall stubs that Rust can invoke to open file content using a Java {@link
- * FileOpener}. It manages the lifecycle of the callback struct and upcall stubs.
+ * <p>This class allocates a {@code JavaFileOpenerCallbacks} struct in Java arena memory and
+ * populates it with upcall stub function pointers. Rust copies the struct via {@code ptr::read}.
+ *
+ * <p>Layout of JavaFileOpenerCallbacks (24 bytes, align 8):
+ *
+ * <pre>
+ * offset  0: java_object ptr  (ADDRESS)
+ * offset  8: open_fn ptr      (ADDRESS)
+ * offset 16: release_fn ptr   (ADDRESS)
+ * </pre>
  */
 final class FileOpenerHandle implements TraitHandle {
-  private static final MethodHandle ALLOC_FILE_OPENER_CALLBACKS =
-      NativeUtil.downcall(
-          "datafusion_alloc_file_opener_callbacks", FunctionDescriptor.of(ValueLayout.ADDRESS));
+  // ======== Struct layout and VarHandles ========
 
-  // Callback struct field offsets
-  // struct JavaFileOpenerCallbacks {
-  //   java_object: *mut c_void,         // offset 0
-  //   open_fn: fn,                      // offset 8
-  //   release_fn: fn,                   // offset 16
-  // }
-  private static final long OFFSET_JAVA_OBJECT = 0;
-  private static final long OFFSET_OPEN_FN = 8;
-  private static final long OFFSET_RELEASE_FN = 16;
-  private static final long STRUCT_SIZE = 24;
+  private static final StructLayout CALLBACKS_LAYOUT =
+      MemoryLayout.structLayout(
+          ValueLayout.ADDRESS.withName("java_object"),
+          ValueLayout.ADDRESS.withName("open_fn"),
+          ValueLayout.ADDRESS.withName("release_fn"));
+
+  private static final VarHandle VH_JAVA_OBJECT =
+      CALLBACKS_LAYOUT.varHandle(PathElement.groupElement("java_object"));
+  private static final VarHandle VH_OPEN_FN =
+      CALLBACKS_LAYOUT.varHandle(PathElement.groupElement("open_fn"));
+  private static final VarHandle VH_RELEASE_FN =
+      CALLBACKS_LAYOUT.varHandle(PathElement.groupElement("release_fn"));
+
+  // ======== Size validation ========
+
+  private static final MethodHandle CALLBACKS_SIZE_MH =
+      NativeUtil.downcall(
+          "datafusion_ffi_file_opener_callbacks_size",
+          FunctionDescriptor.of(ValueLayout.JAVA_LONG));
+
+  static void validateSizes() {
+    NativeUtil.validateSize(
+        CALLBACKS_LAYOUT.byteSize(), CALLBACKS_SIZE_MH, "JavaFileOpenerCallbacks");
+  }
+
+  // ======== Callback FunctionDescriptors ========
 
   // open_fn: (ADDRESS, ADDRESS, LONG, LONG, INT, LONG, LONG, ADDRESS, ADDRESS) -> INT
-  //   java_object, file_path, file_path_len, file_size, has_range, range_start, range_end,
-  //   reader_out, error_out -> result
   private static final FunctionDescriptor OPEN_DESC =
       FunctionDescriptor.of(
           ValueLayout.JAVA_INT,
@@ -49,7 +71,8 @@ final class FileOpenerHandle implements TraitHandle {
   private static final FunctionDescriptor RELEASE_DESC =
       FunctionDescriptor.ofVoid(ValueLayout.ADDRESS);
 
-  // Static MethodHandles - looked up once at class load
+  // ======== Static MethodHandles ========
+
   private static final MethodHandle OPEN_MH = initOpenMethodHandle();
   private static final MethodHandle RELEASE_MH = initReleaseMethodHandle();
 
@@ -87,6 +110,8 @@ final class FileOpenerHandle implements TraitHandle {
     }
   }
 
+  // ======== Instance fields ========
+
   private final Arena arena;
   private final FileOpener opener;
   private final BufferAllocator allocator;
@@ -104,32 +129,25 @@ final class FileOpenerHandle implements TraitHandle {
     this.allocator = allocator;
     this.fullStackTrace = fullStackTrace;
 
-    try {
-      // Allocate the callback struct from Rust
-      this.callbackStruct = (MemorySegment) ALLOC_FILE_OPENER_CALLBACKS.invokeExact();
+    // Create upcall stubs
+    this.openStub = UpcallStub.create(OPEN_MH.bindTo(this), OPEN_DESC, arena);
+    this.releaseStub = UpcallStub.create(RELEASE_MH.bindTo(this), RELEASE_DESC, arena);
 
-      if (callbackStruct.equals(MemorySegment.NULL)) {
-        throw new DataFusionException("Failed to allocate FileOpener callbacks");
-      }
-
-      // Create upcall stubs
-      this.openStub = UpcallStub.create(OPEN_MH.bindTo(this), OPEN_DESC, arena);
-      this.releaseStub = UpcallStub.create(RELEASE_MH.bindTo(this), RELEASE_DESC, arena);
-
-      // Set up the callback struct
-      MemorySegment struct_ = callbackStruct.reinterpret(STRUCT_SIZE);
-      struct_.set(ValueLayout.ADDRESS, OFFSET_JAVA_OBJECT, MemorySegment.NULL);
-      struct_.set(ValueLayout.ADDRESS, OFFSET_OPEN_FN, openStub.segment());
-      struct_.set(ValueLayout.ADDRESS, OFFSET_RELEASE_FN, releaseStub.segment());
-
-    } catch (Throwable e) {
-      throw new DataFusionException("Failed to create FileOpenerHandle", e);
-    }
+    // Allocate and populate the callback struct in Java arena memory
+    this.callbackStruct = arena.allocate(CALLBACKS_LAYOUT);
+    VH_JAVA_OBJECT.set(callbackStruct, 0L, MemorySegment.NULL);
+    VH_OPEN_FN.set(callbackStruct, 0L, openStub.segment());
+    VH_RELEASE_FN.set(callbackStruct, 0L, releaseStub.segment());
   }
 
   /** Get the callback struct pointer to pass to Rust. */
   public MemorySegment getTraitStruct() {
     return callbackStruct;
+  }
+
+  /** Copy the callback struct bytes into a Rust-side output buffer. */
+  void copyStructTo(MemorySegment out) {
+    out.reinterpret(CALLBACKS_LAYOUT.byteSize()).copyFrom(callbackStruct);
   }
 
   /** Callback: Open a file and return a RecordBatchReader. */
@@ -179,6 +197,6 @@ final class FileOpenerHandle implements TraitHandle {
 
   @Override
   public void close() {
-    // Callback struct freed by Rust when it drops the opener
+    // No-op: callback struct is in Java arena memory, freed when arena closes
   }
 }

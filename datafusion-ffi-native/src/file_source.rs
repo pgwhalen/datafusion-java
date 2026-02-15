@@ -12,28 +12,29 @@ use std::any::Any;
 use std::ffi::{c_char, c_void};
 use std::sync::Arc;
 
-use crate::error::{check_callback_result, set_error_return};
-use crate::file_opener::{JavaBackedFileOpener, JavaFileOpenerCallbacks, OpenerCallbacksHolder};
+use crate::error::check_callback_result;
+use crate::file_opener::{JavaBackedFileOpener, JavaFileOpenerCallbacks};
 
 /// C-compatible callback struct for a Java-backed FileSource.
 ///
-/// Created by `JavaFileFormatCallbacks.file_source_fn`. Owned by `JavaBackedFileSource`.
+/// Java allocates this struct in arena memory and populates the fields.
+/// Rust copies it via `ptr::read` when constructing a `SourceCallbacksHolder`.
 #[repr(C)]
 pub struct JavaFileSourceCallbacks {
     /// Opaque pointer to the Java object.
     pub java_object: *mut c_void,
 
-    /// Create a FileOpener, returning a JavaFileOpenerCallbacks pointer.
+    /// Create a FileOpener, writing a `JavaFileOpenerCallbacks` struct to `opener_out`.
     ///
     /// Parameters:
     /// - java_object: opaque pointer
-    /// - opener_out: receives a `*mut JavaFileOpenerCallbacks`
+    /// - opener_out: pointer to a `JavaFileOpenerCallbacks` buffer (Java writes struct bytes)
     /// - error_out: receives error message on failure
     ///
     /// Returns 0 on success, -1 on error.
     pub create_file_opener_fn: unsafe extern "C" fn(
         java_object: *mut c_void,
-        opener_out: *mut *mut JavaFileOpenerCallbacks,
+        opener_out: *mut JavaFileOpenerCallbacks,
         error_out: *mut *mut c_char,
     ) -> i32,
 
@@ -44,9 +45,9 @@ pub struct JavaFileSourceCallbacks {
 unsafe impl Send for JavaFileSourceCallbacks {}
 unsafe impl Sync for JavaFileSourceCallbacks {}
 
-/// Wraps a raw FileSource callback pointer for shared ownership.
+/// Wraps a FileSource callback struct by value for shared ownership.
 pub(crate) struct SourceCallbacksHolder {
-    pub(crate) ptr: *mut JavaFileSourceCallbacks,
+    pub(crate) callbacks: JavaFileSourceCallbacks,
 }
 
 unsafe impl Send for SourceCallbacksHolder {}
@@ -55,9 +56,7 @@ unsafe impl Sync for SourceCallbacksHolder {}
 impl Drop for SourceCallbacksHolder {
     fn drop(&mut self) {
         unsafe {
-            let cb = &*self.ptr;
-            (cb.release_fn)(cb.java_object);
-            drop(Box::from_raw(self.ptr));
+            (self.callbacks.release_fn)(self.callbacks.java_object);
         }
     }
 }
@@ -89,24 +88,21 @@ impl FileSource for JavaBackedFileSource {
         _partition: usize,
     ) -> Result<Arc<dyn FileOpener>> {
         // Call Java to get a FileOpener
-        let cb = unsafe { &*self.callbacks.ptr };
-        let mut opener_out: *mut JavaFileOpenerCallbacks = std::ptr::null_mut();
+        let cb = &self.callbacks.callbacks;
+        let mut opener_callbacks = std::mem::MaybeUninit::<JavaFileOpenerCallbacks>::uninit();
         let mut error_out: *mut c_char = std::ptr::null_mut();
 
-        let result =
-            unsafe { (cb.create_file_opener_fn)(cb.java_object, &mut opener_out, &mut error_out) };
+        let result = unsafe {
+            (cb.create_file_opener_fn)(cb.java_object, opener_callbacks.as_mut_ptr(), &mut error_out)
+        };
         unsafe {
             check_callback_result(result, error_out, "create FileOpener from Java FileSource")?;
         }
 
-        if opener_out.is_null() {
-            return Err(datafusion::error::DataFusionError::Execution(
-                "Java FileSource.createFileOpener returned null".to_string(),
-            ));
-        }
+        let opener_callbacks = unsafe { opener_callbacks.assume_init() };
 
         Ok(Arc::new(JavaBackedFileOpener {
-            callbacks: Arc::new(OpenerCallbacksHolder { ptr: opener_out }),
+            callbacks: Arc::new(opener_callbacks),
         }))
     }
 
@@ -236,30 +232,8 @@ impl ExecutionPlan for JavaBackedFileExec {
     }
 }
 
-// Dummy functions for initialization
-unsafe extern "C" fn dummy_create_file_opener_fn(
-    _java_object: *mut c_void,
-    _opener_out: *mut *mut JavaFileOpenerCallbacks,
-    error_out: *mut *mut c_char,
-) -> i32 {
-    set_error_return(error_out, "FileSource callbacks not initialized")
-}
-
-unsafe extern "C" fn dummy_release_fn(_java_object: *mut c_void) {
-    // Do nothing
-}
-
-/// Allocate a JavaFileSourceCallbacks struct.
-///
-/// Java fills in the function pointers after allocation.
-///
-/// # Safety
-/// The returned pointer is owned by Rust and freed when the exec plan is dropped.
+/// Return the size of `JavaFileSourceCallbacks` for Java-side validation.
 #[no_mangle]
-pub extern "C" fn datafusion_alloc_file_source_callbacks() -> *mut JavaFileSourceCallbacks {
-    Box::into_raw(Box::new(JavaFileSourceCallbacks {
-        java_object: std::ptr::null_mut(),
-        create_file_opener_fn: dummy_create_file_opener_fn,
-        release_fn: dummy_release_fn,
-    }))
+pub extern "C" fn datafusion_ffi_file_source_callbacks_size() -> usize {
+    std::mem::size_of::<JavaFileSourceCallbacks>()
 }

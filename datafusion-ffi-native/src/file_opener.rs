@@ -9,12 +9,13 @@ use futures::stream::BoxStream;
 use std::ffi::{c_char, c_void};
 use std::sync::Arc;
 
-use crate::error::{check_callback_result, set_error_return};
+use crate::error::check_callback_result;
 use datafusion_ffi::record_batch_stream::FFI_RecordBatchStream;
 
 /// C-compatible callback struct for a Java-backed FileOpener.
 ///
-/// Created by `JavaFileSourceCallbacks.create_file_opener_fn`. Owned by `JavaBackedFileOpener`.
+/// Java allocates this struct in arena memory and populates the fields.
+/// Rust copies it via `ptr::read` / `MaybeUninit` when constructing a `JavaBackedFileOpener`.
 #[repr(C)]
 pub struct JavaFileOpenerCallbacks {
     /// Opaque pointer to the Java object.
@@ -53,38 +54,23 @@ pub struct JavaFileOpenerCallbacks {
 unsafe impl Send for JavaFileOpenerCallbacks {}
 unsafe impl Sync for JavaFileOpenerCallbacks {}
 
-/// Wraps a raw opener callback pointer for shared ownership.
+/// A FileOpener that passes file paths to Java for reading.
 ///
-/// This allows the callback pointer to be shared across threads (via Arc)
-/// and into async blocks that require `Send`.
-pub(crate) struct OpenerCallbacksHolder {
-    pub(crate) ptr: *mut JavaFileOpenerCallbacks,
+/// Stores `JavaFileOpenerCallbacks` in an `Arc` so the callbacks can be shared
+/// into the `Send` async block returned by `open()`. The `Arc` is necessary
+/// because raw pointers (`*mut c_void`) are not `Send`, and Rust's async
+/// generator analysis checks individual captured fields.
+pub(crate) struct JavaBackedFileOpener {
+    pub(crate) callbacks: Arc<JavaFileOpenerCallbacks>,
 }
 
-unsafe impl Send for OpenerCallbacksHolder {}
-unsafe impl Sync for OpenerCallbacksHolder {}
-
-impl Drop for OpenerCallbacksHolder {
+impl Drop for JavaBackedFileOpener {
     fn drop(&mut self) {
         unsafe {
-            let cb = &*self.ptr;
-            (cb.release_fn)(cb.java_object);
-            drop(Box::from_raw(self.ptr));
+            (self.callbacks.release_fn)(self.callbacks.java_object);
         }
     }
 }
-
-/// A FileOpener that passes file paths to Java for reading.
-///
-/// Owns a `JavaFileOpenerCallbacks` pointer (via `OpenerCallbacksHolder`).
-/// When `open()` is called, it extracts the file path from the metadata and calls
-/// `open_fn` to get an `FFI_RecordBatchStream`, which directly implements
-/// `Stream<Item=Result<RecordBatch>>`.
-pub(crate) struct JavaBackedFileOpener {
-    pub(crate) callbacks: Arc<OpenerCallbacksHolder>,
-}
-
-impl Unpin for JavaBackedFileOpener {}
 
 impl FileOpener for JavaBackedFileOpener {
     fn open(
@@ -120,7 +106,7 @@ impl FileOpener for JavaBackedFileOpener {
             };
 
             // 2. Call Java callback to open file — Java writes FFI_RecordBatchStream directly
-            let cb = unsafe { &*callbacks.ptr };
+            let cb = &*callbacks;
             let mut ffi_stream =
                 std::mem::MaybeUninit::<FFI_RecordBatchStream>::uninit();
             let mut error_out: *mut c_char = std::ptr::null_mut();
@@ -152,36 +138,8 @@ impl FileOpener for JavaBackedFileOpener {
     }
 }
 
-// Dummy functions for initialization
-unsafe extern "C" fn dummy_open_fn(
-    _java_object: *mut c_void,
-    _file_path: *const u8,
-    _file_path_len: usize,
-    _file_size: u64,
-    _has_range: i32,
-    _range_start: i64,
-    _range_end: i64,
-    _stream_out: *mut FFI_RecordBatchStream,
-    error_out: *mut *mut c_char,
-) -> i32 {
-    set_error_return(error_out, "FileOpener callbacks not initialized")
-}
-
-unsafe extern "C" fn dummy_release_fn(_java_object: *mut c_void) {
-    // Do nothing
-}
-
-/// Allocate a JavaFileOpenerCallbacks struct.
-///
-/// Java fills in the function pointers after allocation.
-///
-/// # Safety
-/// The returned pointer is owned by Rust and freed when the opener is dropped.
+/// Return the size of `JavaFileOpenerCallbacks` for Java-side validation.
 #[no_mangle]
-pub extern "C" fn datafusion_alloc_file_opener_callbacks() -> *mut JavaFileOpenerCallbacks {
-    Box::into_raw(Box::new(JavaFileOpenerCallbacks {
-        java_object: std::ptr::null_mut(),
-        open_fn: dummy_open_fn,
-        release_fn: dummy_release_fn,
-    }))
+pub extern "C" fn datafusion_ffi_file_opener_callbacks_size() -> usize {
+    std::mem::size_of::<JavaFileOpenerCallbacks>()
 }

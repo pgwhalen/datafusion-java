@@ -1,36 +1,59 @@
 package org.apache.arrow.datafusion;
 
 import java.lang.foreign.*;
+import java.lang.foreign.MemoryLayout.PathElement;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
+import java.lang.invoke.VarHandle;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.types.pojo.Schema;
 
 /**
  * Internal FFI bridge for FileSource.
  *
- * <p>This class creates upcall stubs that Rust can invoke to create a FileOpener from a Java {@link
- * FileSource}. It manages the lifecycle of the callback struct and upcall stubs.
+ * <p>This class allocates a {@code JavaFileSourceCallbacks} struct in Java arena memory and
+ * populates it with upcall stub function pointers. Rust copies the struct via {@code ptr::read}.
+ *
+ * <p>Layout of JavaFileSourceCallbacks (24 bytes, align 8):
+ *
+ * <pre>
+ * offset  0: java_object ptr            (ADDRESS)
+ * offset  8: create_file_opener_fn ptr  (ADDRESS)
+ * offset 16: release_fn ptr             (ADDRESS)
+ * </pre>
  */
 final class FileSourceHandle implements TraitHandle {
-  private static final MethodHandle ALLOC_FILE_SOURCE_CALLBACKS =
-      NativeUtil.downcall(
-          "datafusion_alloc_file_source_callbacks", FunctionDescriptor.of(ValueLayout.ADDRESS));
+  // ======== Struct layout and VarHandles ========
 
-  // Callback struct field offsets
-  // struct JavaFileSourceCallbacks {
-  //   java_object: *mut c_void,              // offset 0
-  //   create_file_opener_fn: fn,             // offset 8
-  //   release_fn: fn,                        // offset 16
-  // }
-  private static final long OFFSET_JAVA_OBJECT = 0;
-  private static final long OFFSET_CREATE_FILE_OPENER_FN = 8;
-  private static final long OFFSET_RELEASE_FN = 16;
-  private static final long STRUCT_SIZE = 24;
+  private static final StructLayout CALLBACKS_LAYOUT =
+      MemoryLayout.structLayout(
+          ValueLayout.ADDRESS.withName("java_object"),
+          ValueLayout.ADDRESS.withName("create_file_opener_fn"),
+          ValueLayout.ADDRESS.withName("release_fn"));
+
+  private static final VarHandle VH_JAVA_OBJECT =
+      CALLBACKS_LAYOUT.varHandle(PathElement.groupElement("java_object"));
+  private static final VarHandle VH_CREATE_FILE_OPENER_FN =
+      CALLBACKS_LAYOUT.varHandle(PathElement.groupElement("create_file_opener_fn"));
+  private static final VarHandle VH_RELEASE_FN =
+      CALLBACKS_LAYOUT.varHandle(PathElement.groupElement("release_fn"));
+
+  // ======== Size validation ========
+
+  private static final MethodHandle CALLBACKS_SIZE_MH =
+      NativeUtil.downcall(
+          "datafusion_ffi_file_source_callbacks_size",
+          FunctionDescriptor.of(ValueLayout.JAVA_LONG));
+
+  static void validateSizes() {
+    NativeUtil.validateSize(
+        CALLBACKS_LAYOUT.byteSize(), CALLBACKS_SIZE_MH, "JavaFileSourceCallbacks");
+  }
+
+  // ======== Callback FunctionDescriptors ========
 
   // create_file_opener_fn: (ADDRESS, ADDRESS, ADDRESS) -> INT
-  //   java_object, opener_out, error_out -> result
   private static final FunctionDescriptor CREATE_FILE_OPENER_DESC =
       FunctionDescriptor.of(
           ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS);
@@ -39,7 +62,8 @@ final class FileSourceHandle implements TraitHandle {
   private static final FunctionDescriptor RELEASE_DESC =
       FunctionDescriptor.ofVoid(ValueLayout.ADDRESS);
 
-  // Static MethodHandles - looked up once at class load
+  // ======== Static MethodHandles ========
+
   private static final MethodHandle CREATE_FILE_OPENER_MH = initCreateFileOpenerMethodHandle();
   private static final MethodHandle RELEASE_MH = initReleaseMethodHandle();
 
@@ -68,6 +92,8 @@ final class FileSourceHandle implements TraitHandle {
     }
   }
 
+  // ======== Instance fields ========
+
   private final Arena arena;
   private final FileSource source;
   private final Schema schema;
@@ -91,34 +117,26 @@ final class FileSourceHandle implements TraitHandle {
     this.allocator = allocator;
     this.fullStackTrace = fullStackTrace;
 
-    try {
-      // Allocate the callback struct from Rust
-      this.callbackStruct = (MemorySegment) ALLOC_FILE_SOURCE_CALLBACKS.invokeExact();
+    // Create upcall stubs
+    this.createFileOpenerStub =
+        UpcallStub.create(CREATE_FILE_OPENER_MH.bindTo(this), CREATE_FILE_OPENER_DESC, arena);
+    this.releaseStub = UpcallStub.create(RELEASE_MH.bindTo(this), RELEASE_DESC, arena);
 
-      if (callbackStruct.equals(MemorySegment.NULL)) {
-        throw new DataFusionException("Failed to allocate FileSource callbacks");
-      }
-
-      // Create upcall stubs
-      this.createFileOpenerStub =
-          UpcallStub.create(CREATE_FILE_OPENER_MH.bindTo(this), CREATE_FILE_OPENER_DESC, arena);
-      this.releaseStub = UpcallStub.create(RELEASE_MH.bindTo(this), RELEASE_DESC, arena);
-
-      // Set up the callback struct
-      MemorySegment struct_ = callbackStruct.reinterpret(STRUCT_SIZE);
-      struct_.set(ValueLayout.ADDRESS, OFFSET_JAVA_OBJECT, MemorySegment.NULL);
-      struct_.set(
-          ValueLayout.ADDRESS, OFFSET_CREATE_FILE_OPENER_FN, createFileOpenerStub.segment());
-      struct_.set(ValueLayout.ADDRESS, OFFSET_RELEASE_FN, releaseStub.segment());
-
-    } catch (Throwable e) {
-      throw new DataFusionException("Failed to create FileSourceHandle", e);
-    }
+    // Allocate and populate the callback struct in Java arena memory
+    this.callbackStruct = arena.allocate(CALLBACKS_LAYOUT);
+    VH_JAVA_OBJECT.set(callbackStruct, 0L, MemorySegment.NULL);
+    VH_CREATE_FILE_OPENER_FN.set(callbackStruct, 0L, createFileOpenerStub.segment());
+    VH_RELEASE_FN.set(callbackStruct, 0L, releaseStub.segment());
   }
 
   /** Get the callback struct pointer to pass to Rust. */
   public MemorySegment getTraitStruct() {
     return callbackStruct;
+  }
+
+  /** Copy the callback struct bytes into a Rust-side output buffer. */
+  void copyStructTo(MemorySegment out) {
+    out.reinterpret(CALLBACKS_LAYOUT.byteSize()).copyFrom(callbackStruct);
   }
 
   /** Callback: Create a FileOpener from the FileSource. */
@@ -132,8 +150,8 @@ final class FileSourceHandle implements TraitHandle {
       FileOpenerHandle openerHandle =
           new FileOpenerHandle(opener, allocator, arena, fullStackTrace);
 
-      // Return the callback struct pointer
-      openerHandle.setToPointer(openerOut);
+      // Copy the callback struct bytes into the output buffer
+      openerHandle.copyStructTo(openerOut);
 
       return Errors.SUCCESS;
     } catch (Exception e) {
@@ -149,6 +167,6 @@ final class FileSourceHandle implements TraitHandle {
 
   @Override
   public void close() {
-    // Callback struct freed by Rust when it drops the source
+    // No-op: callback struct is in Java arena memory, freed when arena closes
   }
 }
