@@ -3,11 +3,12 @@
 use datafusion::common::ScalarValue;
 use datafusion::physical_expr::utils::{Guarantee, LiteralGuarantee};
 use datafusion::physical_plan::PhysicalExpr;
-use std::ffi::{c_char, c_void, CString};
+use std::ffi::{c_char, c_void};
 use std::sync::Arc;
 
 use crate::error::{clear_error, set_error_return, set_error_return_null};
 use crate::scalar_value::{scalar_to_ffi, FFI_ScalarValue};
+use crate::table_reference::write_table_reference;
 
 /// Holds the results of LiteralGuarantee::analyze() for indexed access from Java.
 struct GuaranteesHandle {
@@ -107,41 +108,7 @@ pub unsafe extern "C" fn datafusion_guarantee_get_info(
     *name_len_out = name.len();
 
     // Table reference
-    match &g.column.relation {
-        None => {
-            *rel_type_out = 0; // No relation
-        }
-        Some(rel) => {
-            use datafusion::common::TableReference;
-            match rel {
-                TableReference::Bare { table } => {
-                    *rel_type_out = 1;
-                    let table_cstr = CString::new(table.as_ref()).unwrap_or_default();
-                    *rel_strs_out.add(0) = table_cstr.into_raw();
-                }
-                TableReference::Partial { schema, table } => {
-                    *rel_type_out = 2;
-                    let schema_cstr = CString::new(schema.as_ref()).unwrap_or_default();
-                    let table_cstr = CString::new(table.as_ref()).unwrap_or_default();
-                    *rel_strs_out.add(0) = schema_cstr.into_raw();
-                    *rel_strs_out.add(1) = table_cstr.into_raw();
-                }
-                TableReference::Full {
-                    catalog,
-                    schema,
-                    table,
-                } => {
-                    *rel_type_out = 3;
-                    let catalog_cstr = CString::new(catalog.as_ref()).unwrap_or_default();
-                    let schema_cstr = CString::new(schema.as_ref()).unwrap_or_default();
-                    let table_cstr = CString::new(table.as_ref()).unwrap_or_default();
-                    *rel_strs_out.add(0) = catalog_cstr.into_raw();
-                    *rel_strs_out.add(1) = schema_cstr.into_raw();
-                    *rel_strs_out.add(2) = table_cstr.into_raw();
-                }
-            }
-        }
-    }
+    write_table_reference(&g.column.relation, rel_type_out, rel_strs_out);
 
     // Guarantee type
     *guarantee_type_out = match g.guarantee {

@@ -18,6 +18,7 @@ mod session;
 mod session_context;
 mod session_state;
 mod table_provider;
+mod table_reference;
 
 pub use catalog_provider::*;
 pub use data_frame::*;
