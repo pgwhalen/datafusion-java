@@ -27,10 +27,9 @@ final class DataFrameFfi implements AutoCloseable {
           "datafusion_dataframe_execute_stream",
           FunctionDescriptor.of(
               ValueLayout.ADDRESS,
-              ValueLayout.ADDRESS, // rt
-              ValueLayout.ADDRESS, // df
-              ValueLayout.ADDRESS // error_out
-              ));
+              ValueLayout.ADDRESS.withName("rt"),
+              ValueLayout.ADDRESS.withName("df"),
+              ValueLayout.ADDRESS.withName("error_out")));
 
   private final MemorySegment runtime;
   private final MemorySegment dataframe;

@@ -27,10 +27,9 @@ final class SessionStateFfi implements AutoCloseable {
           "datafusion_session_state_create_logical_plan",
           FunctionDescriptor.of(
               ValueLayout.ADDRESS,
-              ValueLayout.ADDRESS, // state_with_rt
-              ValueLayout.ADDRESS, // sql
-              ValueLayout.ADDRESS // error_out
-              ));
+              ValueLayout.ADDRESS.withName("state_with_rt"),
+              ValueLayout.ADDRESS.withName("sql"),
+              ValueLayout.ADDRESS.withName("error_out")));
 
   private final MemorySegment stateWithRuntime;
   private volatile boolean closed = false;

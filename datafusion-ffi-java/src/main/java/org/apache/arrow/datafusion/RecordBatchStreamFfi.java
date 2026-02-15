@@ -35,22 +35,20 @@ final class RecordBatchStreamFfi implements AutoCloseable {
           "datafusion_stream_schema",
           FunctionDescriptor.of(
               ValueLayout.JAVA_INT,
-              ValueLayout.ADDRESS, // stream
-              ValueLayout.ADDRESS, // schema_out
-              ValueLayout.ADDRESS // error_out
-              ));
+              ValueLayout.ADDRESS.withName("stream"),
+              ValueLayout.ADDRESS.withName("schema_out"),
+              ValueLayout.ADDRESS.withName("error_out")));
 
   private static final MethodHandle STREAM_NEXT =
       NativeUtil.downcall(
           "datafusion_stream_next",
           FunctionDescriptor.of(
               ValueLayout.JAVA_INT,
-              ValueLayout.ADDRESS, // rt
-              ValueLayout.ADDRESS, // stream
-              ValueLayout.ADDRESS, // array_out
-              ValueLayout.ADDRESS, // schema_out
-              ValueLayout.ADDRESS // error_out
-              ));
+              ValueLayout.ADDRESS.withName("rt"),
+              ValueLayout.ADDRESS.withName("stream"),
+              ValueLayout.ADDRESS.withName("array_out"),
+              ValueLayout.ADDRESS.withName("schema_out"),
+              ValueLayout.ADDRESS.withName("error_out")));
 
   // Size of FFI_ArrowSchema and FFI_ArrowArray structures
   private static final long ARROW_SCHEMA_SIZE = 72; // sizeof(FFI_ArrowSchema)

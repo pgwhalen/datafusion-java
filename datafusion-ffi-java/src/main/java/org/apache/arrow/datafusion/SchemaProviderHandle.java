@@ -66,10 +66,9 @@ final class SchemaProviderHandle implements TraitHandle {
       NativeUtil.downcall(
           "datafusion_schema_create_table_future_error",
           FunctionDescriptor.ofVoid(
-              ValueLayout.ADDRESS, // ptr (UTF-8 bytes)
-              ValueLayout.JAVA_LONG, // len
-              ValueLayout.ADDRESS // out
-              ));
+              ValueLayout.ADDRESS.withName("ptr"), // UTF-8 bytes
+              ValueLayout.JAVA_LONG.withName("len"),
+              ValueLayout.ADDRESS.withName("out")));
 
   // ======== Rust symbol lookups (schema_provider.rs only) ========
 

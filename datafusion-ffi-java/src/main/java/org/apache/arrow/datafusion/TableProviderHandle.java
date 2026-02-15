@@ -82,20 +82,18 @@ final class TableProviderHandle implements TraitHandle {
           "datafusion_table_deserialize_filters",
           FunctionDescriptor.of(
               ValueLayout.ADDRESS,
-              ValueLayout.ADDRESS, // filter_bytes
-              ValueLayout.JAVA_LONG, // filter_len
-              ValueLayout.ADDRESS, // count_out
-              ValueLayout.ADDRESS // error_out
-              ));
+              ValueLayout.ADDRESS.withName("filter_bytes"),
+              ValueLayout.JAVA_LONG.withName("filter_len"),
+              ValueLayout.ADDRESS.withName("count_out"),
+              ValueLayout.ADDRESS.withName("error_out")));
 
   private static final MethodHandle FILTER_PTR =
       NativeUtil.downcall(
           "datafusion_table_filter_ptr",
           FunctionDescriptor.of(
               ValueLayout.ADDRESS,
-              ValueLayout.ADDRESS, // handle
-              ValueLayout.JAVA_LONG // index
-              ));
+              ValueLayout.ADDRESS.withName("handle"),
+              ValueLayout.JAVA_LONG.withName("index")));
 
   private static final MethodHandle FREE_FILTERS =
       NativeUtil.downcall(

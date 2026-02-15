@@ -25,10 +25,9 @@ final class ScalarValueFfi {
           "datafusion_test_scalar_value",
           FunctionDescriptor.of(
               ValueLayout.JAVA_INT,
-              ValueLayout.JAVA_INT, // type_tag
-              ValueLayout.ADDRESS, // scalar_out
-              ValueLayout.ADDRESS // error_out
-              ));
+              ValueLayout.JAVA_INT.withName("type_tag"),
+              ValueLayout.ADDRESS.withName("scalar_out"),
+              ValueLayout.ADDRESS.withName("error_out")));
 
   private ScalarValueFfi() {}
 

@@ -43,9 +43,9 @@ final class NativeUtil {
       downcall(
           "datafusion_create_rstring",
           FunctionDescriptor.ofVoid(
-              ValueLayout.ADDRESS, // ptr (UTF-8 bytes)
-              ValueLayout.JAVA_LONG, // len
-              ValueLayout.ADDRESS // out (RString buffer)
+              ValueLayout.ADDRESS.withName("ptr"), // UTF-8 bytes
+              ValueLayout.JAVA_LONG.withName("len"),
+              ValueLayout.ADDRESS.withName("out") // RString buffer
               ));
 
   // Cached RString size (queried from Rust once)
@@ -289,11 +289,10 @@ final class NativeUtil {
       downcall(
           "datafusion_create_rvec_rstring",
           FunctionDescriptor.ofVoid(
-              ValueLayout.ADDRESS, // ptrs
-              ValueLayout.ADDRESS, // lens
-              ValueLayout.JAVA_LONG, // count
-              ValueLayout.ADDRESS // out
-              ));
+              ValueLayout.ADDRESS.withName("ptrs"),
+              ValueLayout.ADDRESS.withName("lens"),
+              ValueLayout.JAVA_LONG.withName("count"),
+              ValueLayout.ADDRESS.withName("out")));
 
   private static final MethodHandle ROPTION_RSTRING_SIZE_MH =
       downcall("datafusion_roption_rstring_size", FunctionDescriptor.of(ValueLayout.JAVA_LONG));

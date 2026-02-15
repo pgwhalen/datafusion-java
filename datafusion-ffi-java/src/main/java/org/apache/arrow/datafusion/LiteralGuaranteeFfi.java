@@ -23,10 +23,9 @@ final class LiteralGuaranteeFfi {
           "datafusion_literal_guarantee_analyze",
           FunctionDescriptor.of(
               ValueLayout.ADDRESS,
-              ValueLayout.ADDRESS, // expr
-              ValueLayout.ADDRESS, // count_out
-              ValueLayout.ADDRESS // error_out
-              ));
+              ValueLayout.ADDRESS.withName("expr"),
+              ValueLayout.ADDRESS.withName("count_out"),
+              ValueLayout.ADDRESS.withName("error_out")));
 
   private static final MethodHandle GUARANTEES_DESTROY =
       NativeUtil.downcall(
@@ -37,44 +36,41 @@ final class LiteralGuaranteeFfi {
           "datafusion_guarantee_get_info",
           FunctionDescriptor.of(
               ValueLayout.JAVA_INT,
-              ValueLayout.ADDRESS, // handle
-              ValueLayout.JAVA_LONG, // idx
-              ValueLayout.ADDRESS, // name_out
-              ValueLayout.ADDRESS, // name_len_out
-              ValueLayout.ADDRESS, // rel_type_out
-              ValueLayout.ADDRESS, // rel_strs_out
-              ValueLayout.ADDRESS, // guarantee_type_out
-              ValueLayout.ADDRESS, // literal_count_out
-              ValueLayout.ADDRESS, // spans_count_out
-              ValueLayout.ADDRESS // error_out
-              ));
+              ValueLayout.ADDRESS.withName("handle"),
+              ValueLayout.JAVA_LONG.withName("idx"),
+              ValueLayout.ADDRESS.withName("name_out"),
+              ValueLayout.ADDRESS.withName("name_len_out"),
+              ValueLayout.ADDRESS.withName("rel_type_out"),
+              ValueLayout.ADDRESS.withName("rel_strs_out"),
+              ValueLayout.ADDRESS.withName("guarantee_type_out"),
+              ValueLayout.ADDRESS.withName("literal_count_out"),
+              ValueLayout.ADDRESS.withName("spans_count_out"),
+              ValueLayout.ADDRESS.withName("error_out")));
 
   private static final MethodHandle GUARANTEE_GET_SPAN =
       NativeUtil.downcall(
           "datafusion_guarantee_get_span",
           FunctionDescriptor.of(
               ValueLayout.JAVA_INT,
-              ValueLayout.ADDRESS, // handle
-              ValueLayout.JAVA_LONG, // g_idx
-              ValueLayout.JAVA_LONG, // s_idx
-              ValueLayout.ADDRESS, // start_line_out
-              ValueLayout.ADDRESS, // start_col_out
-              ValueLayout.ADDRESS, // end_line_out
-              ValueLayout.ADDRESS, // end_col_out
-              ValueLayout.ADDRESS // error_out
-              ));
+              ValueLayout.ADDRESS.withName("handle"),
+              ValueLayout.JAVA_LONG.withName("g_idx"),
+              ValueLayout.JAVA_LONG.withName("s_idx"),
+              ValueLayout.ADDRESS.withName("start_line_out"),
+              ValueLayout.ADDRESS.withName("start_col_out"),
+              ValueLayout.ADDRESS.withName("end_line_out"),
+              ValueLayout.ADDRESS.withName("end_col_out"),
+              ValueLayout.ADDRESS.withName("error_out")));
 
   private static final MethodHandle GUARANTEE_GET_LITERAL =
       NativeUtil.downcall(
           "datafusion_guarantee_get_literal",
           FunctionDescriptor.of(
               ValueLayout.JAVA_INT,
-              ValueLayout.ADDRESS, // handle
-              ValueLayout.JAVA_LONG, // g_idx
-              ValueLayout.JAVA_LONG, // l_idx
-              ValueLayout.ADDRESS, // scalar_out
-              ValueLayout.ADDRESS // error_out
-              ));
+              ValueLayout.ADDRESS.withName("handle"),
+              ValueLayout.JAVA_LONG.withName("g_idx"),
+              ValueLayout.JAVA_LONG.withName("l_idx"),
+              ValueLayout.ADDRESS.withName("scalar_out"),
+              ValueLayout.ADDRESS.withName("error_out")));
 
   private LiteralGuaranteeFfi() {}
 

@@ -43,11 +43,10 @@ final class SessionContextFfi implements AutoCloseable {
           "datafusion_context_create_with_config",
           FunctionDescriptor.of(
               ValueLayout.ADDRESS,
-              ValueLayout.ADDRESS, // keys
-              ValueLayout.ADDRESS, // values
-              ValueLayout.JAVA_LONG, // len
-              ValueLayout.ADDRESS // error_out
-              ));
+              ValueLayout.ADDRESS.withName("keys"),
+              ValueLayout.ADDRESS.withName("values"),
+              ValueLayout.JAVA_LONG.withName("len"),
+              ValueLayout.ADDRESS.withName("error_out")));
 
   private static final MethodHandle CONTEXT_DESTROY =
       NativeUtil.downcall(
@@ -58,61 +57,56 @@ final class SessionContextFfi implements AutoCloseable {
           "datafusion_context_register_record_batch",
           FunctionDescriptor.of(
               ValueLayout.JAVA_INT,
-              ValueLayout.ADDRESS, // ctx
-              ValueLayout.ADDRESS, // name
-              ValueLayout.ADDRESS, // schema
-              ValueLayout.ADDRESS, // array
-              ValueLayout.ADDRESS // error_out
-              ));
+              ValueLayout.ADDRESS.withName("ctx"),
+              ValueLayout.ADDRESS.withName("name"),
+              ValueLayout.ADDRESS.withName("schema"),
+              ValueLayout.ADDRESS.withName("array"),
+              ValueLayout.ADDRESS.withName("error_out")));
 
   private static final MethodHandle CONTEXT_SQL =
       NativeUtil.downcall(
           "datafusion_context_sql",
           FunctionDescriptor.of(
               ValueLayout.ADDRESS,
-              ValueLayout.ADDRESS, // rt
-              ValueLayout.ADDRESS, // ctx
-              ValueLayout.ADDRESS, // sql
-              ValueLayout.ADDRESS // error_out
-              ));
+              ValueLayout.ADDRESS.withName("rt"),
+              ValueLayout.ADDRESS.withName("ctx"),
+              ValueLayout.ADDRESS.withName("sql"),
+              ValueLayout.ADDRESS.withName("error_out")));
 
   private static final MethodHandle CONTEXT_STATE =
       NativeUtil.downcall(
           "datafusion_context_state",
           FunctionDescriptor.of(
               ValueLayout.ADDRESS,
-              ValueLayout.ADDRESS, // ctx
-              ValueLayout.ADDRESS // error_out
-              ));
+              ValueLayout.ADDRESS.withName("ctx"),
+              ValueLayout.ADDRESS.withName("error_out")));
 
   private static final MethodHandle CONTEXT_REGISTER_CATALOG =
       NativeUtil.downcall(
           "datafusion_context_register_catalog",
           FunctionDescriptor.of(
               ValueLayout.JAVA_INT,
-              ValueLayout.ADDRESS, // ctx
-              ValueLayout.ADDRESS, // name
-              ValueLayout.ADDRESS, // callbacks
-              ValueLayout.ADDRESS // error_out
-              ));
+              ValueLayout.ADDRESS.withName("ctx"),
+              ValueLayout.ADDRESS.withName("name"),
+              ValueLayout.ADDRESS.withName("callbacks"),
+              ValueLayout.ADDRESS.withName("error_out")));
 
   private static final MethodHandle CONTEXT_REGISTER_LISTING_TABLE =
       NativeUtil.downcall(
           "datafusion_context_register_listing_table",
           FunctionDescriptor.of(
               ValueLayout.JAVA_INT,
-              ValueLayout.ADDRESS, // ctx
-              ValueLayout.ADDRESS, // rt
-              ValueLayout.ADDRESS, // name
-              ValueLayout.ADDRESS, // urls (pointer to array of C string pointers)
-              ValueLayout.JAVA_LONG, // urls_len
-              ValueLayout.ADDRESS, // file_extension
-              ValueLayout.ADDRESS, // schema (FFI_ArrowSchema*)
-              ValueLayout.ADDRESS, // format_callbacks
-              ValueLayout.JAVA_INT, // collect_stat (i32 in Rust, 0=false, 1=true)
-              ValueLayout.JAVA_LONG, // target_partitions
-              ValueLayout.ADDRESS // error_out
-              ));
+              ValueLayout.ADDRESS.withName("ctx"),
+              ValueLayout.ADDRESS.withName("rt"),
+              ValueLayout.ADDRESS.withName("name"),
+              ValueLayout.ADDRESS.withName("urls"), // pointer to array of C string pointers
+              ValueLayout.JAVA_LONG.withName("urls_len"),
+              ValueLayout.ADDRESS.withName("file_extension"),
+              ValueLayout.ADDRESS.withName("schema"), // FFI_ArrowSchema*
+              ValueLayout.ADDRESS.withName("format_callbacks"),
+              ValueLayout.JAVA_INT.withName("collect_stat"), // i32 in Rust, 0=false, 1=true
+              ValueLayout.JAVA_LONG.withName("target_partitions"),
+              ValueLayout.ADDRESS.withName("error_out")));
 
   private final MemorySegment runtime;
   private final MemorySegment context;
