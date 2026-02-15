@@ -463,10 +463,10 @@ public sealed interface ScalarValue {
     }
   }
 
-  record Decimal128(BigDecimal value, int precision, int scale) implements DecimalValue {
+  record Decimal128(BigInteger unscaledValue, int precision, int scale) implements DecimalValue {
     @Override
     public BigDecimal toBigDecimal() {
-      return value;
+      return new BigDecimal(unscaledValue, scale);
     }
 
     @Override
@@ -475,10 +475,10 @@ public sealed interface ScalarValue {
     }
   }
 
-  record Decimal256(BigDecimal value, int precision, int scale) implements DecimalValue {
+  record Decimal256(BigInteger unscaledValue, int precision, int scale) implements DecimalValue {
     @Override
     public BigDecimal toBigDecimal() {
-      return value;
+      return new BigDecimal(unscaledValue, scale);
     }
 
     @Override

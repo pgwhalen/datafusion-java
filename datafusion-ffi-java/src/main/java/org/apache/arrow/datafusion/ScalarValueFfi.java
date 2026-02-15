@@ -8,9 +8,7 @@ import java.lang.foreign.StructLayout;
 import java.lang.foreign.ValueLayout;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.VarHandle;
-import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.math.MathContext;
 
 /**
  * FFI deserialization logic for {@link ScalarValue}.
@@ -306,8 +304,7 @@ final class ScalarValueFfi {
         long low = (long) VH_I128_LOW.get(struct, 0L);
         long high = (long) VH_I128_HIGH.get(struct, 0L);
         BigInteger unscaled = toI128(low, high);
-        yield new ScalarValue.Decimal128(
-            new BigDecimal(unscaled, scale, new MathContext(precision)), precision, scale);
+        yield new ScalarValue.Decimal128(unscaled, precision, scale);
       }
       case TAG_DECIMAL256 -> {
         int precision = Byte.toUnsignedInt((byte) VH_PRECISION.get(struct, 0L));
@@ -323,8 +320,7 @@ final class ScalarValueFfi {
           beBytes[i] = leBytes[31 - i];
         }
         BigInteger unscaled = new BigInteger(beBytes);
-        yield new ScalarValue.Decimal256(
-            new BigDecimal(unscaled, scale, new MathContext(precision)), precision, scale);
+        yield new ScalarValue.Decimal256(unscaled, precision, scale);
       }
       case TAG_LIST,
               TAG_LARGE_LIST,

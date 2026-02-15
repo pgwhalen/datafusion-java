@@ -309,13 +309,15 @@ public class ScalarValueTest {
     assertEquals(
         new BigDecimal("123456.789"), new ScalarValue.Decimal64(123456789L, 12, 3).getObject());
 
-    // Decimal128 already stores BigDecimal
-    BigDecimal bd128 = new BigDecimal("12345678901234.56789");
-    assertEquals(bd128, new ScalarValue.Decimal128(bd128, 20, 5).getObject());
+    // Decimal128: unscaled 1234567890123456789, scale 5 = 12345678901234.56789
+    assertEquals(
+        new BigDecimal("12345678901234.56789"),
+        new ScalarValue.Decimal128(new BigInteger("1234567890123456789"), 20, 5).getObject());
 
-    // Decimal256 already stores BigDecimal
-    BigDecimal bd256 = new BigDecimal("987654321.0123456789");
-    assertEquals(bd256, new ScalarValue.Decimal256(bd256, 30, 10).getObject());
+    // Decimal256: unscaled 9876543210123456789, scale 10 = 987654321.0123456789
+    assertEquals(
+        new BigDecimal("987654321.0123456789"),
+        new ScalarValue.Decimal256(new BigInteger("9876543210123456789"), 30, 10).getObject());
   }
 
   @Test
@@ -353,15 +355,15 @@ public class ScalarValueTest {
     assertEquals(12, d64.precision());
     assertEquals(3, d64.scale());
 
-    BigDecimal bd = new BigDecimal("12345678901234.56789");
-    ScalarValue.DecimalValue d128 = new ScalarValue.Decimal128(bd, 20, 5);
-    assertEquals(bd, d128.toBigDecimal());
+    ScalarValue.DecimalValue d128 =
+        new ScalarValue.Decimal128(new BigInteger("1234567890123456789"), 20, 5);
+    assertEquals(new BigDecimal("12345678901234.56789"), d128.toBigDecimal());
     assertEquals(20, d128.precision());
     assertEquals(5, d128.scale());
 
-    BigDecimal bd256 = new BigDecimal("987654321.0123456789");
-    ScalarValue.DecimalValue d256 = new ScalarValue.Decimal256(bd256, 30, 10);
-    assertEquals(bd256, d256.toBigDecimal());
+    ScalarValue.DecimalValue d256 =
+        new ScalarValue.Decimal256(new BigInteger("9876543210123456789"), 30, 10);
+    assertEquals(new BigDecimal("987654321.0123456789"), d256.toBigDecimal());
     assertEquals(30, d256.precision());
     assertEquals(10, d256.scale());
   }
@@ -439,9 +441,9 @@ public class ScalarValueTest {
     assertInstanceOf(ScalarValue.DecimalValue.class, new ScalarValue.Decimal32(1, 5, 2));
     assertInstanceOf(ScalarValue.DecimalValue.class, new ScalarValue.Decimal64(1L, 10, 3));
     assertInstanceOf(
-        ScalarValue.DecimalValue.class, new ScalarValue.Decimal128(BigDecimal.ONE, 20, 5));
+        ScalarValue.DecimalValue.class, new ScalarValue.Decimal128(BigInteger.ONE, 20, 5));
     assertInstanceOf(
-        ScalarValue.DecimalValue.class, new ScalarValue.Decimal256(BigDecimal.TEN, 30, 10));
+        ScalarValue.DecimalValue.class, new ScalarValue.Decimal256(BigInteger.TEN, 30, 10));
 
     // DurationValue
     assertInstanceOf(ScalarValue.DurationValue.class, new ScalarValue.DurationSecond(1L));
