@@ -14,6 +14,9 @@ import org.apache.arrow.memory.BufferAllocator;
  * FileOpener}. It manages the lifecycle of the callback struct and upcall stubs.
  */
 final class FileOpenerHandle implements TraitHandle {
+  private static final MethodHandle ALLOC_FILE_OPENER_CALLBACKS =
+      NativeUtil.downcall(
+          "datafusion_alloc_file_opener_callbacks", FunctionDescriptor.of(ValueLayout.ADDRESS));
 
   // Callback struct field offsets
   // struct JavaFileOpenerCallbacks {
@@ -103,8 +106,7 @@ final class FileOpenerHandle implements TraitHandle {
 
     try {
       // Allocate the callback struct from Rust
-      this.callbackStruct =
-          (MemorySegment) DataFusionBindings.ALLOC_FILE_OPENER_CALLBACKS.invokeExact();
+      this.callbackStruct = (MemorySegment) ALLOC_FILE_OPENER_CALLBACKS.invokeExact();
 
       if (callbackStruct.equals(MemorySegment.NULL)) {
         throw new DataFusionException("Failed to allocate FileOpener callbacks");
@@ -160,8 +162,8 @@ final class FileOpenerHandle implements TraitHandle {
       RecordBatchReaderHandle readerHandle =
           new RecordBatchReaderHandle(reader, allocator, arena, fullStackTrace);
 
-      // Return the callback struct pointer
-      readerHandle.setToPointer(readerOut);
+      // Copy the FFI_RecordBatchStream struct into the output buffer
+      readerHandle.copyStructTo(readerOut);
 
       return Errors.SUCCESS;
     } catch (Exception e) {

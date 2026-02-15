@@ -15,6 +15,9 @@ import org.apache.arrow.memory.BufferAllocator;
  * It manages the lifecycle of the callback struct and upcall stubs.
  */
 final class SchemaProviderHandle implements TraitHandle {
+  private static final MethodHandle ALLOC_SCHEMA_PROVIDER_CALLBACKS =
+      NativeUtil.downcall(
+          "datafusion_alloc_schema_provider_callbacks", FunctionDescriptor.of(ValueLayout.ADDRESS));
   // Callback struct field offsets
   // struct JavaSchemaProviderCallbacks {
   //   java_object: *mut c_void,         // offset 0
@@ -137,8 +140,7 @@ final class SchemaProviderHandle implements TraitHandle {
 
     try {
       // Allocate the callback struct from Rust
-      this.callbackStruct =
-          (MemorySegment) DataFusionBindings.ALLOC_SCHEMA_PROVIDER_CALLBACKS.invokeExact();
+      this.callbackStruct = (MemorySegment) ALLOC_SCHEMA_PROVIDER_CALLBACKS.invokeExact();
 
       if (callbackStruct.equals(MemorySegment.NULL)) {
         throw new DataFusionException("Failed to allocate SchemaProvider callbacks");

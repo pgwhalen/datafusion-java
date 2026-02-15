@@ -1,7 +1,10 @@
 package org.apache.arrow.datafusion;
 
 import java.lang.foreign.Arena;
+import java.lang.foreign.FunctionDescriptor;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
+import java.lang.invoke.MethodHandle;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -9,11 +12,25 @@ import org.slf4j.LoggerFactory;
  * Internal FFI helper for SessionState.
  *
  * <p>This class manages the native pointer lifecycle for a session state and contains all native
- * call logic. It exists in the ffi package to keep {@code java.lang.foreign} and {@link
- * DataFusionBindings} usage out of the public API.
+ * call logic. It exists in the ffi package to keep {@code java.lang.foreign} and {@link NativeUtil}
+ * usage out of the public API.
  */
 final class SessionStateFfi implements AutoCloseable {
   private static final Logger logger = LoggerFactory.getLogger(SessionStateFfi.class);
+
+  private static final MethodHandle SESSION_STATE_DESTROY =
+      NativeUtil.downcall(
+          "datafusion_session_state_destroy", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
+
+  private static final MethodHandle SESSION_STATE_CREATE_LOGICAL_PLAN =
+      NativeUtil.downcall(
+          "datafusion_session_state_create_logical_plan",
+          FunctionDescriptor.of(
+              ValueLayout.ADDRESS,
+              ValueLayout.ADDRESS, // state_with_rt
+              ValueLayout.ADDRESS, // sql
+              ValueLayout.ADDRESS // error_out
+              ));
 
   private final MemorySegment stateWithRuntime;
   private volatile boolean closed = false;
@@ -41,7 +58,7 @@ final class SessionStateFfi implements AutoCloseable {
               "Create logical plan",
               errorOut ->
                   (MemorySegment)
-                      DataFusionBindings.SESSION_STATE_CREATE_LOGICAL_PLAN.invokeExact(
+                      SESSION_STATE_CREATE_LOGICAL_PLAN.invokeExact(
                           stateWithRuntime, sqlSegment, errorOut));
 
       logger.debug("Created LogicalPlan: {}", plan);
@@ -64,7 +81,7 @@ final class SessionStateFfi implements AutoCloseable {
     if (!closed) {
       closed = true;
       try {
-        DataFusionBindings.SESSION_STATE_DESTROY.invokeExact(stateWithRuntime);
+        SESSION_STATE_DESTROY.invokeExact(stateWithRuntime);
         logger.debug("Closed SessionState");
       } catch (Throwable e) {
         logger.error("Error closing SessionState", e);

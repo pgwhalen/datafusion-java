@@ -1,4 +1,3 @@
-use datafusion::execution::context::SessionContext;
 use datafusion::execution::SessionState;
 use std::ffi::{c_char, c_void, CStr};
 use tokio::runtime::Runtime;
@@ -6,49 +5,9 @@ use tokio::runtime::Runtime;
 use crate::error::{clear_error, set_error_return_null};
 
 /// Bundles a SessionState with its own Tokio runtime so it can outlive the SessionContext.
-struct SessionStateWithRuntime {
-    state: SessionState,
-    runtime: Runtime,
-}
-
-/// Create a SessionState from an existing SessionContext.
-///
-/// The returned pointer owns a `SessionStateWithRuntime` containing the state and a new
-/// Tokio runtime. This means the SessionState can outlive the SessionContext.
-///
-/// # Returns
-/// A pointer to SessionStateWithRuntime, or null on error.
-///
-/// # Safety
-/// `ctx` must have been created by `datafusion_context_create`.
-/// The caller must call `datafusion_session_state_destroy` to free the result.
-#[no_mangle]
-pub unsafe extern "C" fn datafusion_context_state(
-    ctx: *mut c_void,
-    error_out: *mut *mut c_char,
-) -> *mut c_void {
-    clear_error(error_out);
-
-    if ctx.is_null() {
-        return set_error_return_null(error_out, "Context is null");
-    }
-
-    let context = &*(ctx as *mut SessionContext);
-
-    let runtime = match Runtime::new() {
-        Ok(rt) => rt,
-        Err(e) => {
-            return set_error_return_null(
-                error_out,
-                &format!("Failed to create Tokio runtime: {}", e),
-            )
-        }
-    };
-
-    let state = context.state();
-
-    let sw = SessionStateWithRuntime { state, runtime };
-    Box::into_raw(Box::new(sw)) as *mut c_void
+pub(crate) struct SessionStateWithRuntime {
+    pub(crate) state: SessionState,
+    pub(crate) runtime: Runtime,
 }
 
 /// Destroy a SessionStateWithRuntime.

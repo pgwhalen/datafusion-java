@@ -18,7 +18,7 @@ public class ScalarValueTest {
 
   @Test
   void testStructSizeMatchesNative() throws Throwable {
-    long nativeSize = (long) DataFusionBindings.FFI_SCALAR_VALUE_SIZE.invokeExact();
+    long nativeSize = (long) ScalarValueFfi.FFI_SCALAR_VALUE_SIZE.invokeExact();
     assertEquals(
         ScalarValueFfi.FFI_STRUCT_SIZE,
         nativeSize,
@@ -86,7 +86,7 @@ public class ScalarValueTest {
           arena,
           "Test scalar value for tag " + typeTag,
           errorOut ->
-              (int) DataFusionBindings.TEST_SCALAR_VALUE.invokeExact(typeTag, scalarOut, errorOut));
+              (int) ScalarValueFfi.TEST_SCALAR_VALUE.invokeExact(typeTag, scalarOut, errorOut));
 
       ScalarValue result = ScalarValueFfi.fromFfi(scalarOut);
       assertNotNull(result, "Result should not be null for type tag " + typeTag);
@@ -195,6 +195,6 @@ public class ScalarValueTest {
         arena,
         "Test scalar value",
         errorOut ->
-            (int) DataFusionBindings.TEST_SCALAR_VALUE.invokeExact(typeTag, scalarOut, errorOut));
+            (int) ScalarValueFfi.TEST_SCALAR_VALUE.invokeExact(typeTag, scalarOut, errorOut));
   }
 }

@@ -1,7 +1,10 @@
 package org.apache.arrow.datafusion;
 
 import java.lang.foreign.Arena;
+import java.lang.foreign.FunctionDescriptor;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
+import java.lang.invoke.MethodHandle;
 import java.util.Set;
 import org.apache.arrow.c.ArrowArray;
 import org.apache.arrow.c.ArrowSchema;
@@ -22,6 +25,32 @@ import org.slf4j.LoggerFactory;
  */
 final class RecordBatchStreamFfi implements AutoCloseable {
   private static final Logger logger = LoggerFactory.getLogger(RecordBatchStreamFfi.class);
+
+  private static final MethodHandle STREAM_DESTROY =
+      NativeUtil.downcall(
+          "datafusion_stream_destroy", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
+
+  private static final MethodHandle STREAM_SCHEMA =
+      NativeUtil.downcall(
+          "datafusion_stream_schema",
+          FunctionDescriptor.of(
+              ValueLayout.JAVA_INT,
+              ValueLayout.ADDRESS, // stream
+              ValueLayout.ADDRESS, // schema_out
+              ValueLayout.ADDRESS // error_out
+              ));
+
+  private static final MethodHandle STREAM_NEXT =
+      NativeUtil.downcall(
+          "datafusion_stream_next",
+          FunctionDescriptor.of(
+              ValueLayout.JAVA_INT,
+              ValueLayout.ADDRESS, // rt
+              ValueLayout.ADDRESS, // stream
+              ValueLayout.ADDRESS, // array_out
+              ValueLayout.ADDRESS, // schema_out
+              ValueLayout.ADDRESS // error_out
+              ));
 
   // Size of FFI_ArrowSchema and FFI_ArrowArray structures
   private static final long ARROW_SCHEMA_SIZE = 72; // sizeof(FFI_ArrowSchema)
@@ -71,9 +100,7 @@ final class RecordBatchStreamFfi implements AutoCloseable {
               arena,
               "Stream next",
               errorOut ->
-                  (int)
-                      DataFusionBindings.STREAM_NEXT.invokeExact(
-                          runtime, stream, arrayOut, schemaOut, errorOut));
+                  (int) STREAM_NEXT.invokeExact(runtime, stream, arrayOut, schemaOut, errorOut));
 
       if (result == 0) {
         logger.debug("End of stream reached");
@@ -126,8 +153,7 @@ final class RecordBatchStreamFfi implements AutoCloseable {
       NativeUtil.call(
           arena,
           "Get schema",
-          errorOut ->
-              (int) DataFusionBindings.STREAM_SCHEMA.invokeExact(stream, schemaOut, errorOut));
+          errorOut -> (int) STREAM_SCHEMA.invokeExact(stream, schemaOut, errorOut));
 
       ArrowSchema arrowSchema = ArrowSchema.wrap(schemaOut.address());
       return Data.importSchema(allocator, arrowSchema, dictionaryProvider);
@@ -149,7 +175,7 @@ final class RecordBatchStreamFfi implements AutoCloseable {
     if (!closed) {
       closed = true;
       try {
-        DataFusionBindings.STREAM_DESTROY.invokeExact(stream);
+        STREAM_DESTROY.invokeExact(stream);
         dictionaryProvider.close();
         if (initialized && vectorSchemaRoot != null) {
           vectorSchemaRoot.close();

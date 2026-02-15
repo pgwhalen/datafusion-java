@@ -1,8 +1,10 @@
 package org.apache.arrow.datafusion;
 
 import java.lang.foreign.Arena;
+import java.lang.foreign.FunctionDescriptor;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.lang.invoke.MethodHandle;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -25,6 +27,92 @@ import org.slf4j.LoggerFactory;
  */
 final class SessionContextFfi implements AutoCloseable {
   private static final Logger logger = LoggerFactory.getLogger(SessionContextFfi.class);
+
+  private static final MethodHandle RUNTIME_CREATE =
+      NativeUtil.downcall("datafusion_runtime_create", FunctionDescriptor.of(ValueLayout.ADDRESS));
+
+  private static final MethodHandle RUNTIME_DESTROY =
+      NativeUtil.downcall(
+          "datafusion_runtime_destroy", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
+
+  private static final MethodHandle CONTEXT_CREATE =
+      NativeUtil.downcall("datafusion_context_create", FunctionDescriptor.of(ValueLayout.ADDRESS));
+
+  private static final MethodHandle CONTEXT_CREATE_WITH_CONFIG =
+      NativeUtil.downcall(
+          "datafusion_context_create_with_config",
+          FunctionDescriptor.of(
+              ValueLayout.ADDRESS,
+              ValueLayout.ADDRESS, // keys
+              ValueLayout.ADDRESS, // values
+              ValueLayout.JAVA_LONG, // len
+              ValueLayout.ADDRESS // error_out
+              ));
+
+  private static final MethodHandle CONTEXT_DESTROY =
+      NativeUtil.downcall(
+          "datafusion_context_destroy", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
+
+  private static final MethodHandle CONTEXT_REGISTER_RECORD_BATCH =
+      NativeUtil.downcall(
+          "datafusion_context_register_record_batch",
+          FunctionDescriptor.of(
+              ValueLayout.JAVA_INT,
+              ValueLayout.ADDRESS, // ctx
+              ValueLayout.ADDRESS, // name
+              ValueLayout.ADDRESS, // schema
+              ValueLayout.ADDRESS, // array
+              ValueLayout.ADDRESS // error_out
+              ));
+
+  private static final MethodHandle CONTEXT_SQL =
+      NativeUtil.downcall(
+          "datafusion_context_sql",
+          FunctionDescriptor.of(
+              ValueLayout.ADDRESS,
+              ValueLayout.ADDRESS, // rt
+              ValueLayout.ADDRESS, // ctx
+              ValueLayout.ADDRESS, // sql
+              ValueLayout.ADDRESS // error_out
+              ));
+
+  private static final MethodHandle CONTEXT_STATE =
+      NativeUtil.downcall(
+          "datafusion_context_state",
+          FunctionDescriptor.of(
+              ValueLayout.ADDRESS,
+              ValueLayout.ADDRESS, // ctx
+              ValueLayout.ADDRESS // error_out
+              ));
+
+  private static final MethodHandle CONTEXT_REGISTER_CATALOG =
+      NativeUtil.downcall(
+          "datafusion_context_register_catalog",
+          FunctionDescriptor.of(
+              ValueLayout.JAVA_INT,
+              ValueLayout.ADDRESS, // ctx
+              ValueLayout.ADDRESS, // name
+              ValueLayout.ADDRESS, // callbacks
+              ValueLayout.ADDRESS // error_out
+              ));
+
+  private static final MethodHandle CONTEXT_REGISTER_LISTING_TABLE =
+      NativeUtil.downcall(
+          "datafusion_context_register_listing_table",
+          FunctionDescriptor.of(
+              ValueLayout.JAVA_INT,
+              ValueLayout.ADDRESS, // ctx
+              ValueLayout.ADDRESS, // rt
+              ValueLayout.ADDRESS, // name
+              ValueLayout.ADDRESS, // urls (pointer to array of C string pointers)
+              ValueLayout.JAVA_LONG, // urls_len
+              ValueLayout.ADDRESS, // file_extension
+              ValueLayout.ADDRESS, // schema (FFI_ArrowSchema*)
+              ValueLayout.ADDRESS, // format_callbacks
+              ValueLayout.JAVA_INT, // collect_stat (i32 in Rust, 0=false, 1=true)
+              ValueLayout.JAVA_LONG, // target_partitions
+              ValueLayout.ADDRESS // error_out
+              ));
 
   private final MemorySegment runtime;
   private final MemorySegment context;
@@ -49,17 +137,17 @@ final class SessionContextFfi implements AutoCloseable {
   SessionContextFfi(SessionConfig config) {
     this.config = config;
     try {
-      runtime = (MemorySegment) DataFusionBindings.RUNTIME_CREATE.invokeExact();
+      runtime = (MemorySegment) RUNTIME_CREATE.invokeExact();
       if (runtime.equals(MemorySegment.NULL)) {
         throw new DataFusionException("Failed to create Tokio runtime");
       }
       if (config.hasOptions()) {
         context = createWithConfig(config);
       } else {
-        context = (MemorySegment) DataFusionBindings.CONTEXT_CREATE.invokeExact();
+        context = (MemorySegment) CONTEXT_CREATE.invokeExact();
       }
       if (context.equals(MemorySegment.NULL)) {
-        DataFusionBindings.RUNTIME_DESTROY.invokeExact(runtime);
+        RUNTIME_DESTROY.invokeExact(runtime);
         throw new DataFusionException("Failed to create SessionContext");
       }
       this.catalogArena = Arena.ofShared();
@@ -94,8 +182,7 @@ final class SessionContextFfi implements AutoCloseable {
           "Create SessionContext with config",
           errorOut ->
               (MemorySegment)
-                  DataFusionBindings.CONTEXT_CREATE_WITH_CONFIG.invokeExact(
-                      keys, values, (long) size, errorOut));
+                  CONTEXT_CREATE_WITH_CONFIG.invokeExact(keys, values, (long) size, errorOut));
     }
   }
 
@@ -129,7 +216,7 @@ final class SessionContextFfi implements AutoCloseable {
           "Register table '" + name + "'",
           errorOut ->
               (int)
-                  DataFusionBindings.CONTEXT_REGISTER_RECORD_BATCH.invokeExact(
+                  CONTEXT_REGISTER_RECORD_BATCH.invokeExact(
                       context, nameSegment, schemaAddr, arrayAddr, errorOut));
 
       logger.debug("Registered table '{}' with {} rows", name, root.getRowCount());
@@ -157,8 +244,7 @@ final class SessionContextFfi implements AutoCloseable {
               "SQL execution",
               errorOut ->
                   (MemorySegment)
-                      DataFusionBindings.CONTEXT_SQL.invokeExact(
-                          runtime, context, querySegment, errorOut));
+                      CONTEXT_SQL.invokeExact(runtime, context, querySegment, errorOut));
 
       logger.debug("Executed SQL query, got DataFrame: {}", dataframe);
       return new DataFrameFfi(runtime, dataframe);
@@ -181,8 +267,7 @@ final class SessionContextFfi implements AutoCloseable {
           NativeUtil.callForPointer(
               arena,
               "Get session state",
-              errorOut ->
-                  (MemorySegment) DataFusionBindings.CONTEXT_STATE.invokeExact(context, errorOut));
+              errorOut -> (MemorySegment) CONTEXT_STATE.invokeExact(context, errorOut));
 
       return new SessionStateFfi(statePtr);
     } catch (DataFusionException e) {
@@ -215,8 +300,7 @@ final class SessionContextFfi implements AutoCloseable {
           "Register catalog '" + name + "'",
           errorOut ->
               (int)
-                  DataFusionBindings.CONTEXT_REGISTER_CATALOG.invokeExact(
-                      context, nameSegment, callbacks, errorOut));
+                  CONTEXT_REGISTER_CATALOG.invokeExact(context, nameSegment, callbacks, errorOut));
 
       logger.debug("Registered catalog '{}'", name);
     } catch (DataFusionException e) {
@@ -267,7 +351,7 @@ final class SessionContextFfi implements AutoCloseable {
             "Register listing table '" + name + "'",
             errorOut ->
                 (int)
-                    DataFusionBindings.CONTEXT_REGISTER_LISTING_TABLE.invokeExact(
+                    CONTEXT_REGISTER_LISTING_TABLE.invokeExact(
                         context,
                         runtime,
                         nameSegment,
@@ -308,8 +392,8 @@ final class SessionContextFfi implements AutoCloseable {
       closeFormatHandles();
 
       // Destroy native objects
-      DataFusionBindings.CONTEXT_DESTROY.invokeExact(context);
-      DataFusionBindings.RUNTIME_DESTROY.invokeExact(runtime);
+      CONTEXT_DESTROY.invokeExact(context);
+      RUNTIME_DESTROY.invokeExact(runtime);
 
       // Now safe to close arenas
       catalogArena.close();

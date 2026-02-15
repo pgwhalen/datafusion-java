@@ -2,6 +2,7 @@ package org.apache.arrow.datafusion;
 
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
+import java.nio.charset.StandardCharsets;
 
 /**
  * Utility class for handling errors from native DataFusion functions.
@@ -12,15 +13,15 @@ import java.lang.invoke.MethodHandle;
  * <pre>{@code
  * // For void operations (int result code, 0 = success):
  * NativeUtil.call(arena, "Register table", errorOut ->
- *     (int) DataFusionBindings.REGISTER.invokeExact(ctx, name, errorOut));
+ *     (int) REGISTER.invokeExact(ctx, name, errorOut));
  *
  * // For pointer-returning operations:
  * MemorySegment df = NativeUtil.callForPointer(arena, "Execute SQL", errorOut ->
- *     (MemorySegment) DataFusionBindings.SQL.invokeExact(ctx, query, errorOut));
+ *     (MemorySegment) SQL.invokeExact(ctx, query, errorOut));
  *
  * // For stream operations (returns result: positive=data, 0=end, negative=error):
  * int result = NativeUtil.callForStreamResult(arena, "Stream next", errorOut ->
- *     (int) DataFusionBindings.STREAM_NEXT.invokeExact(stream, errorOut));
+ *     (int) STREAM_NEXT.invokeExact(stream, errorOut));
  * }</pre>
  */
 final class NativeUtil {
@@ -34,6 +35,21 @@ final class NativeUtil {
 
   static final MethodHandle FREE_STRING =
       downcall("datafusion_free_string", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
+
+  private static final MethodHandle RSTRING_SIZE =
+      downcall("datafusion_rstring_size", FunctionDescriptor.of(ValueLayout.JAVA_LONG));
+
+  private static final MethodHandle CREATE_RSTRING =
+      downcall(
+          "datafusion_create_rstring",
+          FunctionDescriptor.ofVoid(
+              ValueLayout.ADDRESS, // ptr (UTF-8 bytes)
+              ValueLayout.JAVA_LONG, // len
+              ValueLayout.ADDRESS // out (RString buffer)
+              ));
+
+  // Cached RString size (queried from Rust once)
+  private static volatile long rstringSizeBytes = -1;
 
   private NativeUtil() {}
 
@@ -153,6 +169,70 @@ final class NativeUtil {
       throw e;
     } catch (Throwable e) {
       throw new DataFusionException("Failed to " + operation, e);
+    }
+  }
+
+  // ========================================================================
+  // FFI struct size validation and RString helpers
+  // ========================================================================
+
+  /**
+   * Get the size in bytes of an abi_stable {@code RString}. The value is cached after the first
+   * call.
+   */
+  static long getRStringSize() {
+    long size = rstringSizeBytes;
+    if (size < 0) {
+      try {
+        size = (long) RSTRING_SIZE.invokeExact();
+        rstringSizeBytes = size;
+      } catch (Throwable e) {
+        throw new DataFusionException("Failed to query RString size", e);
+      }
+    }
+    return size;
+  }
+
+  /**
+   * Write a UTF-8 string as an abi_stable {@code RString} into a buffer at the given offset. Uses
+   * the Rust {@code datafusion_create_rstring} helper.
+   *
+   * @param message the string to write
+   * @param buffer the destination buffer
+   * @param offset byte offset within the buffer where the RString should be written
+   * @param arena arena used for temporary allocation of the UTF-8 bytes
+   */
+  static void writeRString(String message, MemorySegment buffer, long offset, Arena arena) {
+    byte[] msgBytes = message.getBytes(StandardCharsets.UTF_8);
+    MemorySegment msgSegment = arena.allocateFrom(ValueLayout.JAVA_BYTE, msgBytes);
+    try {
+      CREATE_RSTRING.invokeExact(
+          msgSegment, (long) msgBytes.length, buffer.asSlice(offset, getRStringSize()));
+    } catch (Throwable ignored) {
+      // Best effort — if we can't write the RString, the zero-initialized buffer
+      // will produce a default/empty error on the Rust side.
+    }
+  }
+
+  /**
+   * Validate that a Java-side size constant matches the Rust-reported size for an FFI type.
+   *
+   * @param javaSize the size constant defined in Java
+   * @param sizeHandle a MethodHandle that calls a Rust size helper (returns long)
+   * @param typeName the type name for error messages
+   * @throws DataFusionException if the sizes don't match
+   */
+  static void validateSize(long javaSize, MethodHandle sizeHandle, String typeName) {
+    try {
+      long rustSize = (long) sizeHandle.invokeExact();
+      if (rustSize != javaSize) {
+        throw new DataFusionException(
+            typeName + " size mismatch: Java=" + javaSize + " Rust=" + rustSize);
+      }
+    } catch (DataFusionException e) {
+      throw e;
+    } catch (Throwable e) {
+      throw new DataFusionException("Failed to validate " + typeName + " size", e);
     }
   }
 
@@ -281,7 +361,12 @@ final class NativeUtil {
     }
   }
 
-  private static MethodHandle downcall(String name, FunctionDescriptor descriptor) {
+  /** Get the native linker for creating upcall stubs. */
+  static Linker getLinker() {
+    return LINKER;
+  }
+
+  static MethodHandle downcall(String name, FunctionDescriptor descriptor) {
     MemorySegment symbol =
         LOOKUP.find(name).orElseThrow(() -> new RuntimeException("Symbol not found: " + name));
     return LINKER.downcallHandle(symbol, descriptor);

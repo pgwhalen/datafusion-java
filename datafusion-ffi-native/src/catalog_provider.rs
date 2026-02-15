@@ -1,12 +1,11 @@
 //! Rust CatalogProvider implementation that calls back into Java.
 
-use crate::error::{clear_error, set_error_return};
-use crate::java_backed_schema::JavaBackedSchemaProvider;
+use crate::error::set_error_return;
+use crate::schema_provider::JavaBackedSchemaProvider;
 use crate::java_provider::{JavaCatalogProviderCallbacks, JavaSchemaProviderCallbacks};
 use datafusion::catalog::{CatalogProvider, SchemaProvider};
-use datafusion::execution::context::SessionContext;
 use std::any::Any;
-use std::ffi::{c_char, c_void, CStr};
+use std::ffi::{c_char, CStr};
 use std::sync::Arc;
 
 /// A CatalogProvider that calls back into Java.
@@ -143,49 +142,6 @@ pub extern "C" fn datafusion_alloc_catalog_provider_callbacks() -> *mut JavaCata
         schema_fn: dummy_schema_fn,
         release_fn: dummy_release_fn,
     }))
-}
-
-/// Register a catalog with the session context.
-///
-/// # Arguments
-/// * `ctx` - Pointer to the SessionContext
-/// * `name` - Catalog name (null-terminated C string)
-/// * `callbacks` - Pointer to JavaCatalogProviderCallbacks (takes ownership)
-/// * `error_out` - Pointer to receive error message
-///
-/// # Returns
-/// 0 on success, -1 on error.
-///
-/// # Safety
-/// All pointers must be valid. The callbacks struct ownership is transferred to Rust.
-#[no_mangle]
-pub unsafe extern "C" fn datafusion_context_register_catalog(
-    ctx: *mut c_void,
-    name: *const c_char,
-    callbacks: *mut JavaCatalogProviderCallbacks,
-    error_out: *mut *mut c_char,
-) -> i32 {
-    clear_error(error_out);
-
-    if ctx.is_null() || name.is_null() || callbacks.is_null() {
-        return set_error_return(error_out, "Null pointer argument");
-    }
-
-    let context = &*(ctx as *mut SessionContext);
-
-    // Get catalog name
-    let name_str = match CStr::from_ptr(name).to_str() {
-        Ok(s) => s.to_string(),
-        Err(e) => return set_error_return(error_out, &format!("Invalid catalog name: {}", e)),
-    };
-
-    // Create the Java-backed catalog provider
-    let provider = JavaBackedCatalogProvider::new(callbacks);
-
-    // Register the catalog (returns the old catalog if one was registered with the same name)
-    context.register_catalog(&name_str, Arc::new(provider));
-
-    0
 }
 
 // Dummy functions for initialization - Java will set the actual function pointers

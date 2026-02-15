@@ -36,7 +36,7 @@ record UpcallStub(MemorySegment segment) {
    * @return a new UpcallStub wrapping the created native function pointer
    */
   static UpcallStub create(MethodHandle boundHandle, FunctionDescriptor descriptor, Arena arena) {
-    Linker linker = DataFusionBindings.getLinker();
+    Linker linker = NativeUtil.getLinker();
     return new UpcallStub(linker.upcallStub(boundHandle, descriptor, arena));
   }
 }

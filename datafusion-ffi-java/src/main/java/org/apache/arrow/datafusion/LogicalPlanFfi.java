@@ -1,6 +1,9 @@
 package org.apache.arrow.datafusion;
 
+import java.lang.foreign.FunctionDescriptor;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
+import java.lang.invoke.MethodHandle;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -13,6 +16,10 @@ import org.slf4j.LoggerFactory;
  */
 final class LogicalPlanFfi implements AutoCloseable {
   private static final Logger logger = LoggerFactory.getLogger(LogicalPlanFfi.class);
+
+  private static final MethodHandle LOGICAL_PLAN_DESTROY =
+      NativeUtil.downcall(
+          "datafusion_logical_plan_destroy", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
 
   private final MemorySegment plan;
   private volatile boolean closed = false;
@@ -37,7 +44,7 @@ final class LogicalPlanFfi implements AutoCloseable {
     if (!closed) {
       closed = true;
       try {
-        DataFusionBindings.LOGICAL_PLAN_DESTROY.invokeExact(plan);
+        LOGICAL_PLAN_DESTROY.invokeExact(plan);
         logger.debug("Closed LogicalPlan");
       } catch (Throwable e) {
         logger.error("Error closing LogicalPlan", e);

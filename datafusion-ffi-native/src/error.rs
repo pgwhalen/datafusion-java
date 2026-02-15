@@ -101,25 +101,3 @@ pub fn clear_error(error_out: *mut *mut c_char) {
     }
 }
 
-/// Get the length of a null-terminated C string (not including the null terminator).
-///
-/// # Safety
-/// The pointer must be a valid null-terminated C string.
-#[no_mangle]
-pub unsafe extern "C" fn datafusion_string_len(s: *const c_char) -> usize {
-    if s.is_null() {
-        return 0;
-    }
-    std::ffi::CStr::from_ptr(s).to_bytes().len()
-}
-
-/// Free a string that was allocated by Rust.
-///
-/// # Safety
-/// The pointer must have been allocated by Rust using CString::into_raw().
-#[no_mangle]
-pub unsafe extern "C" fn datafusion_free_string(s: *mut c_char) {
-    if !s.is_null() {
-        drop(CString::from_raw(s));
-    }
-}

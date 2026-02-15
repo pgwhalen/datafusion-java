@@ -16,6 +16,10 @@ import org.apache.arrow.vector.types.pojo.Schema;
  * It manages the lifecycle of the callback struct and upcall stubs.
  */
 final class TableProviderHandle implements TraitHandle {
+  private static final MethodHandle ALLOC_TABLE_PROVIDER_CALLBACKS =
+      NativeUtil.downcall(
+          "datafusion_alloc_table_provider_callbacks", FunctionDescriptor.of(ValueLayout.ADDRESS));
+
   private static final long ARROW_SCHEMA_SIZE = 72;
 
   // Callback struct field offsets
@@ -142,8 +146,7 @@ final class TableProviderHandle implements TraitHandle {
 
     try {
       // Allocate the callback struct from Rust
-      this.callbackStruct =
-          (MemorySegment) DataFusionBindings.ALLOC_TABLE_PROVIDER_CALLBACKS.invokeExact();
+      this.callbackStruct = (MemorySegment) ALLOC_TABLE_PROVIDER_CALLBACKS.invokeExact();
 
       if (callbackStruct.equals(MemorySegment.NULL)) {
         throw new DataFusionException("Failed to allocate TableProvider callbacks");
@@ -254,8 +257,8 @@ final class TableProviderHandle implements TraitHandle {
       ExecutionPlanHandle planHandle =
           new ExecutionPlanHandle(plan, allocator, arena, fullStackTrace);
 
-      // Return the callback struct pointer
-      planHandle.setToPointer(planOut);
+      // Copy the FFI_ExecutionPlan struct into the output buffer
+      planHandle.copyStructTo(planOut);
 
       return Errors.SUCCESS;
     } catch (Exception e) {

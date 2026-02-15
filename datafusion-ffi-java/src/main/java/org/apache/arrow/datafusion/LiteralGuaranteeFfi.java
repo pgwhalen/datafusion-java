@@ -1,8 +1,10 @@
 package org.apache.arrow.datafusion;
 
 import java.lang.foreign.Arena;
+import java.lang.foreign.FunctionDescriptor;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.lang.invoke.MethodHandle;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -15,6 +17,64 @@ import java.util.Set;
  * <p>This class contains the native interop code that was previously in {@link LiteralGuarantee}.
  */
 final class LiteralGuaranteeFfi {
+
+  private static final MethodHandle LITERAL_GUARANTEE_ANALYZE =
+      NativeUtil.downcall(
+          "datafusion_literal_guarantee_analyze",
+          FunctionDescriptor.of(
+              ValueLayout.ADDRESS,
+              ValueLayout.ADDRESS, // expr
+              ValueLayout.ADDRESS, // count_out
+              ValueLayout.ADDRESS // error_out
+              ));
+
+  private static final MethodHandle GUARANTEES_DESTROY =
+      NativeUtil.downcall(
+          "datafusion_guarantees_destroy", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
+
+  private static final MethodHandle GUARANTEE_GET_INFO =
+      NativeUtil.downcall(
+          "datafusion_guarantee_get_info",
+          FunctionDescriptor.of(
+              ValueLayout.JAVA_INT,
+              ValueLayout.ADDRESS, // handle
+              ValueLayout.JAVA_LONG, // idx
+              ValueLayout.ADDRESS, // name_out
+              ValueLayout.ADDRESS, // name_len_out
+              ValueLayout.ADDRESS, // rel_type_out
+              ValueLayout.ADDRESS, // rel_strs_out
+              ValueLayout.ADDRESS, // guarantee_type_out
+              ValueLayout.ADDRESS, // literal_count_out
+              ValueLayout.ADDRESS, // spans_count_out
+              ValueLayout.ADDRESS // error_out
+              ));
+
+  private static final MethodHandle GUARANTEE_GET_SPAN =
+      NativeUtil.downcall(
+          "datafusion_guarantee_get_span",
+          FunctionDescriptor.of(
+              ValueLayout.JAVA_INT,
+              ValueLayout.ADDRESS, // handle
+              ValueLayout.JAVA_LONG, // g_idx
+              ValueLayout.JAVA_LONG, // s_idx
+              ValueLayout.ADDRESS, // start_line_out
+              ValueLayout.ADDRESS, // start_col_out
+              ValueLayout.ADDRESS, // end_line_out
+              ValueLayout.ADDRESS, // end_col_out
+              ValueLayout.ADDRESS // error_out
+              ));
+
+  private static final MethodHandle GUARANTEE_GET_LITERAL =
+      NativeUtil.downcall(
+          "datafusion_guarantee_get_literal",
+          FunctionDescriptor.of(
+              ValueLayout.JAVA_INT,
+              ValueLayout.ADDRESS, // handle
+              ValueLayout.JAVA_LONG, // g_idx
+              ValueLayout.JAVA_LONG, // l_idx
+              ValueLayout.ADDRESS, // scalar_out
+              ValueLayout.ADDRESS // error_out
+              ));
 
   private LiteralGuaranteeFfi() {}
 
@@ -37,7 +97,7 @@ final class LiteralGuaranteeFfi {
       try {
         handle =
             (MemorySegment)
-                DataFusionBindings.LITERAL_GUARANTEE_ANALYZE.invokeExact(
+                LITERAL_GUARANTEE_ANALYZE.invokeExact(
                     expr.ffi().nativeHandle(), countOut, errorOut);
       } catch (Throwable e) {
         throw new DataFusionException("Failed to analyze literal guarantees", e);
@@ -48,7 +108,7 @@ final class LiteralGuaranteeFfi {
         return readGuarantees(arena, handle, countOut.get(ValueLayout.JAVA_LONG, 0));
       } finally {
         try {
-          DataFusionBindings.GUARANTEES_DESTROY.invokeExact(handle);
+          GUARANTEES_DESTROY.invokeExact(handle);
         } catch (Throwable ignored) {
           // Best effort cleanup
         }
@@ -79,7 +139,7 @@ final class LiteralGuaranteeFfi {
           "Get guarantee info",
           errorOut ->
               (int)
-                  DataFusionBindings.GUARANTEE_GET_INFO.invokeExact(
+                  GUARANTEE_GET_INFO.invokeExact(
                       handle,
                       (long) guaranteeIdx,
                       nameOut,
@@ -118,7 +178,7 @@ final class LiteralGuaranteeFfi {
             "Get guarantee span",
             errorOut ->
                 (int)
-                    DataFusionBindings.GUARANTEE_GET_SPAN.invokeExact(
+                    GUARANTEE_GET_SPAN.invokeExact(
                         handle,
                         (long) guaranteeIdx,
                         (long) spanIdx,
@@ -159,7 +219,7 @@ final class LiteralGuaranteeFfi {
             "Get guarantee literal",
             errorOut ->
                 (int)
-                    DataFusionBindings.GUARANTEE_GET_LITERAL.invokeExact(
+                    GUARANTEE_GET_LITERAL.invokeExact(
                         handle, (long) guaranteeIdx, (long) litIdx, scalarOut, errorOut));
 
         literals.add(ScalarValueFfi.fromFfi(scalarOut));

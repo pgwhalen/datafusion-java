@@ -1,7 +1,10 @@
 package org.apache.arrow.datafusion;
 
 import java.lang.foreign.Arena;
+import java.lang.foreign.FunctionDescriptor;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
+import java.lang.invoke.MethodHandle;
 import org.apache.arrow.memory.BufferAllocator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,6 +17,20 @@ import org.slf4j.LoggerFactory;
  */
 final class DataFrameFfi implements AutoCloseable {
   private static final Logger logger = LoggerFactory.getLogger(DataFrameFfi.class);
+
+  private static final MethodHandle DATAFRAME_DESTROY =
+      NativeUtil.downcall(
+          "datafusion_dataframe_destroy", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
+
+  private static final MethodHandle DATAFRAME_EXECUTE_STREAM =
+      NativeUtil.downcall(
+          "datafusion_dataframe_execute_stream",
+          FunctionDescriptor.of(
+              ValueLayout.ADDRESS,
+              ValueLayout.ADDRESS, // rt
+              ValueLayout.ADDRESS, // df
+              ValueLayout.ADDRESS // error_out
+              ));
 
   private final MemorySegment runtime;
   private final MemorySegment dataframe;
@@ -41,8 +58,7 @@ final class DataFrameFfi implements AutoCloseable {
               "Execute stream",
               errorOut ->
                   (MemorySegment)
-                      DataFusionBindings.DATAFRAME_EXECUTE_STREAM.invokeExact(
-                          runtime, dataframe, errorOut));
+                      DATAFRAME_EXECUTE_STREAM.invokeExact(runtime, dataframe, errorOut));
 
       logger.debug("Created RecordBatchStream: {}", stream);
       return new RecordBatchStream(new RecordBatchStreamFfi(runtime, stream, allocator));
@@ -64,7 +80,7 @@ final class DataFrameFfi implements AutoCloseable {
     if (!closed) {
       closed = true;
       try {
-        DataFusionBindings.DATAFRAME_DESTROY.invokeExact(dataframe);
+        DATAFRAME_DESTROY.invokeExact(dataframe);
         logger.debug("Closed DataFrame");
       } catch (Throwable e) {
         logger.error("Error closing DataFrame", e);

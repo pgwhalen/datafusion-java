@@ -86,15 +86,15 @@ Use `NativeUtil` high-level methods to combine allocation, invocation, and error
 ```java
 // For void operations (int result, 0 = success):
 NativeUtil.call(arena, "Operation name", errorOut ->
-    (int) DataFusionBindings.SOME_FUNCTION.invokeExact(arg1, arg2, errorOut));
+    (int) SOME_FUNCTION.invokeExact(arg1, arg2, errorOut));
 
 // For pointer-returning operations:
 MemorySegment ptr = NativeUtil.callForPointer(arena, "Operation name", errorOut ->
-    (MemorySegment) DataFusionBindings.CREATE_THING.invokeExact(arg, errorOut));
+    (MemorySegment) CREATE_THING.invokeExact(arg, errorOut));
 
 // For stream operations (positive=data, 0=end, negative=error):
 int result = NativeUtil.callForStreamResult(arena, "Stream next", errorOut ->
-    (int) DataFusionBindings.STREAM_NEXT.invokeExact(stream, out, errorOut));
+    (int) STREAM_NEXT.invokeExact(stream, out, errorOut));
 ```
 
 ### Java Side: Low-Level Error Handling
@@ -186,7 +186,7 @@ final class SomeHandle implements TraitHandle {
 
     SomeHandle(Arena arena) {
         // Create upcall stubs bound to this instance
-        Linker linker = DataFusionBindings.getLinker();
+        Linker linker = NativeUtil.getLinker();
         this.callbackStub = linker.upcallStub(CALLBACK_MH.bindTo(this), CALLBACK_DESC, arena);
     }
 
@@ -202,9 +202,9 @@ final class SomeHandle implements TraitHandle {
 }
 ```
 
-### Rust Callback Structs
+### Rust Callback Structs (Callback Pattern)
 
-The Rust side defines callback structs that Java populates:
+When using the callback pattern (see "Handle Class Pattern" below), the Rust side defines callback structs that Java populates:
 
 ```rust
 #[repr(C)]
@@ -215,7 +215,7 @@ pub struct JavaCallbacks {
 }
 ```
 
-### 1:1 Callback-to-Trait-Method Rule
+### 1:1 Callback-to-Trait-Method Rule (Callback Pattern)
 
 Each function pointer in a `Java*Callbacks` struct must correspond 1:1 to a method on the DataFusion trait **and** the Java interface it mirrors. Do not split one trait method into multiple callbacks, and do not merge multiple trait methods into one callback.
 
@@ -250,6 +250,155 @@ void getProperties(MemorySegment javaObject, MemorySegment propertiesOut) {
 ```
 
 This keeps the callback struct aligned with the trait hierarchy and makes it easy to verify correctness by comparing `Java*Callbacks` fields against DataFusion trait methods.
+
+## Direct FFI Struct Construction
+
+Handle classes that implement upstream `datafusion-ffi` traits (e.g., `ExecutionPlan`, `RecordBatchStream`) use a different pattern from the callback structs above. Instead of defining intermediate Rust callback structs and wrapper types, Java constructs the upstream FFI struct directly in Java arena memory and populates it with upcall stub function pointers. Rust's `TryFrom<&FFI_Xxx>` conversion then produces the final DataFusion trait object.
+
+### Architecture
+
+The callback pattern uses intermediate Rust layers:
+
+```
+Java Handle → Rust Java*Callbacks → Rust JavaBacked* wrapper → DataFusion trait
+```
+
+Direct struct construction eliminates them:
+
+```
+Java Handle → FFI_Xxx (constructed in Java arena) → ForeignXxx (via TryFrom)
+```
+
+### When to Use Each Pattern
+
+**Direct struct construction is always preferred** when the upstream `datafusion-ffi` crate defines a corresponding `FFI_*` struct. This eliminates intermediate Rust layers (`Java*Callbacks` + `JavaBacked*` wrapper) and lets Rust's existing `TryFrom<&FFI_Xxx>` do the conversion.
+
+The **callback pattern** is a legacy approach still used by some Handle classes (see "Existing violations" under Handle Class Pattern). It should not be used for new Handle classes unless there is no upstream `FFI_*` struct available in `datafusion-ffi`.
+
+### Struct Layouts, VarHandles, and Runtime Validation
+
+Define the struct as a named `StructLayout` and derive `VarHandle` accessors from it. Validate the layout's size at first construction against Rust size helpers:
+
+```java
+private static final StructLayout FFI_STRUCT_LAYOUT =
+    MemoryLayout.structLayout(
+        ValueLayout.ADDRESS.withName("field_a"),
+        ValueLayout.ADDRESS.withName("field_b"),
+        ValueLayout.ADDRESS.withName("release"),
+        ValueLayout.ADDRESS.withName("private_data"));
+
+private static final VarHandle VH_FIELD_A =
+    FFI_STRUCT_LAYOUT.varHandle(PathElement.groupElement("field_a"));
+private static final VarHandle VH_FIELD_B =
+    FFI_STRUCT_LAYOUT.varHandle(PathElement.groupElement("field_b"));
+
+private static final MethodHandle FFI_STRUCT_SIZE_MH =
+    NativeUtil.downcall("datafusion_ffi_struct_size", FunctionDescriptor.of(ValueLayout.JAVA_LONG));
+
+private static void validateSizes() {
+    NativeUtil.validateSize(FFI_STRUCT_LAYOUT.byteSize(), FFI_STRUCT_SIZE_MH, "FFI_Struct");
+}
+```
+
+Field access uses the `VarHandle` with a `0L` base offset (required by the FFM API in all JDK versions):
+
+```java
+VH_FIELD_A.set(ffiStruct, 0L, upcallStubSegment);
+```
+
+### Struct-Returning Callbacks
+
+When callbacks must return `abi_stable` or `async-ffi` structs (not simple `int`/`void`), use `StructLayout` descriptors:
+
+```java
+private static final StructLayout RESULT_LAYOUT =
+    MemoryLayout.structLayout(
+        MemoryLayout.sequenceLayout(SIZE / 8, ValueLayout.JAVA_LONG));
+
+private static final FunctionDescriptor CALLBACK_DESC =
+    FunctionDescriptor.of(RESULT_LAYOUT, ValueLayout.ADDRESS, ValueLayout.ADDRESS);
+```
+
+The callback Java method returns `MemorySegment` (pointing to a pre-allocated buffer).
+
+### Pre-allocated Return Buffers
+
+Allocate return buffers once in the constructor to avoid per-call allocation:
+
+```java
+private final MemorySegment resultBuffer;
+
+Handle(Arena arena) {
+    this.resultBuffer = arena.allocate(RESULT_SIZE, 8);
+}
+
+MemorySegment callback(MemorySegment arg) {
+    resultBuffer.fill((byte) 0);
+    // ... populate buffer ...
+    return resultBuffer;
+}
+```
+
+### copyStructTo
+
+Since the struct is constructed in Java arena memory (not Rust heap), callers copy the struct bytes into the Rust-side output buffer using `copyStructTo` rather than `setToPointer`:
+
+```java
+void copyStructTo(MemorySegment out) {
+    out.reinterpret(FFI_STRUCT_SIZE).copyFrom(ffiStruct);
+}
+```
+
+### Library Marker
+
+`FFI_ExecutionPlan` and `FFI_PlanProperties` have `library_marker_id` fields. Java sets these to a Rust-provided marker function so that `TryFrom` takes the "foreign library" conversion path (not the same-library fast-path):
+
+```java
+private static final MemorySegment JAVA_MARKER_ID_FN =
+    NativeLoader.get().find("datafusion_java_marker_id").orElseThrow();
+```
+
+The marker function is defined in `execution_plan.rs`.
+
+### Discriminant-Based Enum Returns
+
+`abi_stable` enums like `ROption`, `RResult`, and `FfiPoll` use byte discriminants at fixed offsets:
+
+```java
+// FfiPoll::Ready(RSome(ROk(payload)))
+buffer.set(ValueLayout.JAVA_BYTE, 0, (byte) 0);  // FfiPoll: Ready
+buffer.set(ValueLayout.JAVA_BYTE, 8, (byte) 0);  // ROption: RSome
+buffer.set(ValueLayout.JAVA_BYTE, 16, (byte) 0); // RResult: ROk
+// payload starts at offset 24
+```
+
+### `repr(C)` Enum Returns
+
+`datafusion-ffi` enums like `FFI_Partitioning`, `FFI_EmissionType`, and `FFI_Boundedness` use `#[repr(C)]` layout with `i32` discriminants:
+
+```java
+// FFI_Partitioning::UnknownPartitioning(count): disc=2(i32) at 0, pad, count(long) at 8
+buffer.set(ValueLayout.JAVA_INT, 0, 2);     // UnknownPartitioning discriminant
+buffer.set(ValueLayout.JAVA_LONG, 8, count); // payload
+
+// FFI_EmissionType: returned as scalar JAVA_INT (0=Incremental, 1=Final, 2=Both)
+
+// FFI_Boundedness: disc(i32) at 0, requires_infinite_memory(bool) at 4
+buffer.set(ValueLayout.JAVA_INT, 0, boundedness); // 0=Bounded, 1=Unbounded
+```
+
+### RString Construction
+
+Error messages and string returns use `NativeUtil.writeRString()` which delegates to a Rust helper (`datafusion_create_rstring` in `native_util.rs`) since `RString` has internal structure managed by `abi_stable`.
+
+### Rust-Side Support
+
+Size validation and construction helpers live alongside their corresponding FFI functions:
+
+- **`execution_plan.rs`** -- Size helpers for `FFI_ExecutionPlan`, `FFI_PlanProperties`, `FFI_Partitioning`, `FFI_EmissionType`, `FFI_Boundedness`, and related types. Also provides `datafusion_java_marker_id()` and `datafusion_create_empty_rvec_plan()`.
+- **`record_batch_reader.rs`** -- Size helpers for `FFI_RecordBatchStream`, poll result, and wrapped schema types.
+- **`native_util.rs`** -- `datafusion_rstring_size()` and `datafusion_create_rstring()` for `abi_stable` string construction.
+- **`scalar_value.rs`** -- `datafusion_ffi_scalar_value_size()` for scalar value struct validation.
 
 ## Arrow C Data Interface
 
@@ -317,49 +466,54 @@ This keeps FFI encoding details out of the public API. Library users see clean e
 
 Every Java interface that maps to a DataFusion Rust trait MUST have a corresponding package-private `*Handle` class (e.g., `TableProvider` -> `TableProviderHandle`, `FileSource` -> `FileSourceHandle`). The Handle is the internal FFI bridge that creates upcall stubs so Rust can call back into the Java interface implementation. Users never see Handle classes; they only implement the public interface.
 
-Current pairs:
-
-| Interface | Handle |
-|-----------|--------|
-| `CatalogProvider` | `CatalogProviderHandle` |
-| `SchemaProvider` | `SchemaProviderHandle` |
-| `TableProvider` | `TableProviderHandle` |
-| `ExecutionPlan` | `ExecutionPlanHandle` |
-| `RecordBatchReader` | `RecordBatchReaderHandle` |
-| `FileFormat` | `FileFormatHandle` |
-| `FileSource` | `FileSourceHandle` |
-| `FileOpener` | `FileOpenerHandle` |
-
 #### Handle class rules
 
 1. **Implements `TraitHandle`** -- Declared as `final class XxxHandle implements TraitHandle`. The `TraitHandle` interface extends `AutoCloseable` and provides `getTraitStruct()` plus a default `setToPointer(MemorySegment)` method. Never public.
 
 2. **Wraps the interface instance** -- The constructor takes the corresponding interface as its first parameter and stores it in a field. Callback methods delegate to this interface instance.
 
-3. **Struct layout documented in comments** -- The Rust `#[repr(C)]` callback struct layout is documented as a comment block near the top, with matching `OFFSET_*` constants for each field.
+3. **Struct layout documented in comments** -- The struct layout is documented as a comment block near the top, with matching constants for each field. **Callback pattern**: `OFFSET_*` constants for the Rust `Java*Callbacks` struct. **Direct struct pattern**: `StructLayout` with `VarHandle` accessors for the upstream `FFI_*` struct, plus separate size constants for nested and returned struct types.
 
-4. **Static FunctionDescriptors and MethodHandles** -- Each callback has a static `*_DESC` (FunctionDescriptor) and a static `*_MH` (MethodHandle looked up via `init*MethodHandle()`). These are class-level constants, never per-instance, to enable JIT optimization.
+4. **Static FunctionDescriptors and MethodHandles** -- Each callback has a static `*_DESC` (FunctionDescriptor) and a static `*_MH` (MethodHandle looked up via `init*MethodHandle()`). These are class-level constants, never per-instance, to enable JIT optimization. Direct-struct-pattern Handles additionally use `StructLayout`-based descriptors for callbacks that return `abi_stable`/`async-ffi` structs.
 
-5. **Constructor signature** -- Always takes the interface instance, `BufferAllocator`, `Arena`, and `boolean fullStackTrace`. Some Handles take additional context (e.g., `Schema`). The constructor:
-   - Allocates the Rust callback struct via `DataFusionBindings.ALLOC_*_CALLBACKS`
-   - Creates `UpcallStub` instances bound to `this` for each callback
-   - Populates the struct fields with the upcall stub segments
+5. **Constructor signature** -- Always takes the interface instance, `BufferAllocator`, `Arena`, and `boolean fullStackTrace`. Some Handles take additional context (e.g., `Schema`). **Callback pattern**: the constructor allocates the Rust callback struct via a local `ALLOC_*_CALLBACKS` MethodHandle, creates `UpcallStub` instances, and populates the struct fields. **Direct struct pattern**: the constructor allocates the `FFI_*` struct in the Java arena, validates sizes against Rust helpers, pre-allocates return buffers, and populates the struct with upcall stub function pointers.
 
 6. **UpcallStub fields stored to prevent GC** -- Each upcall stub is stored in an instance field (named `*Stub`) with a comment noting this prevents garbage collection.
 
-7. **`getTraitStruct()` method** -- Returns the `MemorySegment` pointing to the populated Rust callback struct. This is what gets passed across the FFI boundary.
+7. **Struct delivery** -- **Callback pattern**: `getTraitStruct()` returns the `MemorySegment` pointing to the Rust-allocated callback struct; `setToPointer()` writes it to a Rust output buffer. **Direct struct pattern**: `copyStructTo(MemorySegment out)` copies the Java-arena struct bytes into a Rust-side output buffer.
 
 8. **Callback methods** -- Each callback method:
    - Is annotated `@SuppressWarnings("unused")` with a comment that it is called via upcall stub
    - Takes `MemorySegment javaObject` as its first parameter (unused on the Java side but required by the Rust struct calling convention)
-   - Returns `int` using `Errors.SUCCESS` on success and `Errors.fromException(errorOut, e, arena, fullStackTrace)` on failure
    - Delegates to the wrapped interface instance for business logic
+   - **Callback pattern**: Returns `int` using `Errors.SUCCESS` on success and `Errors.fromException(errorOut, e, arena, fullStackTrace)` on failure
+   - **Direct struct pattern**: Callbacks returning `abi_stable` types return `MemorySegment` pointing to a pre-allocated buffer populated with discriminants and payload
 
 9. **`release` callback** -- Every Handle has a `release(MemorySegment javaObject)` callback. This is usually a no-op (cleanup happens when the arena closes), except for `RecordBatchReaderHandle` which must close the reader to prevent resource leaks.
 
 10. **`close()` is a no-op** -- The `close()` method from `AutoCloseable` is typically empty because the callback struct is freed by Rust when it drops the wrapper.
 
-11. **Child Handle creation** -- When a callback returns a sub-object, the callback method creates the next Handle in the chain and writes its callback struct pointer to the output using `setToPointer`. For example, `SchemaProviderHandle.getTable()` creates a `TableProviderHandle` and calls `tableHandle.setToPointer(tableOut)`.
+11. **Child Handle creation** -- When a callback returns a sub-object, the callback method creates the next Handle in the chain and writes its struct to the output. **Callback pattern**: uses `setToPointer` (e.g., `SchemaProviderHandle.getTable()` creates a `TableProviderHandle` and calls `tableHandle.setToPointer(tableOut)`). **Direct struct pattern**: uses `copyStructTo` (e.g., `TableProviderHandle.scan()` creates an `ExecutionPlanHandle` and calls `planHandle.copyStructTo(planOut)`).
+
+#### Existing violations (callback pattern)
+
+The following Handle classes still use the callback pattern with intermediate `Java*Callbacks` structs and `JavaBacked*` Rust wrappers. New Handle classes should use direct struct construction. These should be migrated when feasible.
+
+| Handle | Rust Callback Struct | Rust Wrapper | Rust Files |
+|--------|---------------------|--------------|------------|
+| `CatalogProviderHandle` | `JavaCatalogProviderCallbacks` | `JavaBackedCatalogProvider` | `java_provider.rs`, `catalog_provider.rs` |
+| `SchemaProviderHandle` | `JavaSchemaProviderCallbacks` | `JavaBackedSchemaProvider` | `java_provider.rs`, `schema_provider.rs` |
+| `TableProviderHandle` | `JavaTableProviderCallbacks` | `JavaBackedTableProvider` | `java_provider.rs`, `table_provider.rs` |
+| `FileFormatHandle` | `JavaFileFormatCallbacks` | `JavaBackedFileFormat` | `file_format.rs` |
+| `FileSourceHandle` | `JavaFileSourceCallbacks` | `JavaBackedFileSource` | `file_source.rs` |
+| `FileOpenerHandle` | `JavaFileOpenerCallbacks` | `JavaBackedFileOpener` | `file_opener.rs` |
+
+Migration involves:
+1. Defining the struct layout in Java (field offsets, `StructLayout` for complex returns)
+2. Constructing the `FFI_*` struct in Java arena memory with upcall stub function pointers
+3. Adding Rust-side size helpers for runtime validation
+4. Replacing `setToPointer`/`getTraitStruct` with `copyStructTo`
+5. Removing the `Java*Callbacks` struct, `JavaBacked*` wrapper, and `ALLOC_*_CALLBACKS` downcall from Rust
 
 ## Naming Conventions
 
@@ -372,6 +526,26 @@ Current pairs:
 | Java upcall stub field | `*Stub` suffix |
 | Java Handle class | `*Handle` suffix |
 
+## Cross-Language File Naming
+
+Every Java `*Ffi` or `*Handle` class that makes downcalls into Rust must have a matching Rust source file. The Rust file name is derived from the Java class name:
+
+1. Strip the suffix (`Ffi` or `Handle`) from the Java class name
+2. Convert CamelCase to snake_case
+3. Append `.rs`
+
+For example: `SessionContextFfi` → `session_context.rs`, `TableProviderHandle` → `table_provider.rs`.
+
+### Rule
+
+All `#[no_mangle] pub extern "C" fn` entry points called by a given Java class must live in the matching Rust file. Internal Rust helpers (non-FFI functions, trait impls, wrapper structs) may live in other modules; only the `#[no_mangle]` entry points are constrained.
+
+Classes with no downcalls (e.g., `ExprFfi`, `TableReferenceFfi`) do not need a corresponding Rust file.
+
+### Enforcement
+
+`CrossLanguageNamingTest.java` validates this rule at build time by scanning Java source files for downcall function names and verifying they appear in the expected Rust file.
+
 ## FFI Encapsulation Rules
 
 All FFI implementation classes live in `org.apache.arrow.datafusion` but are **package-private** (no `public` modifier), making them invisible to library consumers.
@@ -380,7 +554,7 @@ Rules 1--4, 6, and the Handle class structural rules (implements `TraitHandle`, 
 
 ### Rules
 
-1. **FFI classes are package-private** -- `DataFusionBindings`, `NativeUtil`, `NativeLoader`, `Errors`,
+1. **FFI classes are package-private** -- `NativeUtil`, `NativeLoader`, `Errors`,
    `UpcallStub`, all `*Ffi` classes, all `*Handle` classes, `TraitHandle`, and utility
    records (`NativeString`, `PointerOut`, `LongOut`) must have no `public` modifier on their class
    declaration.
@@ -392,8 +566,8 @@ Rules 1--4, 6, and the Handle class structural rules (implements `TraitHandle`, 
 3. **No `MemorySegment` in public API signatures** -- No public constructor, method, or field may use
    `MemorySegment` as a parameter type, return type, or field type.
 
-4. **`DataFusionBindings` and `NativeUtil` confined to FFI classes** -- Only `*Ffi` and `*Handle` classes
-   may reference `DataFusionBindings` or `NativeUtil`.
+4. **`NativeUtil` confined to FFI classes** -- Only `*Ffi` and `*Handle` classes
+   may reference `NativeUtil`.
 
 5. **Delegation pattern** -- Public API classes that wrap native pointers delegate to a package-private
    `*Ffi` class. The public class holds a `*Ffi` instance field and forwards method calls to it.
@@ -403,9 +577,6 @@ Rules 1--4, 6, and the Handle class structural rules (implements `TraitHandle`, 
    accepts a `*Ffi` parameter, that constructor must be package-private. Example: `Expr(ExprFfi ffi)`
    is package-private.
 
-### Existing violations
-
-There are currently no known violations. Do NOT add new violations.
 
 ## Common Gotchas
 

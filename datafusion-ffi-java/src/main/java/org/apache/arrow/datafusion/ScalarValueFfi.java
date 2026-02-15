@@ -1,7 +1,9 @@
 package org.apache.arrow.datafusion;
 
+import java.lang.foreign.FunctionDescriptor;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.lang.invoke.MethodHandle;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.MathContext;
@@ -13,6 +15,20 @@ import java.math.MathContext;
  * deserializes an {@code FFI_ScalarValue} struct into a {@link ScalarValue} instance.
  */
 final class ScalarValueFfi {
+
+  static final MethodHandle FFI_SCALAR_VALUE_SIZE =
+      NativeUtil.downcall(
+          "datafusion_ffi_scalar_value_size", FunctionDescriptor.of(ValueLayout.JAVA_LONG));
+
+  static final MethodHandle TEST_SCALAR_VALUE =
+      NativeUtil.downcall(
+          "datafusion_test_scalar_value",
+          FunctionDescriptor.of(
+              ValueLayout.JAVA_INT,
+              ValueLayout.JAVA_INT, // type_tag
+              ValueLayout.ADDRESS, // scalar_out
+              ValueLayout.ADDRESS // error_out
+              ));
 
   private ScalarValueFfi() {}
 

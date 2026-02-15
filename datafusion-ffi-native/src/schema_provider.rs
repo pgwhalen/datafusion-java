@@ -1,7 +1,7 @@
 //! Rust SchemaProvider implementation that calls back into Java.
 
 use crate::error::{check_callback_result, set_error_return};
-use crate::java_backed_provider::JavaBackedTableProvider;
+use crate::table_provider::JavaBackedTableProvider;
 use crate::java_provider::{JavaSchemaProviderCallbacks, JavaTableProviderCallbacks};
 use async_trait::async_trait;
 use datafusion::catalog::SchemaProvider;

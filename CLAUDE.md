@@ -35,7 +35,7 @@ The new FFM-based bindings (`datafusion-ffi-java`) were created to:
 | `datafusion-ffi-native/` | Rust crate exposing C-compatible FFI functions |
 | `datafusion-ffi-java/` | Java module using FFM API to call native functions |
 | `NativeLoader.java` | Loads native library via `SymbolLookup` (package-private) |
-| `DataFusionBindings.java` | Method handles for all native functions (package-private) |
+| `NativeUtil.java` | Error handling, `downcall()` helper, `getLinker()` (package-private) |
 | `SessionContext.java` | Main entry point - create sessions, register tables, execute SQL |
 | `DataFrame.java` | Query result wrapper |
 | `RecordBatchStream.java` | Zero-copy Arrow data streaming |
@@ -231,8 +231,7 @@ This will try to build the legacy `datafusion-jni` module which has dependency i
    - Return `i32` for status codes (0 = success, -1 = error)
 
 2. **Java side** (`datafusion-ffi-java/`):
-   - Add method handle in `DataFusionBindings.java`
-   - Create or update wrapper class to call the method handle
+   - Add a `private static final MethodHandle` in the consumer `*Ffi` or `*Handle` class using `NativeUtil.downcall(...)`
    - Use `Arena.ofConfined()` for temporary allocations
    - Always check for null pointers and handle errors
 
@@ -257,27 +256,27 @@ pub unsafe extern "C" fn datafusion_new_function(
 
 **Java:**
 ```java
-// In DataFusionBindings.java
-static final MethodHandle NEW_FUNCTION =
-    downcall("datafusion_new_function",
+// In the consumer *Ffi class
+private static final MethodHandle NEW_FUNCTION =
+    NativeUtil.downcall("datafusion_new_function",
         FunctionDescriptor.of(ValueLayout.JAVA_INT,
             ValueLayout.ADDRESS,  // ctx
             ValueLayout.ADDRESS   // error_out
         ));
 
-// In wrapper class (package-private *Ffi class)
+// In the same class
 void newFunction() {
     try (Arena arena = Arena.ofConfined()) {
         MemorySegment errorOut = arena.allocate(ValueLayout.ADDRESS);
         errorOut.set(ValueLayout.ADDRESS, 0, MemorySegment.NULL);
 
-        int result = (int) DataFusionBindings.NEW_FUNCTION.invokeExact(context, errorOut);
+        int result = (int) NEW_FUNCTION.invokeExact(context, errorOut);
 
         if (result != 0) {
             MemorySegment errorPtr = errorOut.get(ValueLayout.ADDRESS, 0);
             if (!errorPtr.equals(MemorySegment.NULL)) {
                 String msg = errorPtr.reinterpret(1024).getUtf8String(0);
-                DataFusionBindings.FREE_STRING.invokeExact(errorPtr);
+                NativeUtil.FREE_STRING.invokeExact(errorPtr);
                 throw new RuntimeException(msg);
             }
         }

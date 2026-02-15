@@ -1,6 +1,9 @@
 package org.apache.arrow.datafusion;
 
+import java.lang.foreign.FunctionDescriptor;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
+import java.lang.invoke.MethodHandle;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -13,6 +16,10 @@ import org.slf4j.LoggerFactory;
  */
 final class PhysicalExprFfi implements AutoCloseable {
   private static final Logger logger = LoggerFactory.getLogger(PhysicalExprFfi.class);
+
+  private static final MethodHandle PHYSICAL_EXPR_DESTROY =
+      NativeUtil.downcall(
+          "datafusion_physical_expr_destroy", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
 
   private final MemorySegment pointer;
   private volatile boolean closed = false;
@@ -37,7 +44,7 @@ final class PhysicalExprFfi implements AutoCloseable {
     if (!closed) {
       closed = true;
       try {
-        DataFusionBindings.PHYSICAL_EXPR_DESTROY.invokeExact(pointer);
+        PHYSICAL_EXPR_DESTROY.invokeExact(pointer);
         logger.debug("Closed PhysicalExpr");
       } catch (Throwable e) {
         logger.error("Error closing PhysicalExpr", e);

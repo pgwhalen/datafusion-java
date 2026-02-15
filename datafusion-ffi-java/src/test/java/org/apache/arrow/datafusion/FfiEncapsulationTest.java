@@ -29,7 +29,6 @@ public class FfiEncapsulationTest {
 
   private static final Set<String> FFI_CLASS_SIMPLE_NAMES =
       Stream.of(
-              DataFusionBindings.class,
               NativeUtil.class,
               NativeLoader.class,
               Errors.class,
@@ -83,19 +82,7 @@ public class FfiEncapsulationTest {
           .should(notHavePublicMembersUsingMemorySegment())
           .because("MemorySegment must not appear in any public API signature (ffi.md rule 3)");
 
-  /** Rule 4a: Only FFI classes may depend on DataFusionBindings. */
-  @ArchTest
-  static final ArchRule bindingsConfinedToFfiClasses =
-      noClasses()
-          .that(DescribedPredicate.not(IS_FFI_CLASS))
-          .should()
-          .dependOnClassesThat()
-          .haveSimpleName("DataFusionBindings")
-          .because(
-              "DataFusionBindings should only be used"
-                  + " by FFI implementation classes (ffi.md rule 4)");
-
-  /** Rule 4b: Only FFI classes may depend on NativeUtil. */
+  /** Rule 4: Only FFI classes may depend on NativeUtil. */
   @ArchTest
   static final ArchRule nativeUtilConfinedToFfiClasses =
       noClasses()

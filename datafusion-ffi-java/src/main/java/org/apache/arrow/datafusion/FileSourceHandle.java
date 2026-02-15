@@ -14,6 +14,9 @@ import org.apache.arrow.vector.types.pojo.Schema;
  * FileSource}. It manages the lifecycle of the callback struct and upcall stubs.
  */
 final class FileSourceHandle implements TraitHandle {
+  private static final MethodHandle ALLOC_FILE_SOURCE_CALLBACKS =
+      NativeUtil.downcall(
+          "datafusion_alloc_file_source_callbacks", FunctionDescriptor.of(ValueLayout.ADDRESS));
 
   // Callback struct field offsets
   // struct JavaFileSourceCallbacks {
@@ -90,8 +93,7 @@ final class FileSourceHandle implements TraitHandle {
 
     try {
       // Allocate the callback struct from Rust
-      this.callbackStruct =
-          (MemorySegment) DataFusionBindings.ALLOC_FILE_SOURCE_CALLBACKS.invokeExact();
+      this.callbackStruct = (MemorySegment) ALLOC_FILE_SOURCE_CALLBACKS.invokeExact();
 
       if (callbackStruct.equals(MemorySegment.NULL)) {
         throw new DataFusionException("Failed to allocate FileSource callbacks");

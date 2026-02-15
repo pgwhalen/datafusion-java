@@ -1,8 +1,10 @@
 package org.apache.arrow.datafusion;
 
 import java.lang.foreign.Arena;
+import java.lang.foreign.FunctionDescriptor;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.lang.invoke.MethodHandle;
 import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
 import org.apache.arrow.memory.BufferAllocator;
@@ -20,6 +22,18 @@ import org.apache.arrow.vector.types.pojo.Schema;
  * management.
  */
 final class SessionFfi {
+  private static final MethodHandle SESSION_CREATE_PHYSICAL_EXPR =
+      NativeUtil.downcall(
+          "datafusion_session_create_physical_expr",
+          FunctionDescriptor.of(
+              ValueLayout.ADDRESS,
+              ValueLayout.ADDRESS, // session
+              ValueLayout.ADDRESS, // filter_ptrs
+              ValueLayout.JAVA_LONG, // filter_count
+              ValueLayout.ADDRESS, // schema_ffi
+              ValueLayout.ADDRESS // error_out
+              ));
+
   private static final long ARROW_SCHEMA_SIZE = 72;
 
   private final MemorySegment pointer;
@@ -66,7 +80,7 @@ final class SessionFfi {
                 "Create physical expression",
                 errorOut ->
                     (MemorySegment)
-                        DataFusionBindings.SESSION_CREATE_PHYSICAL_EXPR.invokeExact(
+                        SESSION_CREATE_PHYSICAL_EXPR.invokeExact(
                             pointer, filterPtrArray, (long) filters.length, schemaAddr, errorOut));
 
         return new PhysicalExprFfi(result);

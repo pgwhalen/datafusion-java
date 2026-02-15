@@ -1,88 +1,15 @@
 //! C-compatible callback struct definitions for Java-backed providers.
 //!
 //! These structs define the callback interface that Java uses to implement
-//! DataFusion's TableProvider, ExecutionPlan, SchemaProvider, and CatalogProvider
-//! traits. Java creates upcall stubs that Rust stores and invokes.
+//! DataFusion's TableProvider, SchemaProvider, and CatalogProvider traits.
+//! Java creates upcall stubs that Rust stores and invokes.
+//!
+//! ExecutionPlan and RecordBatchReader are no longer defined here — Java
+//! constructs `FFI_ExecutionPlan` and `FFI_RecordBatchStream` directly
+//! using the upstream `datafusion-ffi` types.
 
-use arrow::ffi::{FFI_ArrowArray, FFI_ArrowSchema};
+use datafusion_ffi::execution_plan::FFI_ExecutionPlan;
 use std::ffi::{c_char, c_void};
-
-/// Callback struct for a Java-backed RecordBatchReader.
-///
-/// This corresponds to Java's RecordBatchReader interface. Rust iterates the reader
-/// by calling `load_next_batch_fn` repeatedly until it returns 0 (end of stream).
-#[repr(C)]
-pub struct JavaRecordBatchReaderCallbacks {
-    /// Opaque pointer to the Java object (GlobalRef or similar)
-    pub java_object: *mut c_void,
-
-    /// Loads the next batch into the provided FFI structs.
-    ///
-    /// Returns:
-    ///   1 = batch available (array_out and schema_out populated)
-    ///   0 = end of stream
-    ///  -1 = error (error_out populated)
-    pub load_next_batch_fn: unsafe extern "C" fn(
-        java_object: *mut c_void,
-        array_out: *mut FFI_ArrowArray,
-        schema_out: *mut FFI_ArrowSchema,
-        error_out: *mut *mut c_char,
-    ) -> i32,
-
-    /// Called when Rust is done with this reader. Java should release resources.
-    pub release_fn: unsafe extern "C" fn(java_object: *mut c_void),
-}
-
-/// FFI bridge struct for plan properties, written by Java's `properties_fn` callback.
-///
-/// Maps 1:1 to DataFusion's `PlanProperties` and Java's `PlanProperties` record.
-#[repr(C)]
-pub struct FFI_PlanProperties {
-    /// Number of output partitions.
-    pub output_partitioning: i32,
-    /// Emission type (0=Incremental, 1=Final, 2=Both).
-    pub emission_type: i32,
-    /// Boundedness (0=Bounded, 1=Unbounded).
-    pub boundedness: i32,
-}
-
-/// Callback struct for a Java-backed ExecutionPlan.
-///
-/// This corresponds to Java's ExecutionPlan interface.
-#[repr(C)]
-pub struct JavaExecutionPlanCallbacks {
-    /// Opaque pointer to the Java object
-    pub java_object: *mut c_void,
-
-    /// Gets the schema of the execution plan output.
-    ///
-    /// Returns 0 on success, -1 on error.
-    pub schema_fn: unsafe extern "C" fn(
-        java_object: *mut c_void,
-        schema_out: *mut FFI_ArrowSchema,
-        error_out: *mut *mut c_char,
-    ) -> i32,
-
-    /// Gets the plan properties (partitioning, emission type, boundedness).
-    ///
-    /// Writes to the provided FFI_PlanProperties struct.
-    pub properties_fn:
-        unsafe extern "C" fn(java_object: *mut c_void, properties_out: *mut FFI_PlanProperties),
-
-    /// Executes the plan for the given partition.
-    ///
-    /// Returns a new JavaRecordBatchReaderCallbacks pointer on success.
-    /// Returns 0 on success, -1 on error.
-    pub execute_fn: unsafe extern "C" fn(
-        java_object: *mut c_void,
-        partition: usize,
-        reader_out: *mut *mut JavaRecordBatchReaderCallbacks,
-        error_out: *mut *mut c_char,
-    ) -> i32,
-
-    /// Called when Rust is done with this plan. Java should release resources.
-    pub release_fn: unsafe extern "C" fn(java_object: *mut c_void),
-}
 
 /// Callback struct for a Java-backed TableProvider.
 ///
@@ -97,7 +24,7 @@ pub struct JavaTableProviderCallbacks {
     /// Returns 0 on success, -1 on error.
     pub schema_fn: unsafe extern "C" fn(
         java_object: *mut c_void,
-        schema_out: *mut FFI_ArrowSchema,
+        schema_out: *mut arrow::ffi::FFI_ArrowSchema,
         error_out: *mut *mut c_char,
     ) -> i32,
 
@@ -112,8 +39,8 @@ pub struct JavaTableProviderCallbacks {
     /// projection: array of column indices, or null for all columns
     /// projection_len: length of projection array
     /// limit: maximum rows, or -1 for no limit
+    /// plan_out: pointer to FFI_ExecutionPlan buffer (Java writes 64 bytes)
     ///
-    /// Returns a new JavaExecutionPlanCallbacks pointer on success.
     /// Returns 0 on success, -1 on error.
     pub scan_fn: unsafe extern "C" fn(
         java_object: *mut c_void,
@@ -123,7 +50,7 @@ pub struct JavaTableProviderCallbacks {
         projection: *const usize,
         projection_len: usize,
         limit: i64,
-        plan_out: *mut *mut JavaExecutionPlanCallbacks,
+        plan_out: *mut FFI_ExecutionPlan,
         error_out: *mut *mut c_char,
     ) -> i32,
 
