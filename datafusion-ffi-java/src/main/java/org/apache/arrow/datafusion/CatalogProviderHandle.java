@@ -177,9 +177,7 @@ final class CatalogProviderHandle implements TraitHandle {
 
   // ======== Runtime size validation ========
 
-  private static volatile boolean sizesValidated = false;
-
-  private static void validateSizes() {
+  static void validateSizes() {
     NativeUtil.validateSize(
         FFI_CATALOG_PROVIDER_LAYOUT.byteSize(),
         FFI_CATALOG_PROVIDER_SIZE_MH,
@@ -217,12 +215,6 @@ final class CatalogProviderHandle implements TraitHandle {
     this.fullStackTrace = fullStackTrace;
 
     try {
-      // Validate sizes against Rust at first use
-      if (!sizesValidated) {
-        validateSizes();
-        sizesValidated = true;
-      }
-
       // Pre-allocate return buffers
       this.schemaNamesBuffer = arena.allocate(RVEC_RSTRING_LAYOUT);
       this.schemaBuffer = arena.allocate(ROPTION_SCHEMA_PROVIDER_LAYOUT);

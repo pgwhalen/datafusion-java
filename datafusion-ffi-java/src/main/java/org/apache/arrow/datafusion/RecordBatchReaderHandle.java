@@ -147,9 +147,6 @@ final class RecordBatchReaderHandle implements TraitHandle {
     }
   }
 
-  // Runtime-validated sizes (set once at first construction)
-  private static volatile boolean sizesValidated = false;
-
   private final Arena arena;
   private final RecordBatchReader reader;
   private final BufferAllocator allocator;
@@ -173,12 +170,6 @@ final class RecordBatchReaderHandle implements TraitHandle {
     this.fullStackTrace = fullStackTrace;
 
     try {
-      // Validate sizes against Rust at first use
-      if (!sizesValidated) {
-        validateSizes();
-        sizesValidated = true;
-      }
-
       // Pre-allocate return buffers in arena
       this.pollResultBuffer = arena.allocate(POLL_RESULT_LAYOUT);
       this.schemaBuffer = arena.allocate(WRAPPED_SCHEMA_LAYOUT);
@@ -200,7 +191,7 @@ final class RecordBatchReaderHandle implements TraitHandle {
     }
   }
 
-  private static void validateSizes() {
+  static void validateSizes() {
     NativeUtil.validateSize(
         POLL_RESULT_LAYOUT.byteSize(), POLL_RESULT_SIZE, "poll_next return type");
     NativeUtil.validateSize(WRAPPED_SCHEMA_LAYOUT.byteSize(), WRAPPED_SCHEMA_SIZE, "WrappedSchema");

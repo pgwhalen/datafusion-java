@@ -447,9 +447,6 @@ final class ExecutionPlanHandle implements TraitHandle {
     return NativeUtil.JAVA_MARKER_ID_FN;
   }
 
-  // Runtime-validated sizes (set once at first construction)
-  private static volatile boolean sizesValidated = false;
-
   private final Arena arena;
   private final ExecutionPlan plan;
   private final BufferAllocator allocator;
@@ -505,12 +502,6 @@ final class ExecutionPlanHandle implements TraitHandle {
     this.fullStackTrace = fullStackTrace;
 
     try {
-      // Validate sizes against Rust at first use
-      if (!sizesValidated) {
-        validateSizes();
-        sizesValidated = true;
-      }
-
       // Cache plan properties (read once, returned from callbacks)
       PlanProperties props = plan.properties();
       this.cachedSchema = plan.schema();
@@ -606,7 +597,7 @@ final class ExecutionPlanHandle implements TraitHandle {
     }
   }
 
-  private static void validateSizes() {
+  static void validateSizes() {
     NativeUtil.validateSize(
         FFI_EXECUTION_PLAN_LAYOUT.byteSize(), FFI_EXECUTION_PLAN_SIZE_MH, "FFI_ExecutionPlan");
     NativeUtil.validateSize(

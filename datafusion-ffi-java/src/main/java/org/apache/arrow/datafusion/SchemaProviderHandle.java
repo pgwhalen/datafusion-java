@@ -220,9 +220,7 @@ final class SchemaProviderHandle implements TraitHandle {
 
   // ======== Runtime size validation ========
 
-  private static volatile boolean sizesValidated = false;
-
-  private static void validateSizes() {
+  static void validateSizes() {
     NativeUtil.validateSize(
         FFI_SCHEMA_PROVIDER_LAYOUT.byteSize(), FFI_SCHEMA_PROVIDER_SIZE_MH, "FFI_SchemaProvider");
     NativeUtil.validateSize(
@@ -259,12 +257,6 @@ final class SchemaProviderHandle implements TraitHandle {
     this.fullStackTrace = fullStackTrace;
 
     try {
-      // Validate sizes against Rust at first use
-      if (!sizesValidated) {
-        validateSizes();
-        sizesValidated = true;
-      }
-
       // Pre-allocate return buffers
       this.tableNamesBuffer = arena.allocate(RVEC_RSTRING_LAYOUT);
       this.tableBuffer = arena.allocate(TABLE_FUTURE_LAYOUT);

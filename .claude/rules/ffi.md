@@ -275,9 +275,9 @@ Java Handle → FFI_Xxx (constructed in Java arena) → ForeignXxx (via TryFrom)
 
 The **callback pattern** is a legacy approach still used by some Handle classes (see "Existing violations" under Handle Class Pattern). It should not be used for new Handle classes unless there is no upstream `FFI_*` struct available in `datafusion-ffi`.
 
-### Struct Layouts, VarHandles, and Runtime Validation
+### Struct Layouts, VarHandles, and Size Validation
 
-Define the struct as a named `StructLayout` and derive `VarHandle` accessors from it. Validate the layout's size at first construction against Rust size helpers:
+Define the struct as a named `StructLayout` and derive `VarHandle` accessors from it. Each Handle class exposes a package-private `validateSizes()` method that compares Java layout sizes against Rust-reported sizes. These are called from `FfiSizeValidationTest`, not at runtime:
 
 ```java
 private static final StructLayout FFI_STRUCT_LAYOUT =
@@ -295,7 +295,7 @@ private static final VarHandle VH_FIELD_B =
 private static final MethodHandle FFI_STRUCT_SIZE_MH =
     NativeUtil.downcall("datafusion_ffi_struct_size", FunctionDescriptor.of(ValueLayout.JAVA_LONG));
 
-private static void validateSizes() {
+static void validateSizes() {
     NativeUtil.validateSize(FFI_STRUCT_LAYOUT.byteSize(), FFI_STRUCT_SIZE_MH, "FFI_Struct");
 }
 ```

@@ -291,9 +291,7 @@ final class TableProviderHandle implements TraitHandle {
 
   // ======== Runtime size validation ========
 
-  private static volatile boolean sizesValidated = false;
-
-  private static void validateSizes() {
+  static void validateSizes() {
     NativeUtil.validateSize(
         FFI_TABLE_PROVIDER_LAYOUT.byteSize(), FFI_TABLE_PROVIDER_SIZE_MH, "FFI_TableProvider");
     NativeUtil.validateSize(
@@ -336,12 +334,6 @@ final class TableProviderHandle implements TraitHandle {
     this.fullStackTrace = fullStackTrace;
 
     try {
-      // Validate sizes against Rust at first use
-      if (!sizesValidated) {
-        validateSizes();
-        sizesValidated = true;
-      }
-
       // Pre-allocate return buffers
       this.schemaBuffer = arena.allocate(WRAPPED_SCHEMA_LAYOUT);
       this.scanBuffer = arena.allocate(SCAN_FUTURE_LAYOUT);
