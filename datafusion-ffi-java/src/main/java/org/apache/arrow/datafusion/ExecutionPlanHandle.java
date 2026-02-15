@@ -453,11 +453,10 @@ final class ExecutionPlanHandle implements TraitHandle {
   private final boolean fullStackTrace;
   private final MemorySegment ffiPlan;
 
-  // Cached plan properties (read once in constructor, returned from callbacks)
+  // Schema cached eagerly in constructor: the properties schema callback has no error channel,
+  // so exceptions from plan.schema() would crash the VM if called lazily during the upcall.
+  // Caching here ensures errors propagate cleanly through the scan() callback's error path.
   private final Schema cachedSchema;
-  private final int cachedPartitionCount;
-  private final int cachedEmissionType; // 0=Incremental, 1=Final, 2=Both
-  private final int cachedBoundedness; // 0=Bounded, 1=Unbounded
 
   // Pre-allocated buffers for FFI_ExecutionPlan callback return values
   private final MemorySegment propertiesBuffer;
@@ -502,21 +501,8 @@ final class ExecutionPlanHandle implements TraitHandle {
     this.fullStackTrace = fullStackTrace;
 
     try {
-      // Cache plan properties (read once, returned from callbacks)
-      PlanProperties props = plan.properties();
+      // Cache schema eagerly — see field comment for rationale
       this.cachedSchema = plan.schema();
-      this.cachedPartitionCount = props.outputPartitioning();
-      this.cachedEmissionType =
-          switch (props.emissionType()) {
-            case INCREMENTAL -> 0;
-            case FINAL -> 1;
-            case BOTH -> 2;
-          };
-      this.cachedBoundedness =
-          switch (props.boundedness()) {
-            case BOUNDED -> 0;
-            case UNBOUNDED -> 1;
-          };
 
       // Pre-allocate return buffers for FFI_ExecutionPlan callbacks
       this.childrenBuffer = arena.allocate(RVEC_PLAN_LAYOUT);
@@ -529,21 +515,6 @@ final class ExecutionPlanHandle implements TraitHandle {
       this.boundednessBuffer = arena.allocate(FFI_BOUNDEDNESS_LAYOUT);
       this.outputOrderingBuffer = arena.allocate(ROPTION_SORT_LAYOUT);
       this.propsSchemaBuffer = arena.allocate(WRAPPED_SCHEMA_LAYOUT);
-
-      // Pre-populate partitioning buffer (values don't change)
-      // FFI_Partitioning::UnknownPartitioning(count)
-      partitioningBuffer.fill((byte) 0);
-      VH_PART_DISC.set(partitioningBuffer, 0L, 2); // UnknownPartitioning
-      VH_PART_COUNT.set(partitioningBuffer, 0L, (long) cachedPartitionCount);
-
-      // Pre-populate boundedness buffer (values don't change)
-      boundednessBuffer.fill((byte) 0);
-      VH_BOUND_DISC.set(boundednessBuffer, 0L, cachedBoundedness);
-      // requires_infinite_memory=false — already zeroed
-
-      // Pre-populate output ordering buffer (always RNone — no sort ordering support)
-      outputOrderingBuffer.fill((byte) 0);
-      VH_SORT_DISC.set(outputOrderingBuffer, 0L, 1L); // RNone
 
       // Create upcall stubs for FFI_PlanProperties callbacks
       this.partitioningStub =
@@ -636,11 +607,20 @@ final class ExecutionPlanHandle implements TraitHandle {
   // ======== FFI_PlanProperties callbacks ========
 
   /**
-   * Callback: output_partitioning. Returns the pre-populated 48-byte FFI_Partitioning struct
-   * (UnknownPartitioning with the cached partition count).
+   * Callback: output_partitioning. Returns a 48-byte FFI_Partitioning struct (UnknownPartitioning
+   * with the current partition count).
    */
   @SuppressWarnings("unused") // Called via upcall stub
   MemorySegment getPartitioning(MemorySegment selfPtr) {
+    partitioningBuffer.fill((byte) 0);
+    int partitionCount;
+    try {
+      partitionCount = plan.properties().outputPartitioning();
+    } catch (Exception e) {
+      partitionCount = 1; // safe default — no error channel in this callback
+    }
+    VH_PART_DISC.set(partitioningBuffer, 0L, 2); // UnknownPartitioning
+    VH_PART_COUNT.set(partitioningBuffer, 0L, (long) partitionCount);
     return partitioningBuffer;
   }
 
@@ -650,24 +630,48 @@ final class ExecutionPlanHandle implements TraitHandle {
    */
   @SuppressWarnings("unused") // Called via upcall stub
   int getEmissionType(MemorySegment selfPtr) {
-    return cachedEmissionType;
+    EmissionType emissionType;
+    try {
+      emissionType = plan.properties().emissionType();
+    } catch (Exception e) {
+      emissionType = EmissionType.INCREMENTAL; // safe default — no error channel in this callback
+    }
+    return switch (emissionType) {
+      case INCREMENTAL -> 0;
+      case FINAL -> 1;
+      case BOTH -> 2;
+    };
   }
 
   /**
-   * Callback: boundedness. Returns the pre-populated 8-byte FFI_Boundedness struct. 0=Bounded,
-   * 1=Unbounded (with requires_infinite_memory=false).
+   * Callback: boundedness. Returns an 8-byte FFI_Boundedness struct. 0=Bounded, 1=Unbounded (with
+   * requires_infinite_memory=false).
    */
   @SuppressWarnings("unused") // Called via upcall stub
   MemorySegment getBoundedness(MemorySegment selfPtr) {
+    boundednessBuffer.fill((byte) 0);
+    Boundedness b;
+    try {
+      b = plan.properties().boundedness();
+    } catch (Exception e) {
+      b = Boundedness.BOUNDED; // safe default — no error channel in this callback
+    }
+    int boundedness =
+        switch (b) {
+          case BOUNDED -> 0;
+          case UNBOUNDED -> 1;
+        };
+    VH_BOUND_DISC.set(boundednessBuffer, 0L, boundedness);
     return boundednessBuffer;
   }
 
   /**
-   * Callback: output_ordering. Returns the pre-populated 40-byte ROption (always RNone — no sort
-   * ordering support).
+   * Callback: output_ordering. Returns a 40-byte ROption (always RNone — no sort ordering support).
    */
   @SuppressWarnings("unused") // Called via upcall stub
   MemorySegment getOutputOrdering(MemorySegment selfPtr) {
+    outputOrderingBuffer.fill((byte) 0);
+    VH_SORT_DISC.set(outputOrderingBuffer, 0L, 1L); // RNone
     return outputOrderingBuffer;
   }
 
