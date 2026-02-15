@@ -103,7 +103,6 @@ final class ScalarValueFfi {
   static final long OFFSET_DATA_LEN = 48;
   static final long OFFSET_PRECISION = 56;
   static final long OFFSET_SCALE = 57;
-  static final long OFFSET_FIXED_SIZE = 60;
 
   /**
    * Deserializes a ScalarValue from an FFI_ScalarValue struct.
@@ -151,10 +150,7 @@ final class ScalarValueFfi {
       case TAG_BINARY -> new ScalarValue.Binary(readBytes(struct));
       case TAG_LARGE_BINARY -> new ScalarValue.LargeBinary(readBytes(struct));
       case TAG_BINARY_VIEW -> new ScalarValue.BinaryView(readBytes(struct));
-      case TAG_FIXED_SIZE_BINARY -> {
-        int size = struct.get(ValueLayout.JAVA_INT, OFFSET_FIXED_SIZE);
-        yield new ScalarValue.FixedSizeBinary(size, readBytes(struct));
-      }
+      case TAG_FIXED_SIZE_BINARY -> new ScalarValue.FixedSizeBinary(readBytes(struct));
       case TAG_DATE32 ->
           new ScalarValue.Date32((int) struct.get(ValueLayout.JAVA_LONG, OFFSET_DATA));
       case TAG_DATE64 -> new ScalarValue.Date64(struct.get(ValueLayout.JAVA_LONG, OFFSET_DATA));

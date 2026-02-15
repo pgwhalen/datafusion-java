@@ -50,7 +50,7 @@ public sealed interface ScalarValue {
 
   record BinaryView(byte[] value) implements ScalarValue {}
 
-  record FixedSizeBinary(int size, byte[] value) implements ScalarValue {}
+  record FixedSizeBinary(byte[] value) implements ScalarValue {}
 
   // -- Boolean --
   record BooleanValue(boolean value) implements ScalarValue {}
