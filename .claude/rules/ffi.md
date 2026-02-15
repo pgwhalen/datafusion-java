@@ -277,10 +277,12 @@ The **callback pattern** is a legacy approach still used by some Handle classes 
 
 ### Struct Layouts, VarHandles, and Size Validation
 
-Define the struct as a named `StructLayout` and derive `VarHandle` accessors from it. Each Handle class exposes a package-private `validateSizes()` method that compares Java layout sizes against Rust-reported sizes. These are called from `FfiSizeValidationTest`, not at runtime:
+Every FFI class (`*Ffi` or `*Handle`) that reads or writes a C struct must define a named `StructLayout` and derive `VarHandle` accessors from it. This applies to all FFI classes — not just Handle classes. No magic-number offsets or hardcoded struct sizes are allowed; derive everything from the layout.
+
+Each such class exposes a package-private `static void validateSizes()` method that compares Java layout sizes against Rust-reported sizes. These are called from `FfiSizeValidationTest`, not at runtime:
 
 ```java
-private static final StructLayout FFI_STRUCT_LAYOUT =
+static final StructLayout FFI_STRUCT_LAYOUT =
     MemoryLayout.structLayout(
         ValueLayout.ADDRESS.withName("field_a"),
         ValueLayout.ADDRESS.withName("field_b"),
@@ -304,6 +306,44 @@ Field access uses the `VarHandle` with a `0L` base offset (required by the FFM A
 
 ```java
 VH_FIELD_A.set(ffiStruct, 0L, upcallStubSegment);
+```
+
+#### Union fields
+
+C union fields use `MemoryLayout.unionLayout()` with named members. Nested structs within unions use `MemoryLayout.structLayout()`:
+
+```java
+static final StructLayout LAYOUT = MemoryLayout.structLayout(
+    ValueLayout.JAVA_INT.withName("tag"),
+    MemoryLayout.unionLayout(
+        ValueLayout.JAVA_LONG.withName("i64_val"),
+        ValueLayout.JAVA_DOUBLE.withName("f64_val"),
+        MemoryLayout.structLayout(
+            ValueLayout.JAVA_INT.withName("lo"),
+            ValueLayout.JAVA_INT.withName("hi")
+        ).withName("pair")
+    ).withName("data"));
+```
+
+VarHandles for union and nested-struct members use chained `PathElement.groupElement()` paths:
+
+```java
+private static final VarHandle VH_I64 =
+    LAYOUT.varHandle(PathElement.groupElement("data"), PathElement.groupElement("i64_val"));
+private static final VarHandle VH_PAIR_LO =
+    LAYOUT.varHandle(
+        PathElement.groupElement("data"),
+        PathElement.groupElement("pair"),
+        PathElement.groupElement("lo"));
+```
+
+#### Computed byte offsets
+
+Computed byte offsets from the layout (via `byteOffset()`) are acceptable only for byte-level iteration (e.g., reading raw bytes from a union with `struct.get(JAVA_BYTE, offset + i)`):
+
+```java
+private static final long DATA_OFFSET =
+    LAYOUT.byteOffset(PathElement.groupElement("data"));
 ```
 
 ### Struct-Returning Callbacks
@@ -504,12 +544,12 @@ All Handle classes allocate their structs in Java arena memory and use `StructLa
 - `SchemaProviderHandle` → constructs `FFI_SchemaProvider` directly
 - `TableProviderHandle` → constructs `FFI_TableProvider` directly
 
-**Java-arena callback structs** (project-defined `Java*Callbacks` struct, no upstream `FFI_*` equivalent):
-- `FileFormatHandle` → allocates `JavaFileFormatCallbacks` in Java arena, Rust copies via `ptr::read`
-- `FileSourceHandle` → allocates `JavaFileSourceCallbacks` in Java arena, Rust copies via `ptr::read`/`MaybeUninit`
-- `FileOpenerHandle` → allocates `JavaFileOpenerCallbacks` in Java arena, Rust copies via `ptr::read`/`MaybeUninit`
+**Java-arena FFI structs** (project-defined `FFI_File*` struct, upstream-compatible naming but no upstream equivalent yet):
+- `FileFormatHandle` → allocates `FFI_FileFormat` in Java arena, Rust copies via `ptr::read`
+- `FileSourceHandle` → allocates `FFI_FileSource` in Java arena, Rust copies via `ptr::read`/`MaybeUninit`
+- `FileOpenerHandle` → allocates `FFI_FileOpener` in Java arena, Rust copies via `ptr::read`/`MaybeUninit`
 
-These still use `JavaBacked*` Rust wrapper structs but no longer use Rust-side `Box` allocation. The Rust `ALLOC_*` functions have been removed; Java owns struct memory.
+These follow the same 6-field convention as upstream structs (`trait_fn`, `clone`, `release`, `version`, `private_data`, `library_marker_id`), use `JavaBacked*` Rust wrapper structs, and allocate struct memory in the Java arena. The Rust `ALLOC_*` functions have been removed; Java owns struct memory.
 
 ## Naming Conventions
 

@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
+import java.lang.invoke.VarHandle;
 import java.math.BigInteger;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -16,14 +16,13 @@ import org.junit.jupiter.params.provider.MethodSource;
 /** Tests for ScalarValue FFI round-trip serialization. */
 public class ScalarValueTest {
 
-  @Test
-  void testStructSizeMatchesNative() throws Throwable {
-    long nativeSize = (long) ScalarValueFfi.FFI_SCALAR_VALUE_SIZE.invokeExact();
-    assertEquals(
-        ScalarValueFfi.FFI_STRUCT_SIZE,
-        nativeSize,
-        "Java FFI_STRUCT_SIZE must match native FFI_ScalarValue size");
-  }
+  // VarHandles for writing type_tag/is_null in testComplexTypesThrow
+  private static final VarHandle VH_TYPE_TAG =
+      ScalarValueFfi.FFI_SCALAR_VALUE_LAYOUT.varHandle(
+          java.lang.foreign.MemoryLayout.PathElement.groupElement("type_tag"));
+  private static final VarHandle VH_IS_NULL =
+      ScalarValueFfi.FFI_SCALAR_VALUE_LAYOUT.varHandle(
+          java.lang.foreign.MemoryLayout.PathElement.groupElement("is_null"));
 
   static Stream<Arguments> simpleTypeTagsAndExpectedTypes() {
     return Stream.of(
@@ -80,7 +79,7 @@ public class ScalarValueTest {
   @MethodSource("simpleTypeTagsAndExpectedTypes")
   void testRoundTrip(int typeTag, Class<?> expectedType) {
     try (Arena arena = Arena.ofConfined()) {
-      MemorySegment scalarOut = arena.allocate(ScalarValueFfi.FFI_STRUCT_SIZE);
+      MemorySegment scalarOut = arena.allocate(ScalarValueFfi.FFI_SCALAR_VALUE_LAYOUT);
 
       NativeUtil.call(
           arena,
@@ -100,7 +99,7 @@ public class ScalarValueTest {
   @Test
   void testSpecificValues() {
     try (Arena arena = Arena.ofConfined()) {
-      MemorySegment scalarOut = arena.allocate(ScalarValueFfi.FFI_STRUCT_SIZE);
+      MemorySegment scalarOut = arena.allocate(ScalarValueFfi.FFI_SCALAR_VALUE_LAYOUT);
 
       // Test Boolean
       callTestScalar(arena, ScalarValueFfi.TAG_BOOLEAN, scalarOut);
@@ -178,10 +177,10 @@ public class ScalarValueTest {
   @MethodSource("complexTypeTags")
   void testComplexTypesThrow(int typeTag) {
     try (Arena arena = Arena.ofConfined()) {
-      MemorySegment scalarOut = arena.allocate(ScalarValueFfi.FFI_STRUCT_SIZE);
+      MemorySegment scalarOut = arena.allocate(ScalarValueFfi.FFI_SCALAR_VALUE_LAYOUT);
       // Manually write a struct with the complex type tag and is_null=0
-      scalarOut.set(ValueLayout.JAVA_INT, ScalarValueFfi.OFFSET_TYPE_TAG, typeTag);
-      scalarOut.set(ValueLayout.JAVA_INT, ScalarValueFfi.OFFSET_IS_NULL, 0);
+      VH_TYPE_TAG.set(scalarOut, 0L, typeTag);
+      VH_IS_NULL.set(scalarOut, 0L, 0);
 
       assertThrows(
           UnsupportedOperationException.class,

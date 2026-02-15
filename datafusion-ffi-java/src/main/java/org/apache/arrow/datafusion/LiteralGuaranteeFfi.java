@@ -207,7 +207,7 @@ final class LiteralGuaranteeFfi {
       long literalCount = literalCountOut.get(ValueLayout.JAVA_LONG, 0);
       Set<ScalarValue> literals = new LinkedHashSet<>((int) literalCount);
       for (int lIdx = 0; lIdx < (int) literalCount; lIdx++) {
-        MemorySegment scalarOut = arena.allocate(ScalarValueFfi.FFI_STRUCT_SIZE);
+        MemorySegment scalarOut = arena.allocate(ScalarValueFfi.FFI_SCALAR_VALUE_LAYOUT);
 
         final int litIdx = lIdx;
         NativeUtil.call(

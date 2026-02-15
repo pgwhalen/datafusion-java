@@ -34,17 +34,22 @@ class FfiSizeValidationTest {
   }
 
   @Test
-  void fileFormatCallbacksSizes() {
+  void fileFormatSizes() {
     FileFormatHandle.validateSizes();
   }
 
   @Test
-  void fileSourceCallbacksSizes() {
+  void fileSourceSizes() {
     FileSourceHandle.validateSizes();
   }
 
   @Test
-  void fileOpenerCallbacksSizes() {
+  void fileOpenerSizes() {
     FileOpenerHandle.validateSizes();
+  }
+
+  @Test
+  void scalarValueSizes() {
+    ScalarValueFfi.validateSizes();
   }
 }
