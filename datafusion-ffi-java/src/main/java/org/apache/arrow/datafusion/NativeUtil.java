@@ -237,6 +237,103 @@ final class NativeUtil {
   }
 
   // ========================================================================
+  // Shared FFI symbol lookups (used by multiple Handle classes)
+  // ========================================================================
+
+  /** Version function pointer — stored in the {@code version} field of FFI provider structs. */
+  static final MemorySegment VERSION_FN =
+      NativeLoader.get().find("datafusion_ffi_version").orElseThrow();
+
+  /**
+   * Library marker function pointer — stored in the {@code library_marker_id} field of FFI provider
+   * structs to ensure the "foreign library" conversion path is taken.
+   */
+  static final MemorySegment JAVA_MARKER_ID_FN =
+      NativeLoader.get().find("datafusion_java_marker_id").orElseThrow();
+
+  // ========================================================================
+  // Shared FFI_LogicalExtensionCodec helpers (used by all provider Handle classes)
+  // ========================================================================
+
+  private static final MethodHandle LOGICAL_CODEC_SIZE_MH =
+      downcall("datafusion_ffi_logical_codec_size", FunctionDescriptor.of(ValueLayout.JAVA_LONG));
+
+  static final MethodHandle CREATE_NOOP_LOGICAL_CODEC =
+      downcall(
+          "datafusion_create_noop_logical_codec", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
+
+  private static volatile long logicalCodecSizeBytes = -1;
+
+  /** Get the size of FFI_LogicalExtensionCodec (cached). */
+  static long getLogicalCodecSize() {
+    long size = logicalCodecSizeBytes;
+    if (size < 0) {
+      try {
+        size = (long) LOGICAL_CODEC_SIZE_MH.invokeExact();
+        logicalCodecSizeBytes = size;
+      } catch (Throwable e) {
+        throw new DataFusionException("Failed to query FFI_LogicalExtensionCodec size", e);
+      }
+    }
+    return size;
+  }
+
+  // ========================================================================
+  // Shared RVec<RString> / ROption<RString> helpers (used by catalog/schema Handle classes)
+  // ========================================================================
+
+  private static final MethodHandle RVEC_RSTRING_SIZE_MH =
+      downcall("datafusion_rvec_rstring_size", FunctionDescriptor.of(ValueLayout.JAVA_LONG));
+
+  static final MethodHandle CREATE_RVEC_RSTRING =
+      downcall(
+          "datafusion_create_rvec_rstring",
+          FunctionDescriptor.ofVoid(
+              ValueLayout.ADDRESS, // ptrs
+              ValueLayout.ADDRESS, // lens
+              ValueLayout.JAVA_LONG, // count
+              ValueLayout.ADDRESS // out
+              ));
+
+  private static final MethodHandle ROPTION_RSTRING_SIZE_MH =
+      downcall("datafusion_roption_rstring_size", FunctionDescriptor.of(ValueLayout.JAVA_LONG));
+
+  static final MethodHandle CREATE_ROPTION_RSTRING_NONE =
+      downcall(
+          "datafusion_create_roption_rstring_none", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
+
+  private static volatile long rvecRstringSizeBytes = -1;
+  private static volatile long roptionRstringSizeBytes = -1;
+
+  /** Get the size of RVec&lt;RString&gt; (cached). */
+  static long getRvecRstringSize() {
+    long size = rvecRstringSizeBytes;
+    if (size < 0) {
+      try {
+        size = (long) RVEC_RSTRING_SIZE_MH.invokeExact();
+        rvecRstringSizeBytes = size;
+      } catch (Throwable e) {
+        throw new DataFusionException("Failed to query RVec<RString> size", e);
+      }
+    }
+    return size;
+  }
+
+  /** Get the size of ROption&lt;RString&gt; (cached). */
+  static long getRoptionRstringSize() {
+    long size = roptionRstringSizeBytes;
+    if (size < 0) {
+      try {
+        size = (long) ROPTION_RSTRING_SIZE_MH.invokeExact();
+        roptionRstringSizeBytes = size;
+      } catch (Throwable e) {
+        throw new DataFusionException("Failed to query ROption<RString> size", e);
+      }
+    }
+    return size;
+  }
+
+  // ========================================================================
   // Lower-level utilities (for cases where the high-level API doesn't fit)
   // ========================================================================
 

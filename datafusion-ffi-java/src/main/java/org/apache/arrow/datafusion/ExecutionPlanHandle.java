@@ -444,10 +444,7 @@ final class ExecutionPlanHandle implements TraitHandle {
   }
 
   private static MemorySegment initMarkerIdFnPtr() {
-    return NativeLoader.get()
-        .find("datafusion_java_marker_id")
-        .orElseThrow(
-            () -> new ExceptionInInitializerError("Symbol not found: datafusion_java_marker_id"));
+    return NativeUtil.JAVA_MARKER_ID_FN;
   }
 
   // Runtime-validated sizes (set once at first construction)

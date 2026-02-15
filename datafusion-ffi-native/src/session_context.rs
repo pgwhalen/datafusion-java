@@ -21,11 +21,12 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::runtime::Runtime;
 
-use crate::catalog_provider::JavaBackedCatalogProvider;
 use crate::error::{clear_error, set_error_return, set_error_return_null};
 use crate::file_format::{JavaBackedFileFormat, JavaFileFormatCallbacks};
-use crate::java_provider::JavaCatalogProviderCallbacks;
 use crate::session_state::SessionStateWithRuntime;
+
+use datafusion::catalog::CatalogProvider;
+use datafusion_ffi::catalog_provider::FFI_CatalogProvider;
 
 // ============================================================================
 // Tokio Runtime
@@ -329,27 +330,31 @@ pub unsafe extern "C" fn datafusion_context_register_record_batch(
 
 /// Register a catalog with the session context.
 ///
+/// Java constructs an `FFI_CatalogProvider` in arena memory and passes a pointer.
+/// Rust reads the struct, converts it to a `ForeignCatalogProvider` (via `From`),
+/// and registers it with the context.
+///
 /// # Arguments
 /// * `ctx` - Pointer to the SessionContext
 /// * `name` - Catalog name (null-terminated C string)
-/// * `callbacks` - Pointer to JavaCatalogProviderCallbacks (takes ownership)
+/// * `ffi_provider` - Pointer to FFI_CatalogProvider (read, not consumed)
 /// * `error_out` - Pointer to receive error message
 ///
 /// # Returns
 /// 0 on success, -1 on error.
 ///
 /// # Safety
-/// All pointers must be valid. The callbacks struct ownership is transferred to Rust.
+/// All pointers must be valid. `ffi_provider` must point to a valid FFI_CatalogProvider.
 #[no_mangle]
 pub unsafe extern "C" fn datafusion_context_register_catalog(
     ctx: *mut c_void,
     name: *const c_char,
-    callbacks: *mut JavaCatalogProviderCallbacks,
+    ffi_provider: *const FFI_CatalogProvider,
     error_out: *mut *mut c_char,
 ) -> i32 {
     clear_error(error_out);
 
-    if ctx.is_null() || name.is_null() || callbacks.is_null() {
+    if ctx.is_null() || name.is_null() || ffi_provider.is_null() {
         return set_error_return(error_out, "Null pointer argument");
     }
 
@@ -361,11 +366,12 @@ pub unsafe extern "C" fn datafusion_context_register_catalog(
         Err(e) => return set_error_return(error_out, &format!("Invalid catalog name: {}", e)),
     };
 
-    // Create the Java-backed catalog provider
-    let provider = JavaBackedCatalogProvider::new(callbacks);
+    // Convert FFI_CatalogProvider -> Arc<dyn CatalogProvider + Send>
+    // This clones the FFI struct (via our clone callback) and wraps in ForeignCatalogProvider
+    let provider: Arc<dyn CatalogProvider + Send> = (&*ffi_provider).into();
 
     // Register the catalog (returns the old catalog if one was registered with the same name)
-    context.register_catalog(&name_str, Arc::new(provider));
+    context.register_catalog(&name_str, provider);
 
     0
 }

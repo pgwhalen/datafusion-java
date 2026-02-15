@@ -1,221 +1,613 @@
-//! Rust TableProvider implementation that calls back into Java.
+//! Size helpers, stub functions, FfiFuture helpers, and filter deserialization
+//! for FFI_TableProvider.
+//!
+//! Java constructs `FFI_TableProvider` directly in Java arena memory.
+//! This module provides size validation helpers, clone/release callbacks,
+//! stub functions for unimplemented trait methods, Rust helpers for
+//! constructing FfiFuture return values, and filter deserialization for
+//! the scan callback.
 
-use crate::error::{check_callback_result, set_error_return};
-use crate::java_provider::JavaTableProviderCallbacks;
-use arrow::datatypes::SchemaRef;
-use arrow::ffi::FFI_ArrowSchema;
-use async_trait::async_trait;
-use datafusion::catalog::Session;
-use datafusion::common::Result;
-use datafusion::datasource::{TableProvider, TableType};
-use datafusion::logical_expr::TableProviderFilterPushDown;
-use datafusion::logical_expr::Expr;
-use datafusion::physical_plan::ExecutionPlan;
-use datafusion_ffi::execution_plan::FFI_ExecutionPlan;
-use std::any::Any;
 use std::ffi::{c_char, c_void};
-use std::mem::MaybeUninit;
-use std::sync::Arc;
+use std::sync::LazyLock;
 
-/// A TableProvider that calls back into Java.
-pub struct JavaBackedTableProvider {
-    callbacks: *mut JavaTableProviderCallbacks,
-    schema: SchemaRef,
+use abi_stable::std_types::{ROption, RString, RVec};
+use async_ffi::{FfiFuture, FutureExt};
+use datafusion::catalog::Session;
+use datafusion::execution::SessionState;
+use datafusion::logical_expr::Expr;
+use datafusion::prelude::SessionContext;
+use datafusion_ffi::execution_plan::FFI_ExecutionPlan;
+use datafusion_ffi::proto::logical_extension_codec::FFI_LogicalExtensionCodec;
+use datafusion_ffi::table_provider::FFI_TableProvider;
+use datafusion_ffi::table_source::FFI_TableProviderFilterPushDown;
+use datafusion_ffi::util::FFIResult;
+use datafusion_proto::logical_plan::from_proto::parse_exprs;
+use datafusion_proto::logical_plan::DefaultLogicalExtensionCodec;
+use datafusion_proto::protobuf::LogicalExprList;
+use prost::Message;
+
+use crate::error::{clear_error, set_error_return_null};
+
+// ============================================================================
+// Size helpers
+// ============================================================================
+
+/// Return sizeof(FFI_TableProvider) for Java validation.
+#[no_mangle]
+pub extern "C" fn datafusion_ffi_table_provider_size() -> usize {
+    std::mem::size_of::<FFI_TableProvider>()
 }
 
-impl std::fmt::Debug for JavaBackedTableProvider {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "JavaBackedTableProvider")
+/// Return sizeof(FfiFuture<FFIResult<FFI_ExecutionPlan>>) for Java validation.
+///
+/// This is the return type of the `scan` callback.
+#[no_mangle]
+pub extern "C" fn datafusion_ffi_scan_future_size() -> usize {
+    std::mem::size_of::<FfiFuture<FFIResult<FFI_ExecutionPlan>>>()
+}
+
+/// Return sizeof(RVec<usize>) for Java validation.
+///
+/// This is the `projections` parameter type in the `scan` callback.
+/// All RVec<T> have the same size (32 bytes on 64-bit).
+#[no_mangle]
+pub extern "C" fn datafusion_ffi_rvec_usize_size() -> usize {
+    std::mem::size_of::<RVec<usize>>()
+}
+
+/// Return sizeof(ROption<usize>) for Java validation.
+///
+/// This is the `limit` parameter type in the `scan` callback.
+#[no_mangle]
+pub extern "C" fn datafusion_ffi_roption_usize_size() -> usize {
+    std::mem::size_of::<ROption<usize>>()
+}
+
+/// Return the computed size of FFI_SessionRef.
+///
+/// FFI_SessionRef is `pub(crate)` in datafusion-ffi, so we compute its size
+/// from the struct definition:
+///   10 fn ptrs (80B) + FFI_LogicalExtensionCodec + 5 fields (40B)
+///
+/// Fields: session_id, config, create_physical_plan, create_physical_expr,
+/// scalar_functions, aggregate_functions, window_functions, table_options,
+/// default_table_options, task_ctx,
+/// logical_codec,
+/// clone, release, version, private_data, library_marker_id
+#[no_mangle]
+pub extern "C" fn datafusion_ffi_session_ref_size() -> usize {
+    let codec_size = std::mem::size_of::<FFI_LogicalExtensionCodec>();
+    80 + codec_size + 40
+}
+
+/// Return sizeof(FFI_TableType) for Java validation.
+///
+/// FFI_TableType is a `#[repr(C)]` enum with u32 discriminant.
+/// We extract its size using the fn_return_size trick since it's not pub.
+#[no_mangle]
+pub extern "C" fn datafusion_ffi_table_type_size() -> usize {
+    // FFI_TableType is repr(C) with no data fields, just an enum tag.
+    // size = 4 bytes (i32 discriminant on all platforms)
+    4
+}
+
+/// Return sizeof(WrappedSchema) for Java validation.
+///
+/// WrappedSchema is a newtype around FFI_ArrowSchema (72 bytes).
+#[no_mangle]
+pub extern "C" fn datafusion_ffi_wrapped_schema_size() -> usize {
+    // WrappedSchema(FFI_ArrowSchema) = FFI_ArrowSchema = 72 bytes
+    72
+}
+
+// ============================================================================
+// Clone and release callbacks
+// ============================================================================
+
+/// Clone an FFI_TableProvider.
+///
+/// Uses ptr::read for shallow copy, then deep-clones the embedded logical_codec.
+/// Several fields of FFI_TableProvider are private, so we can't use a struct literal.
+///
+/// Java stores this function's symbol in the `clone` field of FFI_TableProvider.
+#[no_mangle]
+pub unsafe extern "C" fn datafusion_table_provider_clone(
+    provider: &FFI_TableProvider,
+) -> FFI_TableProvider {
+    // Shallow copy all bytes
+    let mut cloned: FFI_TableProvider = std::ptr::read(provider);
+    // Deep-clone the logical_codec (the only field with internal state)
+    let cloned_codec = provider.logical_codec.clone();
+    let old_codec = std::mem::replace(&mut cloned.logical_codec, cloned_codec);
+    std::mem::forget(old_codec); // Don't drop the shallow copy's codec
+    cloned
+}
+
+/// Release an FFI_TableProvider.
+///
+/// No-op for Java-backed providers.
+///
+/// Java stores this function's symbol in the `release` field of FFI_TableProvider.
+#[no_mangle]
+pub unsafe extern "C" fn datafusion_table_provider_release(
+    _provider: &mut FFI_TableProvider,
+) {
+    // No-op: private_data is NULL.
+    // Rust's drop glue will drop logical_codec automatically.
+}
+
+// ============================================================================
+// Stub functions for unimplemented trait methods
+// ============================================================================
+
+/// Stub for insert_into — always returns error.
+///
+/// Takes FFI_SessionRef and FFI_ExecutionPlan by reference, returns error future.
+/// We use c_void pointers since FFI_SessionRef and FFI_InsertOp are not pub.
+///
+/// Java stores this function's symbol in the `insert_into` field.
+///
+/// Note: The actual signature is:
+///   fn(&Self, FFI_SessionRef, &FFI_ExecutionPlan, FFI_InsertOp) -> FfiFuture<FFIResult<FFI_ExecutionPlan>>
+/// We match the C ABI by using *const c_void for the opaque types.
+#[no_mangle]
+pub unsafe extern "C" fn datafusion_table_provider_stub_insert_into(
+    _provider: *const c_void,
+    _session: *const c_void,
+    _input: *const c_void,
+    _insert_op: i32,
+) -> FfiFuture<FFIResult<FFI_ExecutionPlan>> {
+    let result: FFIResult<FFI_ExecutionPlan> = FFIResult::RErr(RString::from(
+        "insert_into not supported from Java-backed TableProvider",
+    ));
+    async move { result }.into_ffi()
+}
+
+// ============================================================================
+// supports_filters_pushdown default implementation
+// ============================================================================
+
+/// Default `supports_filters_pushdown` that returns `Inexact` for all filters.
+///
+/// This tells DataFusion to push all filters down to the scan callback, where
+/// the Java TableProvider can inspect them. The `Inexact` response means
+/// DataFusion may still apply the filters itself after scan returns.
+///
+/// Java stores this function's symbol in the `supports_filters_pushdown` field
+/// of FFI_TableProvider.
+#[no_mangle]
+pub unsafe extern "C" fn datafusion_table_provider_supports_filters_pushdown(
+    _provider: &FFI_TableProvider,
+    filters_serialized: RVec<u8>,
+) -> FFIResult<RVec<FFI_TableProviderFilterPushDown>> {
+    let bytes = filters_serialized.as_slice();
+    let count = match LogicalExprList::decode(bytes) {
+        Ok(list) => list.expr.len(),
+        Err(e) => {
+            return FFIResult::RErr(RString::from(
+                format!("Failed to decode filters: {}", e).as_str(),
+            ));
+        }
+    };
+
+    let pushdowns: RVec<FFI_TableProviderFilterPushDown> = (0..count)
+        .map(|_| FFI_TableProviderFilterPushDown::Inexact)
+        .collect();
+    FFIResult::ROk(pushdowns)
+}
+
+// ============================================================================
+// FfiFuture construction helpers for the `scan` callback
+// ============================================================================
+
+/// Create a ready FfiFuture wrapping a successful FFI_ExecutionPlan.
+///
+/// `ffi_plan_ptr` must point to a valid FFI_ExecutionPlan. This function
+/// takes ownership (reads the source).
+/// `out` must point to a buffer of at least `datafusion_ffi_scan_future_size()` bytes.
+///
+/// # Safety
+/// Both pointers must be valid and properly aligned.
+#[no_mangle]
+pub unsafe extern "C" fn datafusion_table_create_scan_future_ok(
+    ffi_plan_ptr: *const c_void,
+    out: *mut c_void,
+) {
+    let plan = std::ptr::read(ffi_plan_ptr as *const FFI_ExecutionPlan);
+    let result: FFIResult<FFI_ExecutionPlan> = FFIResult::ROk(plan);
+    let future = async move { result }.into_ffi();
+    std::ptr::write(
+        out as *mut FfiFuture<FFIResult<FFI_ExecutionPlan>>,
+        future,
+    );
+}
+
+/// Create a ready FfiFuture wrapping an error for scan.
+///
+/// `ptr` must point to `len` valid UTF-8 bytes.
+/// `out` must point to a buffer of at least `datafusion_ffi_scan_future_size()` bytes.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn datafusion_table_create_scan_future_error(
+    ptr: *const u8,
+    len: usize,
+    out: *mut c_void,
+) {
+    let bytes = std::slice::from_raw_parts(ptr, len);
+    let s = std::str::from_utf8_unchecked(bytes);
+    let result: FFIResult<FFI_ExecutionPlan> = FFIResult::RErr(RString::from(s));
+    let future = async move { result }.into_ffi();
+    std::ptr::write(
+        out as *mut FfiFuture<FFIResult<FFI_ExecutionPlan>>,
+        future,
+    );
+}
+
+/// Create an empty RVec<usize> and write it to the output buffer.
+///
+/// `out` must point to a buffer of at least `datafusion_ffi_rvec_usize_size()` bytes.
+///
+/// # Safety
+/// `out` must be valid and properly aligned.
+#[no_mangle]
+pub unsafe extern "C" fn datafusion_create_empty_rvec_usize(out: *mut c_void) {
+    let rvec: RVec<usize> = RVec::new();
+    std::ptr::write(out as *mut RVec<usize>, rvec);
+}
+
+/// Create an RVec<usize> from an array of usize values.
+///
+/// `values` must point to `count` valid usize values.
+/// `out` must point to a buffer of at least `datafusion_ffi_rvec_usize_size()` bytes.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn datafusion_create_rvec_usize(
+    values: *const usize,
+    count: usize,
+    out: *mut c_void,
+) {
+    let slice = std::slice::from_raw_parts(values, count);
+    let rvec: RVec<usize> = slice.into();
+    std::ptr::write(out as *mut RVec<usize>, rvec);
+}
+
+/// Create an empty RVec<u8> and write it to the output buffer.
+///
+/// `out` must point to a buffer of at least 32 bytes (sizeof RVec<u8>).
+///
+/// # Safety
+/// `out` must be valid and properly aligned.
+#[no_mangle]
+pub unsafe extern "C" fn datafusion_create_empty_rvec_u8(out: *mut c_void) {
+    let rvec: RVec<u8> = RVec::new();
+    std::ptr::write(out as *mut RVec<u8>, rvec);
+}
+
+/// Write ROption<usize>::RSome(value) to the output buffer.
+///
+/// `out` must point to a buffer of at least `datafusion_ffi_roption_usize_size()` bytes.
+///
+/// # Safety
+/// `out` must be valid and properly aligned.
+#[no_mangle]
+pub unsafe extern "C" fn datafusion_create_roption_usize_some(
+    value: usize,
+    out: *mut c_void,
+) {
+    let opt: ROption<usize> = ROption::RSome(value);
+    std::ptr::write(out as *mut ROption<usize>, opt);
+}
+
+/// Write ROption<usize>::RNone to the output buffer.
+///
+/// `out` must point to a buffer of at least `datafusion_ffi_roption_usize_size()` bytes.
+///
+/// # Safety
+/// `out` must be valid and properly aligned.
+#[no_mangle]
+pub unsafe extern "C" fn datafusion_create_roption_usize_none(out: *mut c_void) {
+    let opt: ROption<usize> = ROption::RNone;
+    std::ptr::write(out as *mut ROption<usize>, opt);
+}
+
+// ============================================================================
+// Filter deserialization helpers for the `scan` callback
+// ============================================================================
+
+/// A default SessionState for deserializing filter expressions.
+///
+/// This is used because `FFI_SessionRef` is `pub(crate)` in `datafusion-ffi`
+/// and cannot be accessed from this crate. A default SessionState provides
+/// the `FunctionRegistry` needed for `parse_exprs` and the `Session` trait
+/// needed for `create_physical_expr`. Simple filter expressions
+/// (comparisons, literals, IN lists) work with any registry.
+static DEFAULT_SESSION_STATE: LazyLock<SessionState> =
+    LazyLock::new(|| SessionContext::new().state());
+
+/// Deserialize proto-encoded filter bytes into a `Vec<Expr>`.
+///
+/// The filter bytes are a `prost`-encoded `LogicalExprList`, as produced by
+/// `ForeignTableProvider::scan()` in `datafusion-ffi`.
+///
+/// Returns a handle to a `Box<Vec<Expr>>` on success, or null on error.
+/// Use `datafusion_table_filter_ptr` to access individual expressions.
+/// Free with `datafusion_table_free_filters`.
+///
+/// # Safety
+/// - `filter_bytes` must point to `filter_len` valid bytes (or be null if `filter_len` is 0).
+/// - `count_out` must be a valid pointer.
+#[no_mangle]
+pub unsafe extern "C" fn datafusion_table_deserialize_filters(
+    filter_bytes: *const u8,
+    filter_len: usize,
+    count_out: *mut usize,
+    error_out: *mut *mut c_char,
+) -> *mut c_void {
+    clear_error(error_out);
+
+    if filter_len == 0 || filter_bytes.is_null() {
+        *count_out = 0;
+        return std::ptr::null_mut();
+    }
+
+    let bytes = std::slice::from_raw_parts(filter_bytes, filter_len);
+
+    let proto_list = match LogicalExprList::decode(bytes) {
+        Ok(l) => l,
+        Err(e) => {
+            *count_out = 0;
+            return set_error_return_null(
+                error_out,
+                &format!("Failed to decode filter protobuf: {}", e),
+            );
+        }
+    };
+
+    let codec = DefaultLogicalExtensionCodec {};
+    let exprs = match parse_exprs(proto_list.expr.iter(), &*DEFAULT_SESSION_STATE, &codec) {
+        Ok(e) => e,
+        Err(e) => {
+            *count_out = 0;
+            return set_error_return_null(
+                error_out,
+                &format!("Failed to parse filter expressions: {}", e),
+            );
+        }
+    };
+
+    *count_out = exprs.len();
+    Box::into_raw(Box::new(exprs)) as *mut c_void
+}
+
+/// Get a pointer to the `index`-th filter expression in the deserialized Vec.
+///
+/// Returns a `*const Expr` as `*const c_void`. The pointer is borrowed from
+/// the Vec and is valid until `datafusion_table_free_filters` is called.
+///
+/// # Safety
+/// - `handle` must have been returned by `datafusion_table_deserialize_filters`.
+/// - `index` must be less than the count returned by that function.
+#[no_mangle]
+pub unsafe extern "C" fn datafusion_table_filter_ptr(
+    handle: *const c_void,
+    index: usize,
+) -> *const c_void {
+    let exprs = &*(handle as *const Vec<Expr>);
+    &exprs[index] as *const Expr as *const c_void
+}
+
+/// Free the deserialized filter expressions.
+///
+/// # Safety
+/// `handle` must have been returned by `datafusion_table_deserialize_filters`,
+/// or be null (no-op).
+#[no_mangle]
+pub unsafe extern "C" fn datafusion_table_free_filters(handle: *mut c_void) {
+    if !handle.is_null() {
+        let _ = Box::from_raw(handle as *mut Vec<Expr>);
     }
 }
 
-impl JavaBackedTableProvider {
-    /// Create a new JavaBackedTableProvider from callback pointers.
-    ///
-    /// # Safety
-    /// The callbacks pointer must be valid and point to a properly initialized struct.
-    pub unsafe fn new(callbacks: *mut JavaTableProviderCallbacks) -> Result<Self> {
-        let cb = &*callbacks;
+// ============================================================================
+// Session handle helpers for the `scan` callback
+// ============================================================================
 
-        // Get schema from Java
-        let mut schema_out: FFI_ArrowSchema = std::mem::zeroed();
-        let mut error_out: *mut c_char = std::ptr::null_mut();
+/// Create a boxed session handle suitable for `datafusion_session_create_physical_expr`.
+///
+/// Since `FFI_SessionRef` is `pub(crate)` in `datafusion-ffi`, we cannot
+/// reconstruct the actual session from the FFI bytes. Instead, we provide
+/// a default `SessionContext` that supports standard filter expressions.
+///
+/// Returns a `*mut c_void` that should be passed as the `session` parameter
+/// to `datafusion_session_create_physical_expr`. Free with
+/// `datafusion_table_free_session_handle`.
+///
+/// # Safety
+/// The returned handle must be freed after use.
+#[no_mangle]
+pub extern "C" fn datafusion_table_create_session_handle() -> *mut c_void {
+    let session_ptr: *const dyn Session = &*DEFAULT_SESSION_STATE;
+    let boxed = Box::new(session_ptr);
+    Box::into_raw(boxed) as *mut c_void
+}
 
-        let result = (cb.schema_fn)(cb.java_object, &mut schema_out, &mut error_out);
-        check_callback_result(result, error_out, "get schema from Java TableProvider")?;
-
-        // Convert FFI schema to Arrow schema
-        let schema = match arrow::datatypes::Schema::try_from(&schema_out) {
-            Ok(s) => Arc::new(s),
-            Err(e) => return Err(datafusion::error::DataFusionError::ArrowError(Box::new(e), None)),
-        };
-
-        Ok(Self { callbacks, schema })
+/// Free a session handle created by `datafusion_table_create_session_handle`.
+///
+/// # Safety
+/// `handle` must have been returned by `datafusion_table_create_session_handle`,
+/// or be null (no-op).
+#[no_mangle]
+pub unsafe extern "C" fn datafusion_table_free_session_handle(handle: *mut c_void) {
+    if !handle.is_null() {
+        let _ = Box::from_raw(handle as *mut *const dyn Session);
     }
 }
 
-unsafe impl Send for JavaBackedTableProvider {}
-unsafe impl Sync for JavaBackedTableProvider {}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-#[async_trait]
-impl TableProvider for JavaBackedTableProvider {
-    fn as_any(&self) -> &dyn Any {
-        self
+    #[test]
+    fn test_table_provider_size() {
+        let size = datafusion_ffi_table_provider_size();
+        // FFI_TableProvider: 5 fn ptrs/Option + logical_codec + 5 more fields
+        let codec_size = std::mem::size_of::<FFI_LogicalExtensionCodec>();
+        let expected = 5 * 8 + codec_size + 5 * 8;
+        assert_eq!(size, expected, "FFI_TableProvider size mismatch");
     }
 
-    fn schema(&self) -> SchemaRef {
-        Arc::clone(&self.schema)
+    #[test]
+    fn test_session_ref_size() {
+        let computed = datafusion_ffi_session_ref_size();
+        let codec_size = std::mem::size_of::<FFI_LogicalExtensionCodec>();
+        assert_eq!(computed, 80 + codec_size + 40);
+        // Sanity check: should be > 200 bytes (10 ptrs + codec + 5 ptrs)
+        assert!(computed > 200, "FFI_SessionRef should be > 200 bytes");
     }
 
-    fn table_type(&self) -> TableType {
+    #[test]
+    fn test_scan_future_size() {
+        let size = datafusion_ffi_scan_future_size();
+        assert_eq!(size, 24, "FfiFuture should be 24 bytes");
+    }
+
+    #[test]
+    fn test_rvec_usize_size() {
+        let size = datafusion_ffi_rvec_usize_size();
+        assert_eq!(size, 32, "RVec<usize> should be 32 bytes");
+    }
+
+    #[test]
+    fn test_roption_usize_size() {
+        let size = datafusion_ffi_roption_usize_size();
+        assert_eq!(size, 16, "ROption<usize> should be 16 bytes");
+    }
+
+    #[test]
+    fn test_scan_future_error() {
+        let msg = "scan error";
+        let mut out: std::mem::MaybeUninit<FfiFuture<FFIResult<FFI_ExecutionPlan>>> =
+            std::mem::MaybeUninit::uninit();
         unsafe {
-            let cb = &*self.callbacks;
-            let type_val = (cb.table_type_fn)(cb.java_object);
-            match type_val {
-                0 => TableType::Base,
-                1 => TableType::View,
-                2 => TableType::Temporary,
-                _ => TableType::Base,
+            datafusion_table_create_scan_future_error(
+                msg.as_ptr(),
+                msg.len(),
+                out.as_mut_ptr() as *mut c_void,
+            );
+            let future = out.assume_init();
+            let result = futures::executor::block_on(future);
+            match result {
+                FFIResult::RErr(e) => assert_eq!(e.as_str(), "scan error"),
+                FFIResult::ROk(_) => panic!("Expected RErr, got ROk"),
             }
         }
     }
 
-    fn supports_filters_pushdown(
-        &self,
-        filters: &[&Expr],
-    ) -> Result<Vec<TableProviderFilterPushDown>> {
-        // Report all filters as Inexact: DataFusion passes them to scan() but still applies them
-        Ok(filters
-            .iter()
-            .map(|_| TableProviderFilterPushDown::Inexact)
-            .collect())
+    #[test]
+    fn test_rvec_usize_helpers() {
+        // Test empty
+        let mut out: std::mem::MaybeUninit<RVec<usize>> = std::mem::MaybeUninit::uninit();
+        unsafe {
+            datafusion_create_empty_rvec_usize(out.as_mut_ptr() as *mut c_void);
+            let rvec = out.assume_init();
+            assert_eq!(rvec.len(), 0);
+        }
+
+        // Test with values
+        let values = [1usize, 3, 5];
+        let mut out: std::mem::MaybeUninit<RVec<usize>> = std::mem::MaybeUninit::uninit();
+        unsafe {
+            datafusion_create_rvec_usize(
+                values.as_ptr(),
+                values.len(),
+                out.as_mut_ptr() as *mut c_void,
+            );
+            let rvec = out.assume_init();
+            assert_eq!(rvec.len(), 3);
+            assert_eq!(rvec[0], 1);
+            assert_eq!(rvec[1], 3);
+            assert_eq!(rvec[2], 5);
+        }
     }
 
-    async fn scan(
-        &self,
-        state: &dyn Session,
-        projection: Option<&Vec<usize>>,
-        filters: &[Expr],
-        limit: Option<usize>,
-    ) -> Result<Arc<dyn ExecutionPlan>> {
+    #[test]
+    fn test_roption_usize_helpers() {
+        // Test RSome
+        let mut out: std::mem::MaybeUninit<ROption<usize>> = std::mem::MaybeUninit::uninit();
         unsafe {
-            let cb = &*self.callbacks;
+            datafusion_create_roption_usize_some(42, out.as_mut_ptr() as *mut c_void);
+            let opt = out.assume_init();
+            assert_eq!(opt.into_option(), Some(42));
+        }
 
-            // Box the session fat pointer so it can be passed as *mut c_void.
-            // Safety: The boxed pointer only lives for the duration of this scan() call.
-            // The session reference is only used within the Java callback, which returns
-            // before we reclaim the box. We transmute to erase the borrow lifetime.
-            let session_ptr: *const dyn Session =
-                std::mem::transmute::<*const dyn Session, *const dyn Session>(state);
-            let session_box = Box::new(session_ptr);
-            let session_handle = Box::into_raw(session_box) as *mut c_void;
+        // Test RNone
+        let mut out: std::mem::MaybeUninit<ROption<usize>> = std::mem::MaybeUninit::uninit();
+        unsafe {
+            datafusion_create_roption_usize_none(out.as_mut_ptr() as *mut c_void);
+            let opt = out.assume_init();
+            assert!(opt.is_none());
+        }
+    }
 
-            // Create filter pointer array (pointers into the borrowed filters slice)
-            let filter_ptrs: Vec<*const c_void> = filters
-                .iter()
-                .map(|e| e as *const Expr as *const c_void)
-                .collect();
-
-            // Convert projection to C array
-            let (projection_ptr, projection_len) = match projection {
-                Some(p) => (p.as_ptr(), p.len()),
-                None => (std::ptr::null(), 0),
-            };
-
-            // Convert limit to i64 (-1 for no limit)
-            let limit_val = match limit {
-                Some(l) => l as i64,
-                None => -1,
-            };
-
-            // Allocate FFI_ExecutionPlan on the stack for Java to write into
-            let mut ffi_plan = MaybeUninit::<FFI_ExecutionPlan>::uninit();
+    #[test]
+    fn test_deserialize_empty_filters() {
+        unsafe {
+            let mut count: usize = 99;
             let mut error_out: *mut c_char = std::ptr::null_mut();
-
-            let result = (cb.scan_fn)(
-                cb.java_object,
-                session_handle,
-                filter_ptrs.as_ptr() as *const *const c_void,
-                filter_ptrs.len(),
-                projection_ptr,
-                projection_len,
-                limit_val,
-                ffi_plan.as_mut_ptr(),
+            let handle = datafusion_table_deserialize_filters(
+                std::ptr::null(),
+                0,
+                &mut count,
                 &mut error_out,
             );
-
-            // Reclaim and drop the boxed session pointer
-            let _ = Box::from_raw(session_handle as *mut *const dyn Session);
-
-            check_callback_result(result, error_out, "scan Java TableProvider")?;
-
-            // Convert FFI_ExecutionPlan to ForeignExecutionPlan via TryFrom
-            let ffi_plan = ffi_plan.assume_init();
-            let plan: Arc<dyn ExecutionPlan> = (&ffi_plan).try_into().map_err(|e| {
-                datafusion::error::DataFusionError::Execution(format!(
-                    "Failed to convert FFI_ExecutionPlan: {}",
-                    e
-                ))
-            })?;
-
-            Ok(plan)
+            assert!(handle.is_null());
+            assert_eq!(count, 0);
         }
     }
-}
 
-impl Drop for JavaBackedTableProvider {
-    fn drop(&mut self) {
+    #[test]
+    fn test_deserialize_filters_roundtrip() {
+        use datafusion::prelude::*;
+        use datafusion_proto::logical_plan::to_proto::serialize_exprs;
+
+        // Create a simple filter expression: col("name") = lit("A")
+        let expr = col("name").eq(lit("A"));
+        let codec = DefaultLogicalExtensionCodec {};
+        let serialized = serialize_exprs(&[expr.clone()], &codec).unwrap();
+        let proto_list = LogicalExprList { expr: serialized };
+        let bytes = proto_list.encode_to_vec();
+
         unsafe {
-            let callbacks = &*self.callbacks;
-            (callbacks.release_fn)(callbacks.java_object);
-            // Free the callbacks struct itself
-            drop(Box::from_raw(self.callbacks));
+            let mut count: usize = 0;
+            let mut error_out: *mut c_char = std::ptr::null_mut();
+            let handle = datafusion_table_deserialize_filters(
+                bytes.as_ptr(),
+                bytes.len(),
+                &mut count,
+                &mut error_out,
+            );
+            assert!(!handle.is_null(), "Should return non-null handle");
+            assert_eq!(count, 1, "Should have 1 filter");
+
+            // Get the pointer and verify it's valid
+            let ptr = datafusion_table_filter_ptr(handle, 0);
+            assert!(!ptr.is_null());
+
+            // Clean up
+            datafusion_table_free_filters(handle);
         }
     }
-}
 
-/// Allocate a JavaTableProviderCallbacks struct.
-///
-/// # Safety
-/// The returned pointer must be freed by Rust when the provider is dropped.
-#[no_mangle]
-pub extern "C" fn datafusion_alloc_table_provider_callbacks() -> *mut JavaTableProviderCallbacks {
-    Box::into_raw(Box::new(JavaTableProviderCallbacks {
-        java_object: std::ptr::null_mut(),
-        schema_fn: dummy_schema_fn,
-        table_type_fn: dummy_table_type_fn,
-        scan_fn: dummy_scan_fn,
-        release_fn: dummy_release_fn,
-    }))
-}
-
-// Dummy functions for initialization - Java will set the actual function pointers
-unsafe extern "C" fn dummy_schema_fn(
-    _java_object: *mut std::ffi::c_void,
-    _schema_out: *mut FFI_ArrowSchema,
-    error_out: *mut *mut c_char,
-) -> i32 {
-    set_error_return(error_out, "TableProvider callbacks not initialized")
-}
-
-unsafe extern "C" fn dummy_table_type_fn(_java_object: *mut std::ffi::c_void) -> i32 {
-    0 // BASE
-}
-
-unsafe extern "C" fn dummy_scan_fn(
-    _java_object: *mut std::ffi::c_void,
-    _session: *mut std::ffi::c_void,
-    _filter_ptrs: *const *const std::ffi::c_void,
-    _filter_count: usize,
-    _projection: *const usize,
-    _projection_len: usize,
-    _limit: i64,
-    _plan_out: *mut FFI_ExecutionPlan,
-    error_out: *mut *mut c_char,
-) -> i32 {
-    set_error_return(error_out, "TableProvider callbacks not initialized")
-}
-
-unsafe extern "C" fn dummy_release_fn(_java_object: *mut std::ffi::c_void) {
-    // Do nothing
+    #[test]
+    fn test_session_handle_roundtrip() {
+        let handle = datafusion_table_create_session_handle();
+        assert!(!handle.is_null());
+        unsafe {
+            datafusion_table_free_session_handle(handle);
+        }
+    }
 }

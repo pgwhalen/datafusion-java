@@ -1,168 +1,134 @@
-//! Rust CatalogProvider implementation that calls back into Java.
+//! Size helpers and stub functions for FFI_CatalogProvider.
+//!
+//! Java constructs `FFI_CatalogProvider` directly in Java arena memory.
+//! This module provides size validation helpers, clone/release callbacks,
+//! and stub functions for unimplemented trait methods.
 
-use crate::error::set_error_return;
-use crate::schema_provider::JavaBackedSchemaProvider;
-use crate::java_provider::{JavaCatalogProviderCallbacks, JavaSchemaProviderCallbacks};
-use datafusion::catalog::{CatalogProvider, SchemaProvider};
-use std::any::Any;
-use std::ffi::{c_char, CStr};
-use std::sync::Arc;
+use abi_stable::std_types::{ROption, RString};
+use datafusion_ffi::catalog_provider::FFI_CatalogProvider;
+use datafusion_ffi::schema_provider::FFI_SchemaProvider;
+use datafusion_ffi::util::FFIResult;
 
-/// A CatalogProvider that calls back into Java.
-pub struct JavaBackedCatalogProvider {
-    callbacks: *mut JavaCatalogProviderCallbacks,
-}
+// ============================================================================
+// Size helpers
+// ============================================================================
 
-impl std::fmt::Debug for JavaBackedCatalogProvider {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "JavaBackedCatalogProvider")
-    }
-}
-
-impl JavaBackedCatalogProvider {
-    /// Create a new JavaBackedCatalogProvider from callback pointers.
-    ///
-    /// # Safety
-    /// The callbacks pointer must be valid and point to a properly initialized struct.
-    pub unsafe fn new(callbacks: *mut JavaCatalogProviderCallbacks) -> Self {
-        Self { callbacks }
-    }
-}
-
-unsafe impl Send for JavaBackedCatalogProvider {}
-unsafe impl Sync for JavaBackedCatalogProvider {}
-
-impl CatalogProvider for JavaBackedCatalogProvider {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn schema_names(&self) -> Vec<String> {
-        unsafe {
-            let cb = &*self.callbacks;
-
-            let mut names_out: *mut *mut c_char = std::ptr::null_mut();
-            let mut names_len: usize = 0;
-            let mut error_out: *mut c_char = std::ptr::null_mut();
-
-            let result = (cb.schema_names_fn)(
-                cb.java_object,
-                &mut names_out,
-                &mut names_len,
-                &mut error_out,
-            );
-
-            if result != 0 {
-                // Log error but return empty list
-                if !error_out.is_null() {
-                    crate::datafusion_free_string(error_out);
-                }
-                return vec![];
-            }
-
-            if names_out.is_null() || names_len == 0 {
-                return vec![];
-            }
-
-            // Convert C strings to Rust strings
-            let mut names = Vec::with_capacity(names_len);
-            for i in 0..names_len {
-                let s = *names_out.add(i);
-                if !s.is_null() {
-                    if let Ok(name) = CStr::from_ptr(s).to_str() {
-                        names.push(name.to_string());
-                    }
-                }
-            }
-
-            // Free the string array
-            crate::datafusion_free_string_array(names_out, names_len);
-
-            names
-        }
-    }
-
-    fn schema(&self, name: &str) -> Option<Arc<dyn SchemaProvider>> {
-        unsafe {
-            let cb = &*self.callbacks;
-
-            let c_name = match std::ffi::CString::new(name) {
-                Ok(s) => s,
-                Err(_) => return None,
-            };
-
-            let mut schema_out: *mut JavaSchemaProviderCallbacks = std::ptr::null_mut();
-            let mut error_out: *mut c_char = std::ptr::null_mut();
-
-            let result = (cb.schema_fn)(
-                cb.java_object,
-                c_name.as_ptr(),
-                &mut schema_out,
-                &mut error_out,
-            );
-
-            if result != 0 {
-                if !error_out.is_null() {
-                    crate::datafusion_free_string(error_out);
-                }
-                return None;
-            }
-
-            if schema_out.is_null() {
-                return None;
-            }
-
-            let provider = JavaBackedSchemaProvider::new(schema_out);
-            Some(Arc::new(provider))
-        }
-    }
-}
-
-impl Drop for JavaBackedCatalogProvider {
-    fn drop(&mut self) {
-        unsafe {
-            let callbacks = &*self.callbacks;
-            (callbacks.release_fn)(callbacks.java_object);
-            // Free the callbacks struct itself
-            drop(Box::from_raw(self.callbacks));
-        }
-    }
-}
-
-/// Allocate a JavaCatalogProviderCallbacks struct.
-///
-/// # Safety
-/// The returned pointer must be freed by Rust when the provider is dropped.
+/// Return sizeof(FFI_CatalogProvider) for Java validation.
 #[no_mangle]
-pub extern "C" fn datafusion_alloc_catalog_provider_callbacks() -> *mut JavaCatalogProviderCallbacks
-{
-    Box::into_raw(Box::new(JavaCatalogProviderCallbacks {
-        java_object: std::ptr::null_mut(),
-        schema_names_fn: dummy_schema_names_fn,
-        schema_fn: dummy_schema_fn,
-        release_fn: dummy_release_fn,
-    }))
+pub extern "C" fn datafusion_ffi_catalog_provider_size() -> usize {
+    std::mem::size_of::<FFI_CatalogProvider>()
 }
 
-// Dummy functions for initialization - Java will set the actual function pointers
-unsafe extern "C" fn dummy_schema_names_fn(
-    _java_object: *mut std::ffi::c_void,
-    _names_out: *mut *mut *mut c_char,
-    _names_len_out: *mut usize,
-    error_out: *mut *mut c_char,
-) -> i32 {
-    set_error_return(error_out, "CatalogProvider callbacks not initialized")
+/// Return sizeof(ROption<FFI_SchemaProvider>) for Java validation.
+///
+/// This is the return type of the `schema` callback.
+#[no_mangle]
+pub extern "C" fn datafusion_ffi_roption_schema_provider_size() -> usize {
+    std::mem::size_of::<ROption<FFI_SchemaProvider>>()
 }
 
-unsafe extern "C" fn dummy_schema_fn(
-    _java_object: *mut std::ffi::c_void,
-    _name: *const c_char,
-    _schema_out: *mut *mut JavaSchemaProviderCallbacks,
-    error_out: *mut *mut c_char,
-) -> i32 {
-    set_error_return(error_out, "CatalogProvider callbacks not initialized")
+/// Return sizeof(FFIResult<ROption<FFI_SchemaProvider>>) for Java validation.
+///
+/// This is the return type of register_schema/deregister_schema stubs.
+#[no_mangle]
+pub extern "C" fn datafusion_ffi_result_roption_schema_provider_size() -> usize {
+    std::mem::size_of::<FFIResult<ROption<FFI_SchemaProvider>>>()
 }
 
-unsafe extern "C" fn dummy_release_fn(_java_object: *mut std::ffi::c_void) {
-    // Do nothing
+// ============================================================================
+// Clone and release callbacks
+// ============================================================================
+
+/// Clone an FFI_CatalogProvider.
+///
+/// Copies all function pointers, deep-clones the embedded logical_codec,
+/// and copies private_data (which is NULL for Java-backed providers).
+///
+/// Java stores this function's symbol in the `clone` field of FFI_CatalogProvider.
+#[no_mangle]
+pub unsafe extern "C" fn datafusion_catalog_provider_clone(
+    provider: &FFI_CatalogProvider,
+) -> FFI_CatalogProvider {
+    FFI_CatalogProvider {
+        schema_names: provider.schema_names,
+        schema: provider.schema,
+        register_schema: provider.register_schema,
+        deregister_schema: provider.deregister_schema,
+        logical_codec: provider.logical_codec.clone(),
+        clone: provider.clone,
+        release: provider.release,
+        version: provider.version,
+        private_data: provider.private_data,
+        library_marker_id: provider.library_marker_id,
+    }
+}
+
+/// Release an FFI_CatalogProvider.
+///
+/// No-op for Java-backed providers: private_data is NULL, and Rust's drop
+/// glue handles the embedded logical_codec after this returns.
+///
+/// Java stores this function's symbol in the `release` field of FFI_CatalogProvider.
+#[no_mangle]
+pub unsafe extern "C" fn datafusion_catalog_provider_release(
+    _provider: &mut FFI_CatalogProvider,
+) {
+    // No-op: private_data is NULL.
+    // Rust's drop glue will drop logical_codec automatically after this returns.
+}
+
+// ============================================================================
+// Stub functions for unimplemented trait methods
+// ============================================================================
+
+/// Stub for register_schema — always returns error.
+///
+/// Java stores this function's symbol in the `register_schema` field.
+#[no_mangle]
+pub unsafe extern "C" fn datafusion_catalog_provider_stub_register_schema(
+    _provider: &FFI_CatalogProvider,
+    _name: RString,
+    _schema: &FFI_SchemaProvider,
+) -> FFIResult<ROption<FFI_SchemaProvider>> {
+    FFIResult::RErr(RString::from(
+        "register_schema not supported from Java-backed CatalogProvider",
+    ))
+}
+
+/// Stub for deregister_schema — always returns error.
+///
+/// Java stores this function's symbol in the `deregister_schema` field.
+#[no_mangle]
+pub unsafe extern "C" fn datafusion_catalog_provider_stub_deregister_schema(
+    _provider: &FFI_CatalogProvider,
+    _name: RString,
+    _cascade: bool,
+) -> FFIResult<ROption<FFI_SchemaProvider>> {
+    FFIResult::RErr(RString::from(
+        "deregister_schema not supported from Java-backed CatalogProvider",
+    ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use datafusion_ffi::proto::logical_extension_codec::FFI_LogicalExtensionCodec;
+
+    #[test]
+    fn test_catalog_provider_size() {
+        let size = datafusion_ffi_catalog_provider_size();
+        // FFI_CatalogProvider: 4 fn ptrs + logical_codec + 5 more fields
+        let codec_size = std::mem::size_of::<FFI_LogicalExtensionCodec>();
+        let expected = 4 * 8 + codec_size + 5 * 8;
+        assert_eq!(size, expected, "FFI_CatalogProvider size mismatch");
+    }
+
+    #[test]
+    fn test_roption_schema_provider_size() {
+        let size = datafusion_ffi_roption_schema_provider_size();
+        // ROption<FFI_SchemaProvider>: disc(u8) + pad(7) + FFI_SchemaProvider
+        let sp_size = std::mem::size_of::<FFI_SchemaProvider>();
+        let expected = 8 + sp_size;
+        assert_eq!(size, expected, "ROption<FFI_SchemaProvider> size mismatch");
+    }
 }

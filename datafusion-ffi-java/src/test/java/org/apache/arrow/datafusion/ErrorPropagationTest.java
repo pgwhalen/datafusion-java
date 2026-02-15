@@ -25,13 +25,14 @@ import org.junit.jupiter.api.Test;
  *   <li>CatalogProvider.schemaNames() returns empty list
  *   <li>CatalogProvider.schema() returns None
  *   <li>SchemaProvider.tableNames() returns empty list
+ *   <li>TableProvider.schema() returns empty schema (upstream FFI_TableProvider has no error
+ *       channel for schema)
  * </ul>
  *
  * <p>The following callbacks DO propagate errors and are tested here:
  *
  * <ul>
  *   <li>SchemaProvider.table()
- *   <li>TableProvider.schema()
  *   <li>TableProvider.scan()
  *   <li>ExecutionPlan.schema()
  *   <li>ExecutionPlan.execute()
@@ -89,17 +90,18 @@ public class ErrorPropagationTest {
   }
 
   @Test
-  void testTableProviderSchema_errorPropagation() {
+  void testTableProviderSchema_errorHandledGracefully() {
+    // When TableProvider.schema() throws, the error cannot propagate through the
+    // upstream FFI_TableProvider struct (it has no error channel). Instead, the table
+    // appears to have an empty schema. Queries referencing columns will fail at planning.
     try (BufferAllocator allocator = new RootAllocator();
         SessionContext ctx = new SessionContext()) {
-
-      String errorMessage = "Test error in TableProvider.schema()";
 
       TableProvider errorTable =
           new TableProvider() {
             @Override
             public Schema schema() {
-              throw new RuntimeException(errorMessage);
+              throw new RuntimeException("Test error in TableProvider.schema()");
             }
 
             @Override
@@ -113,18 +115,14 @@ public class ErrorPropagationTest {
       CatalogProvider catalog = new SimpleCatalogProvider(Map.of("my_schema", schema));
       ctx.registerCatalog("test_catalog", catalog, allocator);
 
-      Exception exception =
-          assertThrows(
-              Exception.class,
-              () -> {
-                try (DataFrame df = ctx.sql("SELECT * FROM test_catalog.my_schema.error_table")) {
-                  // Should not reach here
-                }
-              });
-
-      assertTrue(
-          exception.getMessage().contains(errorMessage),
-          "Exception should contain original error message. Got: " + exception.getMessage());
+      // Should fail at planning because the table has an empty schema, not crash
+      assertThrows(
+          Exception.class,
+          () -> {
+            try (DataFrame df = ctx.sql("SELECT id FROM test_catalog.my_schema.error_table")) {
+              // Should not reach here
+            }
+          });
     }
   }
 
@@ -354,26 +352,28 @@ public class ErrorPropagationTest {
 
   @Test
   void testStackTraceIncludedWhenConfigured() {
-    // This test verifies full stack traces are included when configured via SessionConfig
+    // This test verifies full stack traces are included when configured via SessionConfig.
+    // Uses scan() error because schema() has no error channel in upstream FFI_TableProvider.
     SessionConfig config = SessionConfig.builder().fullStackTrace(true).build();
 
     try (BufferAllocator allocator = new RootAllocator();
         SessionContext ctx = new SessionContext(config)) {
 
       String errorMessage = "Stack trace test error";
+      Schema testSchema = createTestSchema();
 
       // Use a custom exception to make the stack trace identifiable
       TableProvider errorTable =
           new TableProvider() {
             @Override
             public Schema schema() {
-              throw new IllegalStateException(errorMessage);
+              return testSchema;
             }
 
             @Override
             public ExecutionPlan scan(
                 Session session, Expr[] filters, int[] projection, Long limit) {
-              throw new UnsupportedOperationException("Should not be called");
+              throw new IllegalStateException(errorMessage);
             }
           };
 
@@ -385,8 +385,9 @@ public class ErrorPropagationTest {
           assertThrows(
               Exception.class,
               () -> {
-                try (DataFrame df = ctx.sql("SELECT * FROM test_catalog.my_schema.error_table")) {
-                  // Should not reach here
+                try (DataFrame df = ctx.sql("SELECT * FROM test_catalog.my_schema.error_table");
+                    RecordBatchStream stream = df.executeStream(allocator)) {
+                  stream.loadNextBatch();
                 }
               });
 
@@ -414,7 +415,8 @@ public class ErrorPropagationTest {
 
   @Test
   void testStackTraceIncludesCause() {
-    // This test verifies that nested exception causes are included in full stack traces
+    // This test verifies that nested exception causes are included in full stack traces.
+    // Uses scan() error because schema() has no error channel in upstream FFI_TableProvider.
     SessionConfig config = SessionConfig.builder().fullStackTrace(true).build();
 
     try (BufferAllocator allocator = new RootAllocator();
@@ -422,19 +424,20 @@ public class ErrorPropagationTest {
 
       String rootCause = "Root cause of the problem";
       String wrapperMessage = "Wrapper exception";
+      Schema testSchema = createTestSchema();
 
       TableProvider errorTable =
           new TableProvider() {
             @Override
             public Schema schema() {
-              Exception cause = new IllegalArgumentException(rootCause);
-              throw new RuntimeException(wrapperMessage, cause);
+              return testSchema;
             }
 
             @Override
             public ExecutionPlan scan(
                 Session session, Expr[] filters, int[] projection, Long limit) {
-              throw new UnsupportedOperationException("Should not be called");
+              Exception cause = new IllegalArgumentException(rootCause);
+              throw new RuntimeException(wrapperMessage, cause);
             }
           };
 
@@ -446,8 +449,9 @@ public class ErrorPropagationTest {
           assertThrows(
               Exception.class,
               () -> {
-                try (DataFrame df = ctx.sql("SELECT * FROM test_catalog.my_schema.error_table")) {
-                  // Should not reach here
+                try (DataFrame df = ctx.sql("SELECT * FROM test_catalog.my_schema.error_table");
+                    RecordBatchStream stream = df.executeStream(allocator)) {
+                  stream.loadNextBatch();
                 }
               });
 
@@ -474,23 +478,25 @@ public class ErrorPropagationTest {
 
   @Test
   void testNoStackTraceByDefault() {
-    // This test verifies that stack traces are NOT included by default (only the message)
+    // This test verifies that stack traces are NOT included by default (only the message).
+    // Uses scan() error because schema() has no error channel in upstream FFI_TableProvider.
     try (BufferAllocator allocator = new RootAllocator();
         SessionContext ctx = new SessionContext()) {
 
       String errorMessage = "Default config error message";
+      Schema testSchema = createTestSchema();
 
       TableProvider errorTable =
           new TableProvider() {
             @Override
             public Schema schema() {
-              throw new IllegalStateException(errorMessage);
+              return testSchema;
             }
 
             @Override
             public ExecutionPlan scan(
                 Session session, Expr[] filters, int[] projection, Long limit) {
-              throw new UnsupportedOperationException("Should not be called");
+              throw new IllegalStateException(errorMessage);
             }
           };
 
@@ -502,8 +508,9 @@ public class ErrorPropagationTest {
           assertThrows(
               Exception.class,
               () -> {
-                try (DataFrame df = ctx.sql("SELECT * FROM test_catalog.my_schema.error_table")) {
-                  // Should not reach here
+                try (DataFrame df = ctx.sql("SELECT * FROM test_catalog.my_schema.error_table");
+                    RecordBatchStream stream = df.executeStream(allocator)) {
+                  stream.loadNextBatch();
                 }
               });
 

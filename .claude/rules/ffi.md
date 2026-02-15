@@ -501,12 +501,14 @@ The following Handle classes still use the callback pattern with intermediate `J
 
 | Handle | Rust Callback Struct | Rust Wrapper | Rust Files |
 |--------|---------------------|--------------|------------|
-| `CatalogProviderHandle` | `JavaCatalogProviderCallbacks` | `JavaBackedCatalogProvider` | `java_provider.rs`, `catalog_provider.rs` |
-| `SchemaProviderHandle` | `JavaSchemaProviderCallbacks` | `JavaBackedSchemaProvider` | `java_provider.rs`, `schema_provider.rs` |
-| `TableProviderHandle` | `JavaTableProviderCallbacks` | `JavaBackedTableProvider` | `java_provider.rs`, `table_provider.rs` |
 | `FileFormatHandle` | `JavaFileFormatCallbacks` | `JavaBackedFileFormat` | `file_format.rs` |
 | `FileSourceHandle` | `JavaFileSourceCallbacks` | `JavaBackedFileSource` | `file_source.rs` |
 | `FileOpenerHandle` | `JavaFileOpenerCallbacks` | `JavaBackedFileOpener` | `file_opener.rs` |
+
+The following have been migrated to direct struct construction:
+- `CatalogProviderHandle` → constructs `FFI_CatalogProvider` directly
+- `SchemaProviderHandle` → constructs `FFI_SchemaProvider` directly
+- `TableProviderHandle` → constructs `FFI_TableProvider` directly
 
 Migration involves:
 1. Defining the struct layout in Java (field offsets, `StructLayout` for complex returns)

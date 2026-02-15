@@ -19,22 +19,6 @@ use datafusion_ffi::record_batch_stream::FFI_RecordBatchStream;
 use datafusion_ffi::util::FFIResult;
 
 // ============================================================================
-// Library marker — prevents the `TryFrom<&FFI_ExecutionPlan>` impl from
-// taking the "local" fast-path (which would try to downcast private_data
-// to an `ExecutionPlanPrivateData`, but ours is a Java-backed plan).
-// ============================================================================
-
-/// Library marker function for Java-backed FFI_ExecutionPlan structs.
-///
-/// Java looks up this symbol and stores the function pointer in the
-/// `library_marker_id` field of FFI_ExecutionPlan.
-#[no_mangle]
-pub extern "C" fn datafusion_java_marker_id() -> usize {
-    static MARKER: u8 = 0;
-    &MARKER as *const u8 as usize
-}
-
-// ============================================================================
 // Size and layout helpers
 // ============================================================================
 
