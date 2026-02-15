@@ -528,6 +528,8 @@ Migration involves:
 | Java upcall stub field | `*Stub` suffix |
 | Java Handle class | `*Handle` suffix |
 
+The `*_DESC` and `*Stub` suffix rules are enforced at build time by `FfiNamingTest` (ArchUnit). The `*Handle` suffix rule is enforced by `FfiEncapsulationTest`.
+
 ## Cross-Language File Naming
 
 Every Java `*Ffi` or `*Handle` class that makes downcalls into Rust must have a matching Rust source file. The Rust file name is derived from the Java class name:
