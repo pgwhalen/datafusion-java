@@ -462,12 +462,6 @@ final class NativeUtil {
     return LINKER;
   }
 
-  static String getStackTrace(Exception e) {
-    java.io.StringWriter sw = new java.io.StringWriter();
-    e.printStackTrace(new java.io.PrintWriter(sw));
-    return sw.toString();
-  }
-
   static MethodHandle downcall(String name, FunctionDescriptor descriptor) {
     MemorySegment symbol =
         LOOKUP.find(name).orElseThrow(() -> new RuntimeException("Symbol not found: " + name));

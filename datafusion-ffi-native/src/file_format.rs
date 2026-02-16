@@ -1,5 +1,6 @@
 //! Rust FileFormat implementation that calls back into Java.
 
+use abi_stable::StableAbi;
 use arrow::datatypes::SchemaRef;
 use async_trait::async_trait;
 use datafusion::catalog::Session;
@@ -14,74 +15,118 @@ use datafusion::physical_plan::{ExecutionPlan, PlanProperties};
 use datafusion_datasource::TableSchema;
 use object_store::{ObjectMeta, ObjectStore};
 use std::any::Any;
-use std::ffi::{c_char, c_void};
+use datafusion_ffi::util::FFIResult;
+use std::ffi::c_void;
 use std::sync::Arc;
 
-use crate::file_source::{
-    JavaBackedFileExec, JavaBackedFileSource, JavaFileSourceCallbacks, SourceCallbacksHolder,
-};
+use crate::file_source::{FFI_FileSource, ForeignFileExec, ForeignFileSource};
 
-/// C-compatible callback struct for a Java-backed FileFormat.
+/// C-compatible FFI struct for a Java-backed FileFormat.
 ///
-/// Java allocates this struct in arena memory and populates the fields.
-/// Rust copies it via `ptr::read` when constructing a `JavaBackedFileFormat`.
+/// Follows the upstream `datafusion-ffi` convention. Java allocates this struct
+/// in arena memory and populates all fields. Rust copies it via `ptr::read`.
+///
+/// Layout (48 bytes, align 8):
+/// ```text
+/// offset  0: file_source fn ptr        (ADDRESS)
+/// offset  8: clone fn ptr              (ADDRESS)
+/// offset 16: release fn ptr            (ADDRESS)
+/// offset 24: version fn ptr            (ADDRESS)
+/// offset 32: private_data ptr          (ADDRESS)
+/// offset 40: library_marker_id fn ptr  (ADDRESS)
+/// ```
 #[repr(C)]
-pub struct JavaFileFormatCallbacks {
-    /// Opaque pointer to the Java object (unused, for consistency with other callback structs).
-    pub java_object: *mut c_void,
-
-    /// Create a FileSource, writing a `JavaFileSourceCallbacks` struct to `source_out`.
+#[derive(Debug, StableAbi)]
+pub struct FFI_FileFormat {
+    /// Create a FileSource, returning an `FFIResult<FFI_FileSource>`.
     ///
-    /// Parameters:
-    /// - java_object: opaque pointer (same as above)
-    /// - source_out: pointer to a `JavaFileSourceCallbacks` buffer (Java writes struct bytes)
-    /// - error_out: receives error message on failure
-    ///
-    /// Returns 0 on success, -1 on error.
-    pub file_source_fn: unsafe extern "C" fn(
-        java_object: *mut c_void,
-        source_out: *mut JavaFileSourceCallbacks,
-        error_out: *mut *mut c_char,
-    ) -> i32,
+    /// Returns `FFIResult::ROk(FFI_FileSource)` on success,
+    /// `FFIResult::RErr(RString)` on error.
+    pub file_source: unsafe extern "C" fn(format: &Self) -> FFIResult<FFI_FileSource>,
 
-    /// Called when Rust is done with this format. Java should release resources.
-    pub release_fn: unsafe extern "C" fn(java_object: *mut c_void),
+    /// Clone this FFI_FileFormat struct. Implemented in Rust.
+    pub clone: unsafe extern "C" fn(format: &Self) -> Self,
+
+    /// Release resources. Implemented in Rust.
+    pub release: unsafe extern "C" fn(format: &mut Self),
+
+    /// Return the FFI version. Implemented in Rust.
+    pub version: unsafe extern "C" fn() -> u64,
+
+    /// Opaque pointer to Java-side data (NULL for Java-backed providers).
+    pub private_data: *mut c_void,
+
+    /// Library marker function pointer for foreign-library detection.
+    pub library_marker_id: extern "C" fn() -> usize,
 }
 
-unsafe impl Send for JavaFileFormatCallbacks {}
-unsafe impl Sync for JavaFileFormatCallbacks {}
+unsafe impl Send for FFI_FileFormat {}
+unsafe impl Sync for FFI_FileFormat {}
+
+impl Clone for FFI_FileFormat {
+    fn clone(&self) -> Self {
+        unsafe { (self.clone)(self) }
+    }
+}
+
+impl Drop for FFI_FileFormat {
+    fn drop(&mut self) {
+        unsafe { (self.release)(self) }
+    }
+}
+
+/// Clone an FFI_FileFormat.
+///
+/// Copies all function pointers and private_data.
+/// Java stores this function's symbol in the `clone` field.
+#[no_mangle]
+pub unsafe extern "C" fn datafusion_file_format_clone(format: &FFI_FileFormat) -> FFI_FileFormat {
+    FFI_FileFormat {
+        file_source: format.file_source,
+        clone: format.clone,
+        release: format.release,
+        version: format.version,
+        private_data: format.private_data,
+        library_marker_id: format.library_marker_id,
+    }
+}
+
+/// Release an FFI_FileFormat.
+///
+/// No-op for Java-backed formats: private_data is NULL and Java's arena
+/// manages the lifecycle.
+/// Java stores this function's symbol in the `release` field.
+#[no_mangle]
+pub unsafe extern "C" fn datafusion_file_format_release(_format: &mut FFI_FileFormat) {
+    // No-op: private_data is NULL for Java-backed formats.
+}
 
 /// A FileFormat that delegates to Java via FFI callbacks.
 ///
-/// When DataFusion calls `file_source()`, this format calls `file_source_fn`
-/// to get a `JavaFileSourceCallbacks`, which is used to create a `JavaBackedFileSource`.
-pub(crate) struct JavaBackedFileFormat {
-    pub(crate) callbacks: JavaFileFormatCallbacks,
+/// When DataFusion calls `file_source()`, this format calls `file_source`
+/// to get an `FFI_FileSource`, which is used to create a `ForeignFileSource`.
+///
+/// Note: No manual `Drop` impl — the `FFI_FileFormat` field has its own `Drop`
+/// that calls the release callback.
+pub(crate) struct ForeignFileFormat {
+    pub(crate) ffi: FFI_FileFormat,
     pub(crate) schema: SchemaRef,
     pub(crate) extension: String,
 }
 
-unsafe impl Send for JavaBackedFileFormat {}
-unsafe impl Sync for JavaBackedFileFormat {}
+unsafe impl Send for ForeignFileFormat {}
+unsafe impl Sync for ForeignFileFormat {}
 
-impl std::fmt::Debug for JavaBackedFileFormat {
+impl std::fmt::Debug for ForeignFileFormat {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("JavaBackedFileFormat")
+        f.debug_struct("ForeignFileFormat")
             .field("extension", &self.extension)
             .finish()
     }
 }
 
-impl Drop for JavaBackedFileFormat {
-    fn drop(&mut self) {
-        unsafe {
-            (self.callbacks.release_fn)(self.callbacks.java_object);
-        }
-    }
-}
-
 #[async_trait]
-impl FileFormat for JavaBackedFileFormat {
+impl FileFormat for ForeignFileFormat {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -107,32 +152,20 @@ impl FileFormat for JavaBackedFileFormat {
     }
 
     fn file_source(&self, table_schema: TableSchema) -> Arc<dyn FileSource> {
-        // Call Java to get a FileSource
-        let mut source_callbacks = std::mem::MaybeUninit::<JavaFileSourceCallbacks>::uninit();
-        let mut error_out: *mut c_char = std::ptr::null_mut();
+        // Call Java to get a FileSource via FFIResult
+        let result: FFIResult<FFI_FileSource> = unsafe { (self.ffi.file_source)(&self.ffi) };
 
-        let result = unsafe {
-            (self.callbacks.file_source_fn)(
-                self.callbacks.java_object,
-                source_callbacks.as_mut_ptr(),
-                &mut error_out,
-            )
+        // file_source() is infallible, so defer the error to the first fallible
+        // method (create_file_opener) via ForeignFileSource.ffi: Result<Arc<FFI_FileSource>, String>.
+        let ffi = match result {
+            FFIResult::ROk(s) => Ok(Arc::new(s)),
+            FFIResult::RErr(e) => Err(e.to_string()),
         };
-
-        // Note: file_source() cannot return an error, so we panic on failure.
-        // This matches how other FileFormat impls handle infallible initialization.
-        if result != 0 {
-            panic!("Java FileFormat.fileSource failed");
-        }
-
-        let source_callbacks = unsafe { source_callbacks.assume_init() };
 
         let projection =
             datafusion_datasource::projection::SplitProjection::unprojected(&table_schema);
-        Arc::new(JavaBackedFileSource {
-            callbacks: Arc::new(SourceCallbacksHolder {
-                callbacks: source_callbacks,
-            }),
+        Arc::new(ForeignFileSource {
+            ffi,
             table_schema,
             schema: Arc::clone(&self.schema),
             projection,
@@ -179,7 +212,7 @@ impl FileFormat for JavaBackedFileFormat {
             Boundedness::Bounded,
         );
 
-        Ok(Arc::new(JavaBackedFileExec {
+        Ok(Arc::new(ForeignFileExec {
             base_config: conf,
             file_source,
             metrics: ExecutionPlanMetricsSet::new(),
@@ -189,8 +222,14 @@ impl FileFormat for JavaBackedFileFormat {
     }
 }
 
-/// Return the size of `JavaFileFormatCallbacks` for Java-side validation.
+/// Return the size of `FFI_FileFormat` for Java-side validation.
 #[no_mangle]
-pub extern "C" fn datafusion_ffi_file_format_callbacks_size() -> usize {
-    std::mem::size_of::<JavaFileFormatCallbacks>()
+pub extern "C" fn datafusion_ffi_file_format_size() -> usize {
+    std::mem::size_of::<FFI_FileFormat>()
+}
+
+/// Return the size of `FFIResult<FFI_FileSource>` for Java-side validation.
+#[no_mangle]
+pub extern "C" fn datafusion_ffi_file_format_result_size() -> usize {
+    std::mem::size_of::<FFIResult<FFI_FileSource>>()
 }

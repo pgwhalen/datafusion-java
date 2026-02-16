@@ -22,7 +22,7 @@ use std::time::Duration;
 use tokio::runtime::Runtime;
 
 use crate::error::{clear_error, set_error_return, set_error_return_null};
-use crate::file_format::{JavaBackedFileFormat, JavaFileFormatCallbacks};
+use crate::file_format::{FFI_FileFormat, ForeignFileFormat};
 use crate::session_state::SessionStateWithRuntime;
 
 use datafusion::catalog::CatalogProvider;
@@ -388,7 +388,7 @@ pub unsafe extern "C" fn datafusion_context_register_catalog(
 /// * `urls_len` - Number of URLs in the array
 /// * `file_extension` - File extension (null-terminated C string, e.g. ".tsv")
 /// * `schema` - Pointer to FFI_ArrowSchema (borrowed, Java owns release)
-/// * `format_callbacks` - Pointer to JavaFileFormatCallbacks (takes ownership)
+/// * `format_ffi` - Pointer to FFI_FileFormat (takes ownership)
 /// * `collect_stat` - Whether to collect file statistics
 /// * `target_partitions` - Target number of partitions
 /// * `error_out` - Pointer to receive error message
@@ -404,7 +404,7 @@ pub unsafe extern "C" fn datafusion_context_register_listing_table(
     urls_len: usize,
     file_extension: *const c_char,
     schema: *mut FFI_ArrowSchema,
-    format_callbacks: *const JavaFileFormatCallbacks,
+    format_ffi: *const FFI_FileFormat,
     collect_stat: i32,
     target_partitions: usize,
     error_out: *mut *mut c_char,
@@ -418,7 +418,7 @@ pub unsafe extern "C" fn datafusion_context_register_listing_table(
         || urls_len == 0
         || file_extension.is_null()
         || schema.is_null()
-        || format_callbacks.is_null()
+        || format_ffi.is_null()
     {
         return set_error_return(error_out, "Null pointer argument or empty URLs");
     }
@@ -445,9 +445,9 @@ pub unsafe extern "C" fn datafusion_context_register_listing_table(
     };
     // ffi_schema is dropped here, calling the release callback
 
-    // Create the JavaBackedFileFormat (copies the callback struct from Java arena memory)
-    let format = Arc::new(JavaBackedFileFormat {
-        callbacks: std::ptr::read(format_callbacks),
+    // Create the ForeignFileFormat (copies the FFI struct from Java arena memory)
+    let format = Arc::new(ForeignFileFormat {
+        ffi: std::ptr::read(format_ffi),
         schema: Arc::clone(&arrow_schema),
         extension: ext_str.clone(),
     });

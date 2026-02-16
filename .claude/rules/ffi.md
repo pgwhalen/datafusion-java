@@ -145,11 +145,20 @@ new LongOut(lenOut).set(len);
 // For the success case:
 return Errors.SUCCESS;
 
-// For the error case (preferred pattern):
+// For int-returning callbacks (preferred pattern):
 } catch (Exception e) {
   return Errors.fromException(errorOut, e, arena, fullStackTrace);
 }
+
+// For struct-returning callbacks that build error strings manually
+// (e.g., writing an RString into a result buffer):
+} catch (Throwable e) {
+  String errorMsg = Errors.getErrorMessage(e, fullStackTrace);
+  // ... write errorMsg into the return buffer ...
+}
 ```
+
+`Errors.getErrorMessage(Throwable, boolean)` is the single source of truth for converting a throwable to an error message string. It returns the full stack trace when `fullStackTrace` is true, otherwise returns `getMessage()` with a fallback to the class name when the message is null. All error message formatting in callbacks **must** use this method — do not inline `StringWriter`/`PrintWriter` or null-check logic at call sites. Note that it accepts `Throwable` (not `Exception`), so no casting is needed in `catch (Throwable e)` blocks.
 
 The `fullStackTrace` parameter controls whether error messages include the full Java stack trace. This is configured via `SessionConfig.builder().fullStackTrace(true).build()` or the `FULL_JAVA_STACK_TRACE` environment variable. Full stack traces help trace exactly where exceptions originated in Java callback code.
 
@@ -545,7 +554,7 @@ All Handle classes allocate their structs in Java arena memory and use `StructLa
 - `FileSourceHandle` → allocates `FFI_FileSource` in Java arena, Rust copies via `ptr::read`/`MaybeUninit`
 - `FileOpenerHandle` → allocates `FFI_FileOpener` in Java arena, Rust copies via `ptr::read`/`MaybeUninit`
 
-These follow the same 6-field convention as upstream structs (`trait_fn`, `clone`, `release`, `version`, `private_data`, `library_marker_id`), use `Foreign*` Rust wrapper structs (matching upstream `datafusion-ffi` naming), and allocate struct memory in the Java arena. Each `FFI_File*` struct derives `StableAbi` for compile-time ABI validation and implements `Clone`/`Drop` (delegating to its `clone`/`release` fn pointers), eliminating the need for intermediate holder structs.
+These follow the same 6-field convention as upstream structs (`trait_fn`, `clone`, `release`, `version`, `private_data`, `library_marker_id`), use `Foreign*` Rust wrapper structs (matching upstream `datafusion-ffi` naming), and allocate struct memory in the Java arena. Each `FFI_File*` struct derives `StableAbi` for compile-time ABI validation and implements `Clone`/`Drop` (delegating to its `clone`/`release` fn pointers), eliminating the need for intermediate holder structs. Callbacks return `FFIResult<T>` structs (not out-parameters), matching the upstream convention used by `FFI_ExecutionPlan::execute`, `FFI_CatalogProvider::register_schema`, etc.
 
 ## Naming Conventions
 

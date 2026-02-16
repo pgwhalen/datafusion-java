@@ -33,16 +33,28 @@ final class Errors {
    */
   static int fromException(
       MemorySegment errorOut, Exception e, Arena arena, boolean fullStackTrace) {
-    String message;
+    setError(errorOut, getErrorMessage(e, fullStackTrace), arena);
+    return -1;
+  }
+
+  /**
+   * Returns an error message for the given throwable.
+   *
+   * <p>When {@code fullStackTrace} is true, includes the full stack trace. Otherwise returns just
+   * the exception message, falling back to the class name if the message is null.
+   *
+   * @param t the throwable to get the message from
+   * @param fullStackTrace when true, includes the full stack trace
+   * @return the error message string
+   */
+  static String getErrorMessage(Throwable t, boolean fullStackTrace) {
     if (fullStackTrace) {
       StringWriter sw = new StringWriter();
-      e.printStackTrace(new PrintWriter(sw));
-      message = sw.toString();
-    } else {
-      message = e.getMessage();
+      t.printStackTrace(new PrintWriter(sw));
+      return sw.toString();
     }
-    setError(errorOut, message, arena);
-    return -1;
+    String msg = t.getMessage();
+    return msg != null ? msg : t.getClass().getName();
   }
 
   private static void setError(MemorySegment errorOut, String message, Arena arena) {

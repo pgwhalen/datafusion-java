@@ -746,10 +746,7 @@ final class ExecutionPlanHandle implements TraitHandle {
       buffer.fill((byte) 0);
       VH_RESULT_DISC.set(buffer, 0L, 1L); // RErr
 
-      String errorMsg = fullStackTrace ? NativeUtil.getStackTrace(e) : e.getMessage();
-      if (errorMsg == null) {
-        errorMsg = e.getClass().getName();
-      }
+      String errorMsg = Errors.getErrorMessage(e, fullStackTrace);
       NativeUtil.writeRString(errorMsg, buffer, RESULT_PAYLOAD_OFFSET, arena);
 
       return buffer;
@@ -780,5 +777,4 @@ final class ExecutionPlanHandle implements TraitHandle {
     // The FFI_ExecutionPlan struct lives in the arena.
     // The arena will clean up the upcall stubs.
   }
-
 }

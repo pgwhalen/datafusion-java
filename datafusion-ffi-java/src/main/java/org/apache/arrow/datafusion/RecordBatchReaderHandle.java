@@ -286,10 +286,7 @@ final class RecordBatchReaderHandle implements TraitHandle {
       VH_RESULT_DISC.set(pollResultBuffer, 0L, 1L); // RErr
 
       // Write error RString at payload offset using Rust helper
-      String errorMsg = fullStackTrace ? NativeUtil.getStackTrace(e) : e.getMessage();
-      if (errorMsg == null) {
-        errorMsg = e.getClass().getName();
-      }
+      String errorMsg = Errors.getErrorMessage(e, fullStackTrace);
       NativeUtil.writeRString(errorMsg, pollResultBuffer, PAYLOAD_OFFSET, arena);
       return pollResultBuffer;
     }
@@ -335,5 +332,4 @@ final class RecordBatchReaderHandle implements TraitHandle {
     // The FFI_RecordBatchStream struct lives in the arena; Rust calls release() when done.
     // The arena will clean up the upcall stubs.
   }
-
 }

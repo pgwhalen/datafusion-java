@@ -12,53 +12,106 @@ import org.apache.arrow.vector.types.pojo.Schema;
 /**
  * Internal FFI bridge for FileSource.
  *
- * <p>This class allocates a {@code JavaFileSourceCallbacks} struct in Java arena memory and
- * populates it with upcall stub function pointers. Rust copies the struct via {@code ptr::read}.
+ * <p>This class allocates an {@code FFI_FileSource} struct in Java arena memory and populates it
+ * with upcall stub function pointers. Rust copies the struct via {@code ptr::read}.
  *
- * <p>Layout of JavaFileSourceCallbacks (24 bytes, align 8):
+ * <p>Layout of FFI_FileSource (48 bytes, align 8):
  *
  * <pre>
- * offset  0: java_object ptr            (ADDRESS)
- * offset  8: create_file_opener_fn ptr  (ADDRESS)
- * offset 16: release_fn ptr             (ADDRESS)
+ * offset  0: create_file_opener fn ptr (ADDRESS)
+ * offset  8: clone fn ptr              (ADDRESS)
+ * offset 16: release fn ptr            (ADDRESS)
+ * offset 24: version fn ptr            (ADDRESS)
+ * offset 32: private_data ptr          (ADDRESS)
+ * offset 40: library_marker_id fn ptr  (ADDRESS)
  * </pre>
  */
 final class FileSourceHandle implements TraitHandle {
   // ======== Struct layout and VarHandles ========
 
-  private static final StructLayout CALLBACKS_LAYOUT =
+  private static final StructLayout FFI_FILE_SOURCE_LAYOUT =
       MemoryLayout.structLayout(
-          ValueLayout.ADDRESS.withName("java_object"),
-          ValueLayout.ADDRESS.withName("create_file_opener_fn"),
-          ValueLayout.ADDRESS.withName("release_fn"));
+          ValueLayout.ADDRESS.withName("create_file_opener"),
+          ValueLayout.ADDRESS.withName("clone"),
+          ValueLayout.ADDRESS.withName("release"),
+          ValueLayout.ADDRESS.withName("version"),
+          ValueLayout.ADDRESS.withName("private_data"),
+          ValueLayout.ADDRESS.withName("library_marker_id"));
 
-  private static final VarHandle VH_JAVA_OBJECT =
-      CALLBACKS_LAYOUT.varHandle(PathElement.groupElement("java_object"));
-  private static final VarHandle VH_CREATE_FILE_OPENER_FN =
-      CALLBACKS_LAYOUT.varHandle(PathElement.groupElement("create_file_opener_fn"));
-  private static final VarHandle VH_RELEASE_FN =
-      CALLBACKS_LAYOUT.varHandle(PathElement.groupElement("release_fn"));
+  private static final VarHandle VH_CREATE_FILE_OPENER =
+      FFI_FILE_SOURCE_LAYOUT.varHandle(PathElement.groupElement("create_file_opener"));
+  private static final VarHandle VH_CLONE =
+      FFI_FILE_SOURCE_LAYOUT.varHandle(PathElement.groupElement("clone"));
+  private static final VarHandle VH_RELEASE =
+      FFI_FILE_SOURCE_LAYOUT.varHandle(PathElement.groupElement("release"));
+  private static final VarHandle VH_VERSION =
+      FFI_FILE_SOURCE_LAYOUT.varHandle(PathElement.groupElement("version"));
+  private static final VarHandle VH_PRIVATE_DATA =
+      FFI_FILE_SOURCE_LAYOUT.varHandle(PathElement.groupElement("private_data"));
+  private static final VarHandle VH_LIBRARY_MARKER_ID =
+      FFI_FILE_SOURCE_LAYOUT.varHandle(PathElement.groupElement("library_marker_id"));
+
+  // ======== FFIResult<FFI_FileOpener> layout ========
+  // RResult<T, RString> with #[repr(C, u8)]: disc(u8 padded to 8B) + payload union
+  // payload = max(sizeof(FFI_FileOpener)=48, sizeof(RString)) = 48
+  // Total = 8 + 48 = 56 bytes
+
+  private static final StructLayout FFI_RESULT_FILE_OPENER_LAYOUT =
+      MemoryLayout.structLayout(
+          ValueLayout.JAVA_LONG.withName("discriminant"),
+          MemoryLayout.sequenceLayout(6, ValueLayout.JAVA_LONG).withName("payload"));
+
+  private static final VarHandle VH_RESULT_DISC =
+      FFI_RESULT_FILE_OPENER_LAYOUT.varHandle(PathElement.groupElement("discriminant"));
+
+  private static final long RESULT_PAYLOAD_OFFSET =
+      FFI_RESULT_FILE_OPENER_LAYOUT.byteOffset(PathElement.groupElement("payload"));
+
+  // ======== Rust symbol lookups ========
+
+  private static final MemorySegment CLONE_FN =
+      NativeLoader.get().find("datafusion_file_source_clone").orElseThrow();
+
+  private static final MemorySegment RELEASE_FN =
+      NativeLoader.get().find("datafusion_file_source_release").orElseThrow();
 
   // ======== Size validation ========
 
-  private static final MethodHandle CALLBACKS_SIZE_MH =
+  private static final MethodHandle FFI_FILE_SOURCE_SIZE_MH =
       NativeUtil.downcall(
-          "datafusion_ffi_file_source_callbacks_size",
-          FunctionDescriptor.of(ValueLayout.JAVA_LONG));
+          "datafusion_ffi_file_source_size", FunctionDescriptor.of(ValueLayout.JAVA_LONG));
+
+  private static final MethodHandle FFI_RESULT_FILE_OPENER_SIZE_MH =
+      NativeUtil.downcall(
+          "datafusion_ffi_file_source_result_size", FunctionDescriptor.of(ValueLayout.JAVA_LONG));
+
+  /** Struct size exposed for parent Handle classes. */
+  static final long FFI_SIZE = querySize();
+
+  private static long querySize() {
+    try {
+      return (long) FFI_FILE_SOURCE_SIZE_MH.invokeExact();
+    } catch (Throwable e) {
+      throw new ExceptionInInitializerError(e);
+    }
+  }
 
   static void validateSizes() {
     NativeUtil.validateSize(
-        CALLBACKS_LAYOUT.byteSize(), CALLBACKS_SIZE_MH, "JavaFileSourceCallbacks");
+        FFI_FILE_SOURCE_LAYOUT.byteSize(), FFI_FILE_SOURCE_SIZE_MH, "FFI_FileSource");
+    NativeUtil.validateSize(
+        FFI_RESULT_FILE_OPENER_LAYOUT.byteSize(),
+        FFI_RESULT_FILE_OPENER_SIZE_MH,
+        "FFIResult<FFI_FileOpener>");
   }
 
   // ======== Callback FunctionDescriptors ========
 
-  // create_file_opener_fn: (ADDRESS, ADDRESS, ADDRESS) -> INT
+  // create_file_opener: (ADDRESS) -> STRUCT (FFIResult<FFI_FileOpener>, 56 bytes)
   private static final FunctionDescriptor CREATE_FILE_OPENER_DESC =
-      FunctionDescriptor.of(
-          ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS);
+      FunctionDescriptor.of(FFI_RESULT_FILE_OPENER_LAYOUT, ValueLayout.ADDRESS);
 
-  // release_fn: (ADDRESS) -> void
+  // release: (ADDRESS) -> void
   private static final FunctionDescriptor RELEASE_DESC =
       FunctionDescriptor.ofVoid(ValueLayout.ADDRESS);
 
@@ -73,8 +126,7 @@ final class FileSourceHandle implements TraitHandle {
           .findVirtual(
               FileSourceHandle.class,
               "createFileOpener",
-              MethodType.methodType(
-                  int.class, MemorySegment.class, MemorySegment.class, MemorySegment.class));
+              MethodType.methodType(MemorySegment.class, MemorySegment.class));
     } catch (NoSuchMethodException | IllegalAccessException e) {
       throw new ExceptionInInitializerError(e);
     }
@@ -122,26 +174,33 @@ final class FileSourceHandle implements TraitHandle {
         UpcallStub.create(CREATE_FILE_OPENER_MH.bindTo(this), CREATE_FILE_OPENER_DESC, arena);
     this.releaseStub = UpcallStub.create(RELEASE_MH.bindTo(this), RELEASE_DESC, arena);
 
-    // Allocate and populate the callback struct in Java arena memory
-    this.callbackStruct = arena.allocate(CALLBACKS_LAYOUT);
-    VH_JAVA_OBJECT.set(callbackStruct, 0L, MemorySegment.NULL);
-    VH_CREATE_FILE_OPENER_FN.set(callbackStruct, 0L, createFileOpenerStub.segment());
-    VH_RELEASE_FN.set(callbackStruct, 0L, releaseStub.segment());
+    // Allocate and populate the FFI struct in Java arena memory
+    this.callbackStruct = arena.allocate(FFI_FILE_SOURCE_LAYOUT);
+    VH_CREATE_FILE_OPENER.set(callbackStruct, 0L, createFileOpenerStub.segment());
+    VH_CLONE.set(callbackStruct, 0L, CLONE_FN);
+    VH_RELEASE.set(callbackStruct, 0L, RELEASE_FN);
+    VH_VERSION.set(callbackStruct, 0L, NativeUtil.VERSION_FN);
+    VH_PRIVATE_DATA.set(callbackStruct, 0L, MemorySegment.NULL);
+    VH_LIBRARY_MARKER_ID.set(callbackStruct, 0L, NativeUtil.JAVA_MARKER_ID_FN);
   }
 
-  /** Get the callback struct pointer to pass to Rust. */
+  /** Get the FFI struct pointer to pass to Rust. */
   public MemorySegment getTraitStruct() {
     return callbackStruct;
   }
 
-  /** Copy the callback struct bytes into a Rust-side output buffer. */
+  /** Copy the FFI struct bytes into a Rust-side output buffer. */
   void copyStructTo(MemorySegment out) {
-    out.reinterpret(CALLBACKS_LAYOUT.byteSize()).copyFrom(callbackStruct);
+    out.reinterpret(FFI_FILE_SOURCE_LAYOUT.byteSize()).copyFrom(callbackStruct);
   }
 
-  /** Callback: Create a FileOpener from the FileSource. */
+  /**
+   * Callback: Create a FileOpener from the FileSource. Returns an FFIResult&lt;FFI_FileOpener&gt;
+   * struct (56 bytes): discriminant (8B) + payload (48B).
+   */
   @SuppressWarnings("unused") // Called via upcall stub
-  int createFileOpener(MemorySegment javaObject, MemorySegment openerOut, MemorySegment errorOut) {
+  MemorySegment createFileOpener(MemorySegment selfPtr) {
+    MemorySegment buffer = arena.allocate(FFI_RESULT_FILE_OPENER_LAYOUT);
     try {
       // Call Java FileSource implementation
       FileOpener opener = source.createFileOpener(schema, allocator);
@@ -150,23 +209,30 @@ final class FileSourceHandle implements TraitHandle {
       FileOpenerHandle openerHandle =
           new FileOpenerHandle(opener, allocator, arena, fullStackTrace);
 
-      // Copy the callback struct bytes into the output buffer
-      openerHandle.copyStructTo(openerOut);
+      // FFIResult::ROk(FFI_FileOpener)
+      VH_RESULT_DISC.set(buffer, 0L, 0L); // ROk
+      openerHandle.copyStructTo(buffer.asSlice(RESULT_PAYLOAD_OFFSET, FileOpenerHandle.FFI_SIZE));
 
-      return Errors.SUCCESS;
+      return buffer;
     } catch (Exception e) {
-      return Errors.fromException(errorOut, e, arena, fullStackTrace);
+      // FFIResult::RErr(RString)
+      buffer.fill((byte) 0);
+      VH_RESULT_DISC.set(buffer, 0L, 1L); // RErr
+      NativeUtil.writeRString(
+          Errors.getErrorMessage(e, fullStackTrace), buffer, RESULT_PAYLOAD_OFFSET, arena);
+
+      return buffer;
     }
   }
 
   /** Callback: Release the source. Called by Rust when done. */
   @SuppressWarnings("unused") // Called via upcall stub
-  void release(MemorySegment javaObject) {
+  void release(MemorySegment selfPtr) {
     // Cleanup happens when arena is closed
   }
 
   @Override
   public void close() {
-    // No-op: callback struct is in Java arena memory, freed when arena closes
+    // No-op: FFI struct is in Java arena memory, freed when arena closes
   }
 }

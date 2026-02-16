@@ -557,14 +557,7 @@ final class TableProviderHandle implements TraitHandle {
     } catch (Throwable e) {
       // Create FfiFuture wrapping error
       buffer.fill((byte) 0);
-      String errorMsg;
-      if (fullStackTrace) {
-        java.io.StringWriter sw = new java.io.StringWriter();
-        e.printStackTrace(new java.io.PrintWriter(sw));
-        errorMsg = sw.toString();
-      } else {
-        errorMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getName();
-      }
+      String errorMsg = Errors.getErrorMessage(e, fullStackTrace);
       byte[] errorBytes = errorMsg.getBytes(java.nio.charset.StandardCharsets.UTF_8);
       MemorySegment errorSegment = arena.allocateFrom(ValueLayout.JAVA_BYTE, errorBytes);
       try {
@@ -631,11 +624,7 @@ final class TableProviderHandle implements TraitHandle {
       return buffer;
     } catch (Throwable e) {
       buffer.fill((byte) 0);
-      String errorMsg =
-          fullStackTrace
-              ? NativeUtil.getStackTrace(
-                  e instanceof Exception ? (Exception) e : new RuntimeException(e))
-              : (e.getMessage() != null ? e.getMessage() : e.getClass().getName());
+      String errorMsg = Errors.getErrorMessage(e, fullStackTrace);
       byte[] errorBytes = errorMsg.getBytes(java.nio.charset.StandardCharsets.UTF_8);
       MemorySegment errorSegment = arena.allocateFrom(ValueLayout.JAVA_BYTE, errorBytes);
       try {
