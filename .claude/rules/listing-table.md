@@ -8,7 +8,7 @@ This document describes the listing table FFI bindings, which allow Java users t
 
 2. **Move logic into Java, keep Rust thin** -- The Rust side should be a thin FFI adapter. The Java side owns the interface decomposition and object creation. This keeps the Rust module (`listing_table.rs`) focused on callback plumbing rather than business logic.
 
-3. **Reuse the same multi-level callback pattern as catalogs** -- The `FileFormat` -> `FileSource` -> `FileOpener` chain follows the exact same pattern as `CatalogProvider` -> `SchemaProvider` -> `TableProvider` -> `ExecutionPlan` -> `RecordBatchReader`: each level has a Java interface, a Handle class (FFI bridge), a Rust callback struct, and a Rust wrapper struct.
+3. **Reuse the same multi-level pattern as catalogs** -- The `FileFormat` -> `FileSource` -> `FileOpener` chain follows the exact same pattern as `CatalogProvider` -> `SchemaProvider` -> `TableProvider` -> `ExecutionPlan` -> `RecordBatchReader`: each level has a Java interface, a Handle class (FFI bridge that constructs the `FFI_*` struct directly in Java arena memory), and a Rust `Foreign*` wrapper produced by `TryFrom`.
 
 4. **Pure Java config classes** -- `ListingTableUrl`, `ListingOptions`, and `ListingTable` are pure Java data carriers. They don't wrap native pointers. All native object creation happens in a single FFI registration call (`datafusion_context_register_listing_table`).
 

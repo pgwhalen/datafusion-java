@@ -204,78 +204,25 @@ final class SomeHandle implements TraitHandle {
 }
 ```
 
-### Rust Callback Structs (Callback Pattern)
-
-When using the callback pattern (see "Handle Class Pattern" below), the Rust side defines callback structs that Java populates:
-
-```rust
-#[repr(C)]
-pub struct JavaCallbacks {
-    pub java_object: *mut c_void,
-    pub callback_fn: Option<unsafe extern "C" fn(*mut c_void, *mut *mut c_char) -> i32>,
-    pub release_fn: Option<unsafe extern "C" fn(*mut c_void)>,
-}
-```
-
-### 1:1 Callback-to-Trait-Method Rule (Callback Pattern)
-
-Each function pointer in a `Java*Callbacks` struct must correspond 1:1 to a method on the DataFusion trait **and** the Java interface it mirrors. Do not split one trait method into multiple callbacks, and do not merge multiple trait methods into one callback.
-
-When a trait method returns a compound type (e.g., `properties() -> &PlanProperties`), create an `FFI_*` bridge struct to carry the data across FFI, and use a single callback that writes to that struct:
-
-```rust
-// Bridge struct
-#[repr(C)]
-pub struct FFI_PlanProperties {
-    pub output_partitioning: i32,
-    pub emission_type: i32,
-    pub boundedness: i32,
-}
-
-// Single callback in JavaExecutionPlanCallbacks — maps 1:1 to ExecutionPlan::properties()
-pub properties_fn: unsafe extern "C" fn(
-    java_object: *mut c_void,
-    properties_out: *mut FFI_PlanProperties,
-),
-```
-
-On the Java side, the Handle callback writes to the struct:
-
-```java
-void getProperties(MemorySegment javaObject, MemorySegment propertiesOut) {
-    PlanProperties props = plan.properties();
-    MemorySegment out = propertiesOut.reinterpret(12);
-    out.set(ValueLayout.JAVA_INT, 0, props.outputPartitioning());
-    out.set(ValueLayout.JAVA_INT, 4, /* enum switch */);
-    out.set(ValueLayout.JAVA_INT, 8, /* enum switch */);
-}
-```
-
-This keeps the callback struct aligned with the trait hierarchy and makes it easy to verify correctness by comparing `Java*Callbacks` fields against DataFusion trait methods.
-
 ## Direct FFI Struct Construction
 
-Handle classes that implement upstream `datafusion-ffi` traits (e.g., `ExecutionPlan`, `RecordBatchStream`) use a different pattern from the callback structs above. Instead of defining intermediate Rust callback structs and wrapper types, Java constructs the upstream FFI struct directly in Java arena memory and populates it with upcall stub function pointers. Rust's `TryFrom<&FFI_Xxx>` conversion then produces the final DataFusion trait object.
+**This is the ONLY pattern for Handle classes.** Do NOT create intermediate Rust callback structs (`Java*Callbacks`) or Rust wrapper types. Instead, Java constructs the `FFI_*` struct directly in Java arena memory and populates it with upcall stub function pointers. Rust's `TryFrom<&FFI_Xxx>` conversion then produces the final DataFusion trait object.
+
+When an upstream `datafusion-ffi` crate defines an `FFI_*` struct for a trait, **always** construct that struct directly from Java. When no upstream `FFI_*` struct exists yet, define a project-local `FFI_*` struct in Rust (with `#[derive(Debug, StableAbi)]`) following the same convention, and construct it from Java the same way.
+
+**NEVER** create `Java*Callbacks` structs, `ALLOC_*_CALLBACKS` MethodHandles, or intermediate `Foreign*` Rust wrappers that sit between Java and the `FFI_*` struct. These are a legacy anti-pattern that has been removed from the codebase.
 
 ### Architecture
-
-The callback pattern uses intermediate Rust layers:
-
-```
-Java Handle → Rust Java*Callbacks → Rust Foreign* wrapper → DataFusion trait
-```
-
-Direct struct construction eliminates them:
 
 ```
 Java Handle → FFI_Xxx (constructed in Java arena) → ForeignXxx (via TryFrom)
 ```
 
-### When to Use Each Pattern
+Java allocates the `FFI_*` struct in arena memory, populates its function pointer fields with upcall stubs, and copies the struct bytes to Rust when requested. On the Rust side, the existing `TryFrom<&FFI_Xxx>` implementation (either upstream or project-defined) converts the struct into a DataFusion trait object. No intermediate Rust layers are needed.
 
-**Direct struct construction is always preferred** when the upstream `datafusion-ffi` crate defines a corresponding `FFI_*` struct. This eliminates intermediate Rust layers (`Java*Callbacks` + `Foreign*` wrapper) and lets Rust's existing `TryFrom<&FFI_Xxx>` do the conversion.
+### Handling `abi_stable` Types
 
-The **callback pattern** is a legacy approach still used by some Handle classes (see "Existing violations" under Handle Class Pattern). It should not be used for new Handle classes unless there is no upstream `FFI_*` struct available in `datafusion-ffi`.
+The `FFI_*` structs in `datafusion-ffi` use `abi_stable` types (`RVec`, `RString`, `ROption`, `RResult`, `FfiPoll`, etc.). Java Handle classes **must** construct these types correctly by writing the appropriate discriminants and payloads at the correct byte offsets. This is not optional — these are the types that the upstream `TryFrom` conversion expects. See the "Discriminant-Based Enum Returns", "`repr(C)` Enum Returns", and "RString Construction" sections below for how to construct each type from Java.
 
 ### Struct Layouts, VarHandles, and Size Validation
 
@@ -379,7 +326,7 @@ The only exception is the `FFI_*` trait struct itself (e.g., `ffiProvider`, `ffi
 
 ### copyStructTo
 
-Since the struct is constructed in Java arena memory (not Rust heap), callers copy the struct bytes into the Rust-side output buffer using `copyStructTo` rather than `setToPointer`:
+Since the struct is constructed in Java arena memory (not Rust heap), callers copy the struct bytes into the Rust-side output buffer using `copyStructTo`:
 
 ```java
 void copyStructTo(MemorySegment out) {
@@ -510,44 +457,44 @@ Every Java interface that maps to a DataFusion Rust trait MUST have a correspond
 
 2. **Wraps the interface instance** -- The constructor takes the corresponding interface as its first parameter and stores it in a field. Callback methods delegate to this interface instance.
 
-3. **Struct layout documented in comments** -- The struct layout is documented as a comment block near the top, with matching constants for each field. **Callback pattern**: `OFFSET_*` constants for the Rust `Java*Callbacks` struct. **Direct struct pattern**: `StructLayout` with `VarHandle` accessors for the upstream `FFI_*` struct, plus separate size constants for nested and returned struct types.
+3. **Struct layout via `StructLayout`** -- The Handle defines a `StructLayout` matching the `FFI_*` struct and derives `VarHandle` accessors from it. Separate size constants are used for nested and returned struct types. No magic-number offsets or hardcoded sizes.
 
-4. **Static FunctionDescriptors and MethodHandles** -- Each callback has a static `*_DESC` (FunctionDescriptor) and a static `*_MH` (MethodHandle looked up via `init*MethodHandle()`). These are class-level constants, never per-instance, to enable JIT optimization. Direct-struct-pattern Handles additionally use `StructLayout`-based descriptors for callbacks that return `abi_stable`/`async-ffi` structs.
+4. **Static FunctionDescriptors and MethodHandles** -- Each callback has a static `*_DESC` (FunctionDescriptor) and a static `*_MH` (MethodHandle looked up via `init*MethodHandle()`). These are class-level constants, never per-instance, to enable JIT optimization. Use `StructLayout`-based descriptors for callbacks that return `abi_stable`/`async-ffi` structs.
 
-5. **Constructor signature** -- Always takes the interface instance, `BufferAllocator`, `Arena`, and `boolean fullStackTrace`. Some Handles take additional context (e.g., `Schema`). **Callback pattern**: the constructor allocates the Rust callback struct via a local `ALLOC_*_CALLBACKS` MethodHandle, creates `UpcallStub` instances, and populates the struct fields. **Direct struct pattern**: the constructor allocates the `FFI_*` struct in the Java arena, validates sizes against Rust helpers, pre-allocates return buffers, and populates the struct with upcall stub function pointers.
+5. **Constructor signature** -- Always takes the interface instance, `BufferAllocator`, `Arena`, and `boolean fullStackTrace`. Some Handles take additional context (e.g., `Schema`). The constructor allocates the `FFI_*` struct in the Java arena, validates sizes against Rust helpers, and populates the struct with upcall stub function pointers.
 
 6. **UpcallStub fields stored to prevent GC** -- Each upcall stub is stored in an instance field (named `*Stub`) with a comment noting this prevents garbage collection.
 
-7. **Struct delivery** -- **Callback pattern**: `getTraitStruct()` returns the `MemorySegment` pointing to the Rust-allocated callback struct; `setToPointer()` writes it to a Rust output buffer. **Direct struct pattern**: `copyStructTo(MemorySegment out)` copies the Java-arena struct bytes into a Rust-side output buffer.
+7. **Struct delivery** -- `copyStructTo(MemorySegment out)` copies the Java-arena `FFI_*` struct bytes into a Rust-side output buffer.
 
 8. **Callback methods** -- Each callback method:
    - Is annotated `@SuppressWarnings("unused")` with a comment that it is called via upcall stub
    - Takes `MemorySegment javaObject` as its first parameter (unused on the Java side but required by the Rust struct calling convention)
    - Delegates to the wrapped interface instance for business logic
-   - **Callback pattern**: Returns `int` using `Errors.SUCCESS` on success and `Errors.fromException(errorOut, e, arena, fullStackTrace)` on failure
-   - **Direct struct pattern**: Callbacks returning `abi_stable` types return `MemorySegment` pointing to a pre-allocated buffer populated with discriminants and payload
+   - For int-returning callbacks: returns `Errors.SUCCESS` on success and `Errors.fromException(errorOut, e, arena, fullStackTrace)` on failure
+   - For callbacks returning `abi_stable` types: returns `MemorySegment` pointing to a buffer allocated per-call and populated with discriminants and payload
 
 9. **`release` callback** -- Every Handle has a `release(MemorySegment javaObject)` callback. This is usually a no-op (cleanup happens when the arena closes), except for `RecordBatchReaderHandle` which must close the reader to prevent resource leaks.
 
-10. **`close()` is a no-op** -- The `close()` method from `AutoCloseable` is typically empty because the callback struct is freed by Rust when it drops the wrapper.
+10. **`close()` is a no-op** -- The `close()` method from `AutoCloseable` is typically empty because the `FFI_*` struct is freed by Rust when it drops the wrapper.
 
-11. **Child Handle creation** -- When a callback returns a sub-object, the callback method creates the next Handle in the chain and writes its struct to the output. **Callback pattern**: uses `setToPointer` (e.g., `SchemaProviderHandle.getTable()` creates a `TableProviderHandle` and calls `tableHandle.setToPointer(tableOut)`). **Direct struct pattern**: uses `copyStructTo` (e.g., `TableProviderHandle.scan()` creates an `ExecutionPlanHandle` and calls `planHandle.copyStructTo(planOut)`).
+11. **Child Handle creation** -- When a callback returns a sub-object, the callback method creates the next Handle in the chain and copies its struct to the output using `copyStructTo` (e.g., `TableProviderHandle.scan()` creates an `ExecutionPlanHandle` and calls `planHandle.copyStructTo(planOut)`).
 
 #### Handle class allocation patterns
 
-All Handle classes allocate their structs in Java arena memory and use `StructLayout`/`VarHandle` for field access, with build-time size validation via `FfiSizeValidationTest`.
+All Handle classes allocate their `FFI_*` structs in Java arena memory and use `StructLayout`/`VarHandle` for field access, with build-time size validation via `FfiSizeValidationTest`.
 
-**Direct struct construction** (upstream `FFI_*` struct available in `datafusion-ffi`):
-- `CatalogProviderHandle` → constructs `FFI_CatalogProvider` directly
-- `SchemaProviderHandle` → constructs `FFI_SchemaProvider` directly
-- `TableProviderHandle` → constructs `FFI_TableProvider` directly
+**Using upstream `FFI_*` structs** (defined in `datafusion-ffi`):
+- `CatalogProviderHandle` → constructs `FFI_CatalogProvider`
+- `SchemaProviderHandle` → constructs `FFI_SchemaProvider`
+- `TableProviderHandle` → constructs `FFI_TableProvider`
 
-**Java-arena FFI structs** (project-defined `FFI_File*` struct with `#[derive(Debug, StableAbi)]`, upstream-compatible naming but no upstream equivalent yet):
-- `FileFormatHandle` → allocates `FFI_FileFormat` in Java arena, Rust copies via `ptr::read`
-- `FileSourceHandle` → allocates `FFI_FileSource` in Java arena, Rust copies via `ptr::read`/`MaybeUninit`
-- `FileOpenerHandle` → allocates `FFI_FileOpener` in Java arena, Rust copies via `ptr::read`/`MaybeUninit`
+**Using project-defined `FFI_*` structs** (when no upstream equivalent exists yet):
+- `FileFormatHandle` → constructs `FFI_FileFormat`
+- `FileSourceHandle` → constructs `FFI_FileSource`
+- `FileOpenerHandle` → constructs `FFI_FileOpener`
 
-These follow the same 6-field convention as upstream structs (`trait_fn`, `clone`, `release`, `version`, `private_data`, `library_marker_id`), use `Foreign*` Rust wrapper structs (matching upstream `datafusion-ffi` naming), and allocate struct memory in the Java arena. Each `FFI_File*` struct derives `StableAbi` for compile-time ABI validation and implements `Clone`/`Drop` (delegating to its `clone`/`release` fn pointers), eliminating the need for intermediate holder structs. Callbacks return `FFIResult<T>` structs (not out-parameters), matching the upstream convention used by `FFI_ExecutionPlan::execute`, `FFI_CatalogProvider::register_schema`, etc.
+Both categories use the exact same pattern: Java allocates the struct in arena memory, populates function pointer fields with upcall stubs, and copies the struct to Rust via `copyStructTo`. Project-defined structs follow the same conventions as upstream ones (`trait_fn`, `clone`, `release`, `version`, `private_data`, `library_marker_id`), derive `StableAbi` for compile-time ABI validation, and implement `Clone`/`Drop` (delegating to their `clone`/`release` fn pointers). Callbacks return `FFIResult<T>` structs (not out-parameters), matching the upstream convention used by `FFI_ExecutionPlan::execute`, `FFI_CatalogProvider::register_schema`, etc.
 
 ## Naming Conventions
 
