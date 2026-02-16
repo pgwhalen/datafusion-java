@@ -3,6 +3,7 @@ package org.apache.arrow.datafusion;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -63,14 +64,18 @@ public sealed interface ScalarValue {
   }
 
   /**
-   * Sealed subinterface for timestamp variants, providing typed {@link LocalDateTime} conversion.
+   * Sealed subinterface for timestamp variants, providing typed {@link Instant} conversion.
+   *
+   * <p>When {@link #tz()} is non-null, the stored value is a UTC epoch value and {@link
+   * #getObject()} returns an {@link Instant}. When {@link #tz()} is null, the timestamp is
+   * timezone-naive and {@link #getObject()} returns a {@link LocalDateTime}.
    */
   sealed interface TimestampValue extends ScalarValue
       permits TimestampSecond, TimestampMillisecond, TimestampMicrosecond, TimestampNanosecond {
-    /** Returns the timestamp as a {@link LocalDateTime} in UTC. */
-    LocalDateTime toLocalDateTime();
+    /** Returns the timestamp as an {@link Instant} (interpreting the epoch value as UTC). */
+    Instant toInstant();
 
-    /** Returns the timezone string, or {@code null} if not set. */
+    /** Returns the timezone string, or {@code null} if timezone-naive. */
     String tz();
   }
 
@@ -310,55 +315,68 @@ public sealed interface ScalarValue {
   // -- Timestamps --
   record TimestampSecond(long value, String tz) implements TimestampValue {
     @Override
-    public LocalDateTime toLocalDateTime() {
-      return LocalDateTime.ofEpochSecond(value, 0, ZoneOffset.UTC);
+    public Instant toInstant() {
+      return Instant.ofEpochSecond(value);
     }
 
     @Override
     public Object getObject() {
-      return toLocalDateTime();
+      return tz != null ? toInstant() : LocalDateTime.ofEpochSecond(value, 0, ZoneOffset.UTC);
     }
   }
 
   record TimestampMillisecond(long value, String tz) implements TimestampValue {
     @Override
-    public LocalDateTime toLocalDateTime() {
-      long secs = Math.floorDiv(value, 1_000L);
-      int nanos = (int) Math.floorMod(value, 1_000L) * 1_000_000;
-      return LocalDateTime.ofEpochSecond(secs, nanos, ZoneOffset.UTC);
+    public Instant toInstant() {
+      return Instant.ofEpochMilli(value);
     }
 
     @Override
     public Object getObject() {
-      return toLocalDateTime();
+      if (tz != null) {
+        return toInstant();
+      }
+      long secs = Math.floorDiv(value, 1_000L);
+      int nanos = (int) Math.floorMod(value, 1_000L) * 1_000_000;
+      return LocalDateTime.ofEpochSecond(secs, nanos, ZoneOffset.UTC);
     }
   }
 
   record TimestampMicrosecond(long value, String tz) implements TimestampValue {
     @Override
-    public LocalDateTime toLocalDateTime() {
+    public Instant toInstant() {
       long secs = Math.floorDiv(value, 1_000_000L);
-      int nanos = (int) Math.floorMod(value, 1_000_000L) * 1_000;
-      return LocalDateTime.ofEpochSecond(secs, nanos, ZoneOffset.UTC);
+      long microsFrac = Math.floorMod(value, 1_000_000L);
+      return Instant.ofEpochSecond(secs, microsFrac * 1_000L);
     }
 
     @Override
     public Object getObject() {
-      return toLocalDateTime();
+      if (tz != null) {
+        return toInstant();
+      }
+      long secs = Math.floorDiv(value, 1_000_000L);
+      int nanos = (int) Math.floorMod(value, 1_000_000L) * 1_000;
+      return LocalDateTime.ofEpochSecond(secs, nanos, ZoneOffset.UTC);
     }
   }
 
   record TimestampNanosecond(long value, String tz) implements TimestampValue {
     @Override
-    public LocalDateTime toLocalDateTime() {
+    public Instant toInstant() {
       long secs = Math.floorDiv(value, 1_000_000_000L);
       int nanos = (int) Math.floorMod(value, 1_000_000_000L);
-      return LocalDateTime.ofEpochSecond(secs, nanos, ZoneOffset.UTC);
+      return Instant.ofEpochSecond(secs, nanos);
     }
 
     @Override
     public Object getObject() {
-      return toLocalDateTime();
+      if (tz != null) {
+        return toInstant();
+      }
+      long secs = Math.floorDiv(value, 1_000_000_000L);
+      int nanos = (int) Math.floorMod(value, 1_000_000_000L);
+      return LocalDateTime.ofEpochSecond(secs, nanos, ZoneOffset.UTC);
     }
   }
 

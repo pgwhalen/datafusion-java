@@ -8,6 +8,7 @@ import java.lang.invoke.VarHandle;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -273,6 +274,30 @@ public class ScalarValueTest {
   }
 
   @Test
+  void testGetObjectTimestampTzAware() {
+    // When tz is non-null, getObject() should return Instant
+    Instant expected = Instant.ofEpochSecond(1640995200L);
+
+    Object secObj = new ScalarValue.TimestampSecond(1640995200L, "UTC").getObject();
+    assertInstanceOf(Instant.class, secObj);
+    assertEquals(expected, secObj);
+
+    Object msObj =
+        new ScalarValue.TimestampMillisecond(1640995200000L, "America/New_York").getObject();
+    assertInstanceOf(Instant.class, msObj);
+    assertEquals(expected, msObj);
+
+    Object usObj =
+        new ScalarValue.TimestampMicrosecond(1640995200000000L, "Europe/London").getObject();
+    assertInstanceOf(Instant.class, usObj);
+    assertEquals(expected, usObj);
+
+    Object nsObj = new ScalarValue.TimestampNanosecond(1640995200000000000L, "UTC").getObject();
+    assertInstanceOf(Instant.class, nsObj);
+    assertEquals(expected, nsObj);
+  }
+
+  @Test
   void testGetObjectDurationTypes() {
     // All duration test values = 1 hour (3600 seconds)
     Duration oneHour = Duration.ofHours(1);
@@ -391,22 +416,22 @@ public class ScalarValueTest {
 
   @Test
   void testTimestampValueSubinterface() {
-    LocalDateTime expected = LocalDateTime.of(2022, 1, 1, 0, 0, 0);
+    Instant expected = Instant.ofEpochSecond(1640995200L);
 
     ScalarValue.TimestampValue ts = new ScalarValue.TimestampSecond(1640995200L, "UTC");
-    assertEquals(expected, ts.toLocalDateTime());
+    assertEquals(expected, ts.toInstant());
     assertEquals("UTC", ts.tz());
 
     ScalarValue.TimestampValue tms = new ScalarValue.TimestampMillisecond(1640995200000L, null);
-    assertEquals(expected, tms.toLocalDateTime());
+    assertEquals(expected, tms.toInstant());
     assertNull(tms.tz());
 
     ScalarValue.TimestampValue tus = new ScalarValue.TimestampMicrosecond(1640995200000000L, null);
-    assertEquals(expected, tus.toLocalDateTime());
+    assertEquals(expected, tus.toInstant());
 
     ScalarValue.TimestampValue tns =
         new ScalarValue.TimestampNanosecond(1640995200000000000L, null);
-    assertEquals(expected, tns.toLocalDateTime());
+    assertEquals(expected, tns.toInstant());
   }
 
   @Test
@@ -477,20 +502,23 @@ public class ScalarValueTest {
 
   @Test
   void testTimestampWithSubSecondPrecision() {
-    // TimestampMillisecond with fractional seconds: 1640995200123 ms = 2022-01-01T00:00:00.123
+    // TimestampMillisecond with fractional seconds: 1640995200123 ms
     ScalarValue.TimestampMillisecond tms =
         new ScalarValue.TimestampMillisecond(1640995200123L, null);
-    assertEquals(LocalDateTime.of(2022, 1, 1, 0, 0, 0, 123_000_000), tms.toLocalDateTime());
+    assertEquals(Instant.ofEpochMilli(1640995200123L), tms.toInstant());
+    assertEquals(123_000_000, tms.toInstant().getNano());
 
-    // TimestampMicrosecond: 1640995200000456 us = 2022-01-01T00:00:00.000456
+    // TimestampMicrosecond: 1640995200000456 us
     ScalarValue.TimestampMicrosecond tus =
         new ScalarValue.TimestampMicrosecond(1640995200000456L, null);
-    assertEquals(LocalDateTime.of(2022, 1, 1, 0, 0, 0, 456_000), tus.toLocalDateTime());
+    assertEquals(Instant.ofEpochSecond(1640995200L, 456_000L), tus.toInstant());
+    assertEquals(456_000, tus.toInstant().getNano());
 
-    // TimestampNanosecond: 1640995200000000789 ns = 2022-01-01T00:00:00.000000789
+    // TimestampNanosecond: 1640995200000000789 ns
     ScalarValue.TimestampNanosecond tns =
         new ScalarValue.TimestampNanosecond(1640995200000000789L, null);
-    assertEquals(LocalDateTime.of(2022, 1, 1, 0, 0, 0, 789), tns.toLocalDateTime());
+    assertEquals(Instant.ofEpochSecond(1640995200L, 789L), tns.toInstant());
+    assertEquals(789, tns.toInstant().getNano());
   }
 
   @Test
