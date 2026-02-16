@@ -705,7 +705,7 @@ final class ExecutionPlanHandle implements TraitHandle {
   @SuppressWarnings("unused") // Called via upcall stub
   MemorySegment getName(MemorySegment planRef) {
     MemorySegment buffer = arena.allocate(RSTRING_LAYOUT);
-    NativeUtil.writeRString("JavaBackedExecutionPlan", buffer, 0, arena);
+    NativeUtil.writeRString("ForeignExecutionPlan", buffer, 0, arena);
     return buffer;
   }
 

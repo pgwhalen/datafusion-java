@@ -56,14 +56,14 @@ The FFM bindings support bidirectional FFI: Java can call into DataFusion, and D
 ```
 Java Side                                   Rust Side
 ─────────────────────────────────────────────────────────────────
-User implements:                           Rust wrapper structs:
-  CatalogProvider interface      ──────►   JavaBackedCatalogProvider
-  SchemaProvider interface       ──────►   JavaBackedSchemaProvider
-  TableProvider interface        ──────►   JavaBackedTableProvider
-  ExecutionPlan interface        ──────►   JavaBackedExecutionPlan
+User implements:                           Rust/FFI conversion:
+  CatalogProvider interface      ──────►   ForeignCatalogProvider (via TryFrom)
+  SchemaProvider interface       ──────►   ForeignSchemaProvider (via TryFrom)
+  TableProvider interface        ──────►   ForeignTableProvider (via TryFrom)
+  ExecutionPlan interface        ──────►   ForeignExecutionPlan (via TryFrom)
 
-*Handle classes create upcall stubs        Wrapper implements DataFusion traits
-that Rust can call back into Java          by invoking Java callbacks
+*Handle classes create upcall stubs        TryFrom converts FFI structs into
+that Rust can call back into Java          DataFusion trait objects
 ```
 
 ### Key Interfaces
@@ -160,9 +160,9 @@ private final Map<String, CatalogProviderHandle> catalogHandles = new HashMap<>(
 Rust wrapper structs implementing DataFusion traits need `Debug`. Since they contain raw pointers, implement manually:
 
 ```rust
-impl std::fmt::Debug for JavaBackedTableProvider {
+impl std::fmt::Debug for ForeignTableProvider {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("JavaBackedTableProvider").finish()
+        f.debug_struct("ForeignTableProvider").finish()
     }
 }
 ```

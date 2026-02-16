@@ -262,7 +262,7 @@ Handle classes that implement upstream `datafusion-ffi` traits (e.g., `Execution
 The callback pattern uses intermediate Rust layers:
 
 ```
-Java Handle → Rust Java*Callbacks → Rust JavaBacked* wrapper → DataFusion trait
+Java Handle → Rust Java*Callbacks → Rust Foreign* wrapper → DataFusion trait
 ```
 
 Direct struct construction eliminates them:
@@ -273,7 +273,7 @@ Java Handle → FFI_Xxx (constructed in Java arena) → ForeignXxx (via TryFrom)
 
 ### When to Use Each Pattern
 
-**Direct struct construction is always preferred** when the upstream `datafusion-ffi` crate defines a corresponding `FFI_*` struct. This eliminates intermediate Rust layers (`Java*Callbacks` + `JavaBacked*` wrapper) and lets Rust's existing `TryFrom<&FFI_Xxx>` do the conversion.
+**Direct struct construction is always preferred** when the upstream `datafusion-ffi` crate defines a corresponding `FFI_*` struct. This eliminates intermediate Rust layers (`Java*Callbacks` + `Foreign*` wrapper) and lets Rust's existing `TryFrom<&FFI_Xxx>` do the conversion.
 
 The **callback pattern** is a legacy approach still used by some Handle classes (see "Existing violations" under Handle Class Pattern). It should not be used for new Handle classes unless there is no upstream `FFI_*` struct available in `datafusion-ffi`.
 
