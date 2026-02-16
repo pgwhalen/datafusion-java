@@ -220,9 +220,13 @@ Java Handle → FFI_Xxx (constructed in Java arena) → ForeignXxx (via TryFrom)
 
 Java allocates the `FFI_*` struct in arena memory, populates its function pointer fields with upcall stubs, and copies the struct bytes to Rust when requested. On the Rust side, the existing `TryFrom<&FFI_Xxx>` implementation (either upstream or project-defined) converts the struct into a DataFusion trait object. No intermediate Rust layers are needed.
 
-### Handling `abi_stable` Types
+### Java CAN and MUST Construct `abi_stable` and `async_ffi` Types
 
-The `FFI_*` structs in `datafusion-ffi` use `abi_stable` types (`RVec`, `RString`, `ROption`, `RResult`, `FfiPoll`, etc.). Java Handle classes **must** construct these types correctly by writing the appropriate discriminants and payloads at the correct byte offsets. This is not optional — these are the types that the upstream `TryFrom` conversion expects. See the "Discriminant-Based Enum Returns", "`repr(C)` Enum Returns", and "RString Construction" sections below for how to construct each type from Java.
+**CRITICAL: Do NOT claim that Java "cannot" construct `abi_stable` or `async_ffi` types.** This codebase already does it extensively and successfully. The `FFI_*` structs in `datafusion-ffi` use types like `RVec`, `RString`, `ROption`, `RResult`, `FfiPoll`, `FfiFuture`, and `FFIResult`. Java Handle classes construct ALL of these by writing discriminants and payloads at the correct byte offsets. This is proven, tested, and the required approach.
+
+**Do NOT** propose Rust helper functions, intermediate Rust wrappers, or "bridge" layers to avoid constructing these types from Java. The only exception is `RString` construction, which delegates to a thin Rust helper (`datafusion_create_rstring`) because `RString` has a vtable pointer that must reference `abi_stable` internals, and `RVec<RString>` which similarly delegates to `datafusion_create_rvec_rstring`.
+
+Every other `abi_stable`/`async_ffi` type is constructed purely from Java. Here is how each type works:
 
 ### Struct Layouts, VarHandles, and Size Validation
 
@@ -345,17 +349,108 @@ private static final MemorySegment JAVA_MARKER_ID_FN =
 
 The marker function is defined in `execution_plan.rs`.
 
-### Discriminant-Based Enum Returns
+### `ROption<T>` — Constructed from Java
 
-`abi_stable` enums like `ROption`, `RResult`, and `FfiPoll` use byte discriminants at fixed offsets:
+Layout: `{ disc: u8 (padded to 8B), payload: T }`. Discriminant 0 = RSome, 1 = RNone.
 
 ```java
-// FfiPoll::Ready(RSome(ROk(payload)))
-buffer.set(ValueLayout.JAVA_BYTE, 0, (byte) 0);  // FfiPoll: Ready
-buffer.set(ValueLayout.JAVA_BYTE, 8, (byte) 0);  // ROption: RSome
-buffer.set(ValueLayout.JAVA_BYTE, 16, (byte) 0); // RResult: ROk
-// payload starts at offset 24
+// ROption::RSome(value) — write discriminant then payload
+buffer.set(ValueLayout.JAVA_BYTE, 0, (byte) 0);  // RSome
+// write payload at offset 8 (after 8-byte aligned discriminant)
+
+// ROption::RNone — just set discriminant
+buffer.set(ValueLayout.JAVA_BYTE, 0, (byte) 1);  // RNone
 ```
+
+**Existing usage:** `CatalogProviderHandle.getSchema()` returns `ROption<FFI_SchemaProvider>`, `SchemaProviderHandle.getTable()` returns nested `ROption<FFI_TableProvider>`. `TableProviderHandle.scan()` reads `ROption<usize>` limit parameter.
+
+### `RResult<T, E>` / `FFIResult<T>` — Constructed from Java
+
+Layout: `{ disc: u8 (padded to 8B), payload: union(T, E) }`. Discriminant 0 = ROk, 1 = RErr. `FFIResult<T>` is `RResult<T, RString>`.
+
+```java
+// FFIResult::ROk(value) — write discriminant then copy payload
+VH_RESULT_DISC.set(buffer, 0L, 0L); // ROk
+// write/copy T at payload offset
+
+// FFIResult::RErr(message) — write discriminant then write RString
+VH_RESULT_DISC.set(buffer, 0L, 1L); // RErr
+NativeUtil.writeRString(errorMsg, buffer, RESULT_PAYLOAD_OFFSET, arena);
+```
+
+**Existing usage:** `FileOpenerHandle.open()`, `FileSourceHandle.createFileOpener()`, `FileFormatHandle.createFileSource()`, `ExecutionPlanHandle.execute()` all return `FFIResult<T>` constructed entirely in Java.
+
+### `FfiPoll<T>` — Constructed from Java
+
+Layout: `{ disc: u8 (padded to 8B), payload: T }`. Discriminant 0 = Ready, 1 = Pending.
+
+```java
+// FfiPoll::Ready(payload) — write discriminant then payload
+VH_POLL_DISC.set(buffer, 0L, 0L);  // Ready
+// write payload starting at offset 8
+```
+
+**Existing usage:** `RecordBatchReaderHandle.pollNext()` returns `FfiPoll<ROption<RResult<WrappedArray, RString>>>` — three layers of nested `abi_stable` enums, all constructed from Java.
+
+### `FfiFuture<T>` — Constructed from Java
+
+For synchronous Java callbacks, `FfiFuture` is a wrapper around an immediately-ready value.
+
+**Existing usage:** `SchemaProviderHandle.getTable()` returns `FfiFuture<FFIResult<ROption<FFI_TableProvider>>>`.
+
+### Nested `abi_stable` Enums — Constructed from Java
+
+Nesting is straightforward — each discriminant occupies 1 byte padded to 8 bytes, stacked sequentially:
+
+```java
+// FfiPoll::Ready(RSome(ROk(payload))) — three nested discriminants
+VH_POLL_DISC.set(buffer, 0L, 0L);    // offset 0:  FfiPoll::Ready
+VH_OPTION_DISC.set(buffer, 0L, 0L);  // offset 8:  ROption::RSome
+VH_RESULT_DISC.set(buffer, 0L, 0L);  // offset 16: RResult::ROk
+// payload starts at offset 24
+
+// FfiPoll::Ready(RNone) — end of stream
+VH_POLL_DISC.set(buffer, 0L, 0L);    // offset 0:  FfiPoll::Ready
+VH_OPTION_DISC.set(buffer, 0L, 1L);  // offset 8:  ROption::RNone
+
+// FfiPoll::Ready(RSome(RErr(rstring))) — error case
+VH_POLL_DISC.set(buffer, 0L, 0L);    // offset 0:  FfiPoll::Ready
+VH_OPTION_DISC.set(buffer, 0L, 0L);  // offset 8:  ROption::RSome
+VH_RESULT_DISC.set(buffer, 0L, 1L);  // offset 16: RResult::RErr
+NativeUtil.writeRString(errorMsg, buffer, PAYLOAD_OFFSET, arena);
+```
+
+**Existing usage:** `RecordBatchReaderHandle.pollNext()` constructs all three nesting variants above.
+
+### `RVec<T>` — Reading from Java
+
+`RVec` layout: `{ buf: *mut T, length: usize, capacity: usize, vtable: *const }` (32 bytes).
+
+```java
+// Reading an RVec<usize> parameter passed from Rust
+MemorySegment reinterpreted = rvec.reinterpret(RVEC_LAYOUT.byteSize());
+MemorySegment buf = reinterpreted.get(ValueLayout.ADDRESS, 0);
+long len = reinterpreted.get(ValueLayout.JAVA_LONG, 8);
+MemorySegment data = buf.reinterpret(len * 8);
+for (int i = 0; i < len; i++) {
+    long value = data.getAtIndex(ValueLayout.JAVA_LONG, i);
+}
+```
+
+**Existing usage:** `TableProviderHandle.scan()` reads `RVec<usize>` projections and `RVec<u8>` serialized filters.
+
+### `RString` — Reading from Java / Writing via Rust Helper
+
+Reading is pure Java (same layout as `RVec<u8>`):
+
+```java
+MemorySegment dataPtr = rstring.reinterpret(RSTRING_LAYOUT.byteSize()).get(ValueLayout.ADDRESS, 0);
+long len = rstring.reinterpret(RSTRING_LAYOUT.byteSize()).get(ValueLayout.JAVA_LONG, 8);
+byte[] bytes = dataPtr.reinterpret(len).toArray(ValueLayout.JAVA_BYTE);
+String value = new String(bytes, StandardCharsets.UTF_8);
+```
+
+Writing delegates to `NativeUtil.writeRString()` → `datafusion_create_rstring` because `RString` has a vtable pointer that must reference `abi_stable` internals. This is the **only** `abi_stable` type that requires a Rust helper for construction.
 
 ### `repr(C)` Enum Returns
 
@@ -372,17 +467,13 @@ buffer.set(ValueLayout.JAVA_LONG, 8, count); // payload
 buffer.set(ValueLayout.JAVA_INT, 0, boundedness); // 0=Bounded, 1=Unbounded
 ```
 
-### RString Construction
+### Rust-Side Support (Minimal)
 
-Error messages and string returns use `NativeUtil.writeRString()` which delegates to a Rust helper (`datafusion_create_rstring` in `native_util.rs`) since `RString` has internal structure managed by `abi_stable`.
-
-### Rust-Side Support
-
-Size validation and construction helpers live alongside their corresponding FFI functions:
+The Rust side provides only **size-validation helpers** and the **two construction helpers** that require `abi_stable` internals (`RString` and `RVec<RString>`). All other `abi_stable` type construction (`ROption`, `RResult`, `FFIResult`, `FfiPoll`, `FfiFuture`, `RVec` reading, nested enums) is done purely in Java. Do NOT add new Rust helpers for types that Java can already construct.
 
 - **`execution_plan.rs`** -- Size helpers for `FFI_ExecutionPlan`, `FFI_PlanProperties`, `FFI_Partitioning`, `FFI_EmissionType`, `FFI_Boundedness`, and related types. Also provides `datafusion_java_marker_id()` and `datafusion_create_empty_rvec_plan()`.
 - **`record_batch_reader.rs`** -- Size helpers for `FFI_RecordBatchStream`, poll result, and wrapped schema types.
-- **`native_util.rs`** -- `datafusion_rstring_size()` and `datafusion_create_rstring()` for `abi_stable` string construction.
+- **`native_util.rs`** -- `datafusion_rstring_size()` and `datafusion_create_rstring()` for `RString` construction (vtable-dependent), `datafusion_create_rvec_rstring()` for `RVec<RString>` construction.
 - **`scalar_value.rs`** -- `datafusion_ffi_scalar_value_size()` for scalar value struct validation.
 
 ## Arrow C Data Interface
