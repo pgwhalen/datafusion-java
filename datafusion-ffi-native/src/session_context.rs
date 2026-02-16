@@ -21,6 +21,8 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::runtime::Runtime;
 
+use std::ffi::CString;
+
 use crate::error::{clear_error, set_error_return, set_error_return_null};
 use crate::file_format::{FFI_FileFormat, ForeignFileFormat};
 use crate::session_state::SessionStateWithRuntime;
@@ -501,4 +503,67 @@ pub unsafe extern "C" fn datafusion_context_register_listing_table(
 
         0
     })
+}
+
+// ============================================================================
+// Session metadata
+// ============================================================================
+
+/// Return the session ID as a null-terminated C string.
+///
+/// # Returns
+/// A pointer to the string on success, null on error.
+/// The caller must free the returned string with `datafusion_free_string`.
+///
+/// # Safety
+/// `ctx` must have been created by `datafusion_context_create`.
+#[no_mangle]
+pub unsafe extern "C" fn datafusion_context_session_id(
+    ctx: *mut c_void,
+    error_out: *mut *mut c_char,
+) -> *mut c_char {
+    clear_error(error_out);
+
+    if ctx.is_null() {
+        return set_error_return_null(error_out, "Context is null");
+    }
+
+    let context = &*(ctx as *mut SessionContext);
+    let id = context.session_id();
+
+    match CString::new(id) {
+        Ok(c) => c.into_raw(),
+        Err(e) => set_error_return_null(error_out, &format!("Invalid session ID: {}", e)),
+    }
+}
+
+/// Return the session start time as epoch milliseconds.
+///
+/// # Arguments
+/// * `ctx` - Pointer to the SessionContext
+/// * `millis_out` - Pointer to receive the epoch milliseconds value
+/// * `error_out` - Pointer to receive error message
+///
+/// # Returns
+/// 0 on success, -1 on error.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn datafusion_context_session_start_time(
+    ctx: *mut c_void,
+    millis_out: *mut i64,
+    error_out: *mut *mut c_char,
+) -> i32 {
+    clear_error(error_out);
+
+    if ctx.is_null() || millis_out.is_null() {
+        return set_error_return(error_out, "Null pointer argument");
+    }
+
+    let context = &*(ctx as *mut SessionContext);
+    let start_time = context.session_start_time();
+    *millis_out = start_time.timestamp_millis();
+
+    0
 }

@@ -1,5 +1,6 @@
 package org.apache.arrow.datafusion;
 
+import java.time.Instant;
 import org.apache.arrow.datafusion.config.SessionConfig;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
@@ -128,6 +129,28 @@ public class SessionContext implements AutoCloseable {
   public SessionState state() {
     checkNotClosed();
     return new SessionState(ffi.state());
+  }
+
+  /**
+   * Returns the unique identifier for this session.
+   *
+   * @return the session ID string
+   * @throws DataFusionException if the call fails
+   */
+  public String sessionId() {
+    checkNotClosed();
+    return ffi.sessionId();
+  }
+
+  /**
+   * Returns the time this session was created.
+   *
+   * @return the session start time as an {@link Instant}
+   * @throws DataFusionException if the call fails
+   */
+  public Instant sessionStartTime() {
+    checkNotClosed();
+    return Instant.ofEpochMilli(ffi.sessionStartTimeMillis());
   }
 
   private void checkNotClosed() {

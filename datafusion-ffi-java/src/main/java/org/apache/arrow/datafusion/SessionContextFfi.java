@@ -91,6 +91,23 @@ final class SessionContextFfi implements AutoCloseable {
               ValueLayout.ADDRESS.withName("callbacks"),
               ValueLayout.ADDRESS.withName("error_out")));
 
+  private static final MethodHandle CONTEXT_SESSION_ID =
+      NativeUtil.downcall(
+          "datafusion_context_session_id",
+          FunctionDescriptor.of(
+              ValueLayout.ADDRESS,
+              ValueLayout.ADDRESS.withName("ctx"),
+              ValueLayout.ADDRESS.withName("error_out")));
+
+  private static final MethodHandle CONTEXT_SESSION_START_TIME =
+      NativeUtil.downcall(
+          "datafusion_context_session_start_time",
+          FunctionDescriptor.of(
+              ValueLayout.JAVA_INT,
+              ValueLayout.ADDRESS.withName("ctx"),
+              ValueLayout.ADDRESS.withName("millis_out"),
+              ValueLayout.ADDRESS.withName("error_out")));
+
   private static final MethodHandle CONTEXT_REGISTER_LISTING_TABLE =
       NativeUtil.downcall(
           "datafusion_context_register_listing_table",
@@ -268,6 +285,52 @@ final class SessionContextFfi implements AutoCloseable {
       throw e;
     } catch (Throwable e) {
       throw new DataFusionException("Failed to get session state", e);
+    }
+  }
+
+  /**
+   * Returns the session ID.
+   *
+   * @return the session ID string
+   * @throws DataFusionException if the call fails
+   */
+  String sessionId() {
+    try (Arena arena = Arena.ofConfined()) {
+      MemorySegment ptr =
+          NativeUtil.callForPointer(
+              arena,
+              "Get session ID",
+              errorOut -> (MemorySegment) CONTEXT_SESSION_ID.invokeExact(context, errorOut));
+      try {
+        return NativeUtil.readNullTerminatedString(ptr);
+      } finally {
+        NativeUtil.FREE_STRING.invokeExact(ptr);
+      }
+    } catch (DataFusionException e) {
+      throw e;
+    } catch (Throwable e) {
+      throw new DataFusionException("Failed to get session ID", e);
+    }
+  }
+
+  /**
+   * Returns the session start time as epoch milliseconds.
+   *
+   * @return epoch milliseconds of when the session was created
+   * @throws DataFusionException if the call fails
+   */
+  long sessionStartTimeMillis() {
+    try (Arena arena = Arena.ofConfined()) {
+      MemorySegment millisOut = arena.allocate(ValueLayout.JAVA_LONG);
+      NativeUtil.call(
+          arena,
+          "Get session start time",
+          errorOut -> (int) CONTEXT_SESSION_START_TIME.invokeExact(context, millisOut, errorOut));
+      return millisOut.get(ValueLayout.JAVA_LONG, 0);
+    } catch (DataFusionException e) {
+      throw e;
+    } catch (Throwable e) {
+      throw new DataFusionException("Failed to get session start time", e);
     }
   }
 
