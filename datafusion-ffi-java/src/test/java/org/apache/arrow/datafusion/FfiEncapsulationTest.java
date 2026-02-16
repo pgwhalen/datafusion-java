@@ -34,8 +34,7 @@ public class FfiEncapsulationTest {
               Errors.class,
               UpcallStub.class,
               TraitHandle.class,
-              NativeString.class,
-              PointerOut.class)
+              NativeString.class)
           .map(Class::getSimpleName)
           .collect(Collectors.toUnmodifiableSet());
 
