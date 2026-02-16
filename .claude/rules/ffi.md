@@ -133,13 +133,6 @@ new PointerOut(tableOut).set(ptr);
 new PointerOut(tableOut).setNull();  // for null case
 ```
 
-**LongOut** - for returning long values:
-```java
-// Before: lenOut.reinterpret(8).set(ValueLayout.JAVA_LONG, 0, len)
-// After:
-new LongOut(lenOut).set(len);
-```
-
 **Errors** - for callback return values:
 ```java
 // For the success case:
@@ -599,7 +592,7 @@ Rules 1--4, 6, and the Handle class structural rules (implements `TraitHandle`, 
 
 1. **FFI classes are package-private** -- `NativeUtil`, `NativeLoader`, `Errors`,
    `UpcallStub`, all `*Ffi` classes, all `*Handle` classes, `TraitHandle`, and utility
-   records (`NativeString`, `PointerOut`, `LongOut`) must have no `public` modifier on their class
+   records (`NativeString`, `PointerOut`) must have no `public` modifier on their class
    declaration.
 
 2. **No `java.lang.foreign` in public classes** -- Public API classes (e.g., `SessionContext`, `DataFrame`)

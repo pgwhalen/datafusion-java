@@ -35,8 +35,7 @@ public class FfiEncapsulationTest {
               UpcallStub.class,
               TraitHandle.class,
               NativeString.class,
-              PointerOut.class,
-              LongOut.class)
+              PointerOut.class)
           .map(Class::getSimpleName)
           .collect(Collectors.toUnmodifiableSet());
 
