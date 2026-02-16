@@ -358,39 +358,38 @@ public class ExprTest {
   @Test
   void testMultipleExprsRoundTrip() {
     // Test serializing multiple expressions in a single batch
-    Expr[] originals =
-        new Expr[] {
-          new Expr.BinaryExpr(
-              new Expr.ColumnExpr(new Column("id", null, null)),
-              Operator.Gt,
-              new Expr.LiteralExpr(new ScalarValue.Int64(1L))),
-          new Expr.BinaryExpr(
-              new Expr.ColumnExpr(new Column("name", null, null)),
-              Operator.Eq,
-              new Expr.LiteralExpr(new ScalarValue.Utf8("Alice")))
-        };
+    List<Expr> originals =
+        List.of(
+            new Expr.BinaryExpr(
+                new Expr.ColumnExpr(new Column("id", null, null)),
+                Operator.Gt,
+                new Expr.LiteralExpr(new ScalarValue.Int64(1L))),
+            new Expr.BinaryExpr(
+                new Expr.ColumnExpr(new Column("name", null, null)),
+                Operator.Eq,
+                new Expr.LiteralExpr(new ScalarValue.Utf8("Alice"))));
 
     byte[] bytes = ExprProtoConverter.toProtoBytes(originals);
-    Expr[] results = ExprProtoConverter.fromProtoBytes(bytes);
+    List<Expr> results = ExprProtoConverter.fromProtoBytes(bytes);
 
-    assertEquals(originals.length, results.length);
-    for (int i = 0; i < originals.length; i++) {
-      assertEquals(originals[i], results[i], "Expr at index " + i + " should match");
+    assertEquals(originals.size(), results.size());
+    for (int i = 0; i < originals.size(); i++) {
+      assertEquals(originals.get(i), results.get(i), "Expr at index " + i + " should match");
     }
   }
 
   @Test
   void testEmptyExprsRoundTrip() {
-    byte[] bytes = ExprProtoConverter.toProtoBytes(new Expr[0]);
-    Expr[] results = ExprProtoConverter.fromProtoBytes(bytes);
-    assertEquals(0, results.length);
+    byte[] bytes = ExprProtoConverter.toProtoBytes(List.of());
+    List<Expr> results = ExprProtoConverter.fromProtoBytes(bytes);
+    assertEquals(0, results.size());
   }
 
   /** Serializes an Expr to proto bytes and deserializes back. */
   private static Expr roundTrip(Expr expr) {
-    byte[] bytes = ExprProtoConverter.toProtoBytes(new Expr[] {expr});
-    Expr[] results = ExprProtoConverter.fromProtoBytes(bytes);
-    assertEquals(1, results.length, "Should have exactly one expression");
-    return results[0];
+    byte[] bytes = ExprProtoConverter.toProtoBytes(List.of(expr));
+    List<Expr> results = ExprProtoConverter.fromProtoBytes(bytes);
+    assertEquals(1, results.size(), "Should have exactly one expression");
+    return results.get(0);
   }
 }

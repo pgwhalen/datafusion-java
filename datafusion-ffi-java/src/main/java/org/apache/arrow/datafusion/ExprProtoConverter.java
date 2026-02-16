@@ -34,13 +34,13 @@ import org.apache.arrow.datafusion.proto.WindowExprNode;
 final class ExprProtoConverter {
   private ExprProtoConverter() {}
 
-  /** Decode a proto-encoded {@code LogicalExprList} into an array of {@link Expr}. */
-  static Expr[] fromProtoBytes(byte[] bytes) {
+  /** Decode a proto-encoded {@code LogicalExprList} into a list of {@link Expr}. */
+  static List<Expr> fromProtoBytes(byte[] bytes) {
     try {
       LogicalExprList list = LogicalExprList.parseFrom(bytes);
-      Expr[] result = new Expr[list.getExprCount()];
-      for (int i = 0; i < list.getExprCount(); i++) {
-        result[i] = fromProto(list.getExpr(i));
+      List<Expr> result = new ArrayList<>(list.getExprCount());
+      for (LogicalExprNode node : list.getExprList()) {
+        result.add(fromProto(node));
       }
       return result;
     } catch (com.google.protobuf.InvalidProtocolBufferException e) {
@@ -48,8 +48,8 @@ final class ExprProtoConverter {
     }
   }
 
-  /** Encode an array of {@link Expr} into proto bytes ({@code LogicalExprList}). */
-  static byte[] toProtoBytes(Expr[] exprs) {
+  /** Encode a list of {@link Expr} into proto bytes ({@code LogicalExprList}). */
+  static byte[] toProtoBytes(List<Expr> exprs) {
     LogicalExprList.Builder builder = LogicalExprList.newBuilder();
     for (Expr expr : exprs) {
       builder.addExpr(toProto(expr));

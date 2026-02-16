@@ -106,7 +106,7 @@ public class ErrorPropagationTest {
 
             @Override
             public ExecutionPlan scan(
-                Session session, Expr[] filters, int[] projection, Long limit) {
+                Session session, List<Expr> filters, List<Integer> projection, Long limit) {
               throw new UnsupportedOperationException("Should not be called");
             }
           };
@@ -143,7 +143,7 @@ public class ErrorPropagationTest {
 
             @Override
             public ExecutionPlan scan(
-                Session session, Expr[] filters, int[] projection, Long limit) {
+                Session session, List<Expr> filters, List<Integer> projection, Long limit) {
               throw new RuntimeException(errorMessage);
             }
           };
@@ -198,7 +198,7 @@ public class ErrorPropagationTest {
 
             @Override
             public ExecutionPlan scan(
-                Session session, Expr[] filters, int[] projection, Long limit) {
+                Session session, List<Expr> filters, List<Integer> projection, Long limit) {
               return errorPlan;
             }
           };
@@ -253,7 +253,7 @@ public class ErrorPropagationTest {
 
             @Override
             public ExecutionPlan scan(
-                Session session, Expr[] filters, int[] projection, Long limit) {
+                Session session, List<Expr> filters, List<Integer> projection, Long limit) {
               return errorPlan;
             }
           };
@@ -325,7 +325,7 @@ public class ErrorPropagationTest {
 
             @Override
             public ExecutionPlan scan(
-                Session session, Expr[] filters, int[] projection, Long limit) {
+                Session session, List<Expr> filters, List<Integer> projection, Long limit) {
               return errorPlan;
             }
           };
@@ -372,7 +372,7 @@ public class ErrorPropagationTest {
 
             @Override
             public ExecutionPlan scan(
-                Session session, Expr[] filters, int[] projection, Long limit) {
+                Session session, List<Expr> filters, List<Integer> projection, Long limit) {
               throw new IllegalStateException(errorMessage);
             }
           };
@@ -435,7 +435,7 @@ public class ErrorPropagationTest {
 
             @Override
             public ExecutionPlan scan(
-                Session session, Expr[] filters, int[] projection, Long limit) {
+                Session session, List<Expr> filters, List<Integer> projection, Long limit) {
               Exception cause = new IllegalArgumentException(rootCause);
               throw new RuntimeException(wrapperMessage, cause);
             }
@@ -495,7 +495,7 @@ public class ErrorPropagationTest {
 
             @Override
             public ExecutionPlan scan(
-                Session session, Expr[] filters, int[] projection, Long limit) {
+                Session session, List<Expr> filters, List<Integer> projection, Long limit) {
               throw new IllegalStateException(errorMessage);
             }
           };

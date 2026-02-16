@@ -1,5 +1,6 @@
 package org.apache.arrow.datafusion;
 
+import java.util.List;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.types.pojo.Schema;
 
@@ -33,8 +34,8 @@ public class Session {
    * @return a physical expression representing the conjunction of all filters
    * @throws DataFusionException if the physical expression cannot be created
    */
-  public PhysicalExpr createPhysicalExpr(Schema tableSchema, Expr[] filters) {
-    if (filters.length == 0) {
+  public PhysicalExpr createPhysicalExpr(Schema tableSchema, List<Expr> filters) {
+    if (filters.isEmpty()) {
       throw new DataFusionException("No filters to create physical expression from");
     }
 

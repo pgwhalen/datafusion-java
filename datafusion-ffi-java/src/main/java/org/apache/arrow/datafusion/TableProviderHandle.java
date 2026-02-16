@@ -6,6 +6,9 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.invoke.VarHandle;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
 import org.apache.arrow.memory.BufferAllocator;
@@ -461,13 +464,15 @@ final class TableProviderHandle implements TraitHandle {
       MemorySegment projBuf = projReinterpreted.get(ValueLayout.ADDRESS, 0);
       long projLen = projReinterpreted.get(ValueLayout.JAVA_LONG, 8);
 
-      int[] projectionArray = null;
+      List<Integer> projectionList;
       if (projLen > 0 && !projBuf.equals(MemorySegment.NULL)) {
-        projectionArray = new int[(int) projLen];
+        projectionList = new ArrayList<>((int) projLen);
         MemorySegment projData = projBuf.reinterpret(projLen * 8);
         for (int i = 0; i < projLen; i++) {
-          projectionArray[i] = (int) projData.getAtIndex(ValueLayout.JAVA_LONG, i);
+          projectionList.add((int) projData.getAtIndex(ValueLayout.JAVA_LONG, i));
         }
+      } else {
+        projectionList = Collections.emptyList();
       }
 
       // Read limit from ROption<usize>
@@ -485,12 +490,12 @@ final class TableProviderHandle implements TraitHandle {
       MemorySegment filterBuf = filterReinterpreted.get(ValueLayout.ADDRESS, 0);
       long filterLen = filterReinterpreted.get(ValueLayout.JAVA_LONG, 8);
 
-      Expr[] filterExprs;
+      List<Expr> filterExprs;
       if (filterLen > 0 && !filterBuf.equals(MemorySegment.NULL)) {
         byte[] filterBytes = filterBuf.reinterpret(filterLen).toArray(ValueLayout.JAVA_BYTE);
         filterExprs = ExprProtoConverter.fromProtoBytes(filterBytes);
       } else {
-        filterExprs = new Expr[0];
+        filterExprs = Collections.emptyList();
       }
 
       // Create Session handle (uses default SessionState since FFI_SessionRef is pub(crate))
@@ -499,7 +504,7 @@ final class TableProviderHandle implements TraitHandle {
 
       try {
         // Call the Java provider's scan method
-        ExecutionPlan plan = provider.scan(scanSession, filterExprs, projectionArray, limitValue);
+        ExecutionPlan plan = provider.scan(scanSession, filterExprs, projectionList, limitValue);
 
         // Create an ExecutionPlanHandle and use it to build the return value
         ExecutionPlanHandle planHandle =
@@ -545,31 +550,32 @@ final class TableProviderHandle implements TraitHandle {
       MemorySegment filterBuf = filterReinterpreted.get(ValueLayout.ADDRESS, 0);
       long filterLen = filterReinterpreted.get(ValueLayout.JAVA_LONG, 8);
 
-      Expr[] filterExprs;
+      List<Expr> filterExprs;
       if (filterLen > 0 && !filterBuf.equals(MemorySegment.NULL)) {
         byte[] filterBytes = filterBuf.reinterpret(filterLen).toArray(ValueLayout.JAVA_BYTE);
         filterExprs = ExprProtoConverter.fromProtoBytes(filterBytes);
       } else {
-        filterExprs = new Expr[0];
+        filterExprs = Collections.emptyList();
       }
 
       // Call Java provider
-      FilterPushDown[] pushdowns = provider.supportsFiltersPushdown(filterExprs);
+      List<FilterPushDown> pushdowns = provider.supportsFiltersPushdown(filterExprs);
 
       // Convert to int discriminants
-      MemorySegment discriminants = arena.allocate(ValueLayout.JAVA_INT, pushdowns.length);
-      for (int i = 0; i < pushdowns.length; i++) {
+      MemorySegment discriminants = arena.allocate(ValueLayout.JAVA_INT, pushdowns.size());
+      int idx = 0;
+      for (FilterPushDown pd : pushdowns) {
         int disc =
-            switch (pushdowns[i]) {
+            switch (pd) {
               case UNSUPPORTED -> 0;
               case INEXACT -> 1;
               case EXACT -> 2;
             };
-        discriminants.setAtIndex(ValueLayout.JAVA_INT, i, disc);
+        discriminants.setAtIndex(ValueLayout.JAVA_INT, idx++, disc);
       }
 
       // Construct FFIResult via Rust helper
-      CREATE_FILTER_PUSHDOWN_OK.invokeExact(discriminants, (long) pushdowns.length, buffer);
+      CREATE_FILTER_PUSHDOWN_OK.invokeExact(discriminants, (long) pushdowns.size(), buffer);
       return buffer;
     } catch (Throwable e) {
       buffer.fill((byte) 0);

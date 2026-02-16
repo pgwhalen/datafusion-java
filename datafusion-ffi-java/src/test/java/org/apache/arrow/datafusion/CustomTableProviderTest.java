@@ -2,6 +2,7 @@ package org.apache.arrow.datafusion;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -322,7 +323,7 @@ public class CustomTableProviderTest {
 
             @Override
             public ExecutionPlan scan(
-                Session session, Expr[] filters, int[] projection, Long limit) {
+                Session session, List<Expr> filters, List<Integer> projection, Long limit) {
               capturedLimit.set(limit);
               return new TestExecutionPlan(schema, List.of(usersDataBatch()));
             }
@@ -367,7 +368,7 @@ public class CustomTableProviderTest {
 
             @Override
             public ExecutionPlan scan(
-                Session session, Expr[] filters, int[] projection, Long limit) {
+                Session session, List<Expr> filters, List<Integer> projection, Long limit) {
               capturedLimit.set(limit);
               return new TestExecutionPlan(schema, List.of(usersDataBatch()));
             }
@@ -410,7 +411,7 @@ public class CustomTableProviderTest {
 
             @Override
             public ExecutionPlan scan(
-                Session session, Expr[] filters, int[] projection, Long limit) {
+                Session session, List<Expr> filters, List<Integer> projection, Long limit) {
               return new ExecutionPlan() {
                 @Override
                 public Schema schema() {
@@ -461,7 +462,7 @@ public class CustomTableProviderTest {
       Schema schema = createUsersSchema();
 
       // Create a table provider that returns EXACT for "id" column filters, INEXACT for others
-      AtomicReference<FilterPushDown[]> capturedPushdowns = new AtomicReference<>();
+      AtomicReference<List<FilterPushDown>> capturedPushdowns = new AtomicReference<>();
       TableProvider filterTable =
           new TableProvider() {
             @Override
@@ -470,18 +471,19 @@ public class CustomTableProviderTest {
             }
 
             @Override
-            public FilterPushDown[] supportsFiltersPushdown(Expr[] filters) {
-              FilterPushDown[] result = new FilterPushDown[filters.length];
+            public List<FilterPushDown> supportsFiltersPushdown(List<Expr> filters) {
               // Return EXACT for all filters (we can't inspect Expr contents easily,
               // but we can verify the callback is invoked with the right count)
-              Arrays.fill(result, FilterPushDown.EXACT);
+              List<FilterPushDown> result =
+                  new ArrayList<>(
+                      java.util.Collections.nCopies(filters.size(), FilterPushDown.EXACT));
               capturedPushdowns.set(result);
               return result;
             }
 
             @Override
             public ExecutionPlan scan(
-                Session session, Expr[] filters, int[] projection, Long limit) {
+                Session session, List<Expr> filters, List<Integer> projection, Long limit) {
               return new TestExecutionPlan(schema, List.of(usersDataBatch()));
             }
           };
@@ -505,7 +507,7 @@ public class CustomTableProviderTest {
 
       // Verify the callback was invoked
       assertNotNull(capturedPushdowns.get(), "supportsFiltersPushdown should have been called");
-      assertTrue(capturedPushdowns.get().length > 0, "Should have received at least one filter");
+      assertFalse(capturedPushdowns.get().isEmpty(), "Should have received at least one filter");
     }
   }
 
@@ -525,15 +527,13 @@ public class CustomTableProviderTest {
             }
 
             @Override
-            public FilterPushDown[] supportsFiltersPushdown(Expr[] filters) {
-              FilterPushDown[] result = new FilterPushDown[filters.length];
-              Arrays.fill(result, FilterPushDown.UNSUPPORTED);
-              return result;
+            public List<FilterPushDown> supportsFiltersPushdown(List<Expr> filters) {
+              return java.util.Collections.nCopies(filters.size(), FilterPushDown.UNSUPPORTED);
             }
 
             @Override
             public ExecutionPlan scan(
-                Session session, Expr[] filters, int[] projection, Long limit) {
+                Session session, List<Expr> filters, List<Integer> projection, Long limit) {
               return new TestExecutionPlan(schema, List.of(usersDataBatch()));
             }
           };
@@ -604,8 +604,8 @@ public class CustomTableProviderTest {
 
       Schema schema = createUsersSchema();
 
-      // Capture the Expr[] from scan callback
-      AtomicReference<Expr[]> capturedFilters = new AtomicReference<>();
+      // Capture the filters from scan callback
+      AtomicReference<List<Expr>> capturedFilters = new AtomicReference<>();
       TableProvider filterCapturingTable =
           new TableProvider() {
             @Override
@@ -615,7 +615,7 @@ public class CustomTableProviderTest {
 
             @Override
             public ExecutionPlan scan(
-                Session session, Expr[] filters, int[] projection, Long limit) {
+                Session session, List<Expr> filters, List<Integer> projection, Long limit) {
               capturedFilters.set(filters);
               return new TestExecutionPlan(schema, List.of(usersDataBatch()));
             }
@@ -636,12 +636,12 @@ public class CustomTableProviderTest {
       }
 
       // Verify the captured filter structure
-      Expr[] filters = capturedFilters.get();
+      List<Expr> filters = capturedFilters.get();
       assertNotNull(filters, "Filters should have been captured");
-      assertTrue(filters.length > 0, "Should have at least one filter");
+      assertFalse(filters.isEmpty(), "Should have at least one filter");
 
       // The filter should be a BinaryExpr: id > 1
-      Expr filter = filters[0];
+      Expr filter = filters.get(0);
       assertInstanceOf(Expr.BinaryExpr.class, filter, "Filter should be a BinaryExpr");
       Expr.BinaryExpr binExpr = (Expr.BinaryExpr) filter;
 
@@ -667,8 +667,8 @@ public class CustomTableProviderTest {
 
       Schema schema = createUsersSchema();
 
-      // Capture the Expr[] from supportsFiltersPushdown callback
-      AtomicReference<Expr[]> capturedFilters = new AtomicReference<>();
+      // Capture the filters from supportsFiltersPushdown callback
+      AtomicReference<List<Expr>> capturedFilters = new AtomicReference<>();
       TableProvider filterCapturingTable =
           new TableProvider() {
             @Override
@@ -677,16 +677,14 @@ public class CustomTableProviderTest {
             }
 
             @Override
-            public FilterPushDown[] supportsFiltersPushdown(Expr[] filters) {
+            public List<FilterPushDown> supportsFiltersPushdown(List<Expr> filters) {
               capturedFilters.set(filters);
-              FilterPushDown[] result = new FilterPushDown[filters.length];
-              Arrays.fill(result, FilterPushDown.INEXACT);
-              return result;
+              return java.util.Collections.nCopies(filters.size(), FilterPushDown.INEXACT);
             }
 
             @Override
             public ExecutionPlan scan(
-                Session session, Expr[] filters, int[] projection, Long limit) {
+                Session session, List<Expr> filters, List<Integer> projection, Long limit) {
               return new TestExecutionPlan(schema, List.of(usersDataBatch()));
             }
           };
@@ -709,7 +707,7 @@ public class CustomTableProviderTest {
       }
 
       // Verify the captured filters from supportsFiltersPushdown
-      Expr[] filters = capturedFilters.get();
+      List<Expr> filters = capturedFilters.get();
       assertNotNull(filters, "Filters should have been captured from supportsFiltersPushdown");
 
       // DataFusion may send the AND as a single compound filter or two separate filters.
@@ -790,7 +788,8 @@ public class CustomTableProviderTest {
     }
 
     @Override
-    public ExecutionPlan scan(Session session, Expr[] filters, int[] projection, Long limit) {
+    public ExecutionPlan scan(
+        Session session, List<Expr> filters, List<Integer> projection, Long limit) {
       return new TestExecutionPlan(schema, batches);
     }
   }

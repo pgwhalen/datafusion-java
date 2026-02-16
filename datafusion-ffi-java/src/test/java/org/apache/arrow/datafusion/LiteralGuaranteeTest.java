@@ -106,8 +106,9 @@ public class LiteralGuaranteeTest {
           }
 
           @Override
-          public ExecutionPlan scan(Session session, Expr[] filters, int[] projection, Long limit) {
-            if (filters.length > 0) {
+          public ExecutionPlan scan(
+              Session session, List<Expr> filters, List<Integer> projection, Long limit) {
+            if (filters.size() > 0) {
               try (PhysicalExpr physExpr = session.createPhysicalExpr(schema, filters)) {
                 capturedGuarantees.set(LiteralGuarantee.analyze(physExpr));
               }
@@ -138,8 +139,9 @@ public class LiteralGuaranteeTest {
           }
 
           @Override
-          public ExecutionPlan scan(Session session, Expr[] filters, int[] projection, Long limit) {
-            capturedExprArrayLength.set(filters.length);
+          public ExecutionPlan scan(
+              Session session, List<Expr> filters, List<Integer> projection, Long limit) {
+            capturedExprArrayLength.set(filters.size());
             return new TestExecutionPlan(schema);
           }
         };
@@ -169,8 +171,9 @@ public class LiteralGuaranteeTest {
       }
 
       @Override
-      public ExecutionPlan scan(Session session, Expr[] filters, int[] projection, Long limit) {
-        if (filters.length > 0) {
+      public ExecutionPlan scan(
+          Session session, List<Expr> filters, List<Integer> projection, Long limit) {
+        if (filters.size() > 0) {
           try (PhysicalExpr physExpr = session.createPhysicalExpr(schema, filters)) {
             capturedGuarantees.set(LiteralGuarantee.analyze(physExpr));
           }

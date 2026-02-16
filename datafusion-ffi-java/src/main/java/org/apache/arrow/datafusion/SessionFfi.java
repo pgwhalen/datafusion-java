@@ -5,6 +5,7 @@ import java.lang.foreign.FunctionDescriptor;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.lang.invoke.MethodHandle;
+import java.util.List;
 import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
 import org.apache.arrow.memory.BufferAllocator;
@@ -53,7 +54,7 @@ final class SessionFfi {
    * @throws DataFusionException if the physical expression cannot be created
    */
   PhysicalExprFfi createPhysicalExpr(
-      BufferAllocator allocator, Schema tableSchema, Expr[] filters) {
+      BufferAllocator allocator, Schema tableSchema, List<Expr> filters) {
     try (Arena arena = Arena.ofConfined()) {
       // Serialize filter expressions to proto bytes
       byte[] filterBytes = ExprProtoConverter.toProtoBytes(filters);
