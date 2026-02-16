@@ -33,7 +33,6 @@ pub use logical_plan::*;
 pub use physical_expr::*;
 pub use record_batch_reader::*;
 pub use record_batch_stream::*;
-pub use scalar_value::*;
 pub use schema_provider::*;
 pub use session::*;
 pub use session_context::*;

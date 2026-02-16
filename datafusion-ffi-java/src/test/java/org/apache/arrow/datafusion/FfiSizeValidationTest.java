@@ -47,9 +47,4 @@ class FfiSizeValidationTest {
   void fileOpenerSizes() {
     FileOpenerHandle.validateSizes();
   }
-
-  @Test
-  void scalarValueSizes() {
-    ScalarValueFfi.validateSizes();
-  }
 }

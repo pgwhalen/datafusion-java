@@ -245,32 +245,26 @@ final class ScalarValueProtoConverter {
     return builder.build();
   }
 
-  // Decimal bytes are stored as little-endian two's complement
+  // Decimal bytes use big-endian two's complement, matching datafusion-proto's to_be_bytes().
   private static int decimalBytesToInt(ByteString bytes) {
-    byte[] b = bytes.toByteArray();
-    reverseBytesInPlace(b);
-    return new BigInteger(b).intValue();
+    return new BigInteger(bytes.toByteArray()).intValue();
   }
 
   private static long decimalBytesToLong(ByteString bytes) {
-    byte[] b = bytes.toByteArray();
-    reverseBytesInPlace(b);
-    return new BigInteger(b).longValue();
+    return new BigInteger(bytes.toByteArray()).longValue();
   }
 
   private static BigInteger decimalBytesToBigInteger(ByteString bytes) {
-    byte[] b = bytes.toByteArray();
-    reverseBytesInPlace(b);
-    return new BigInteger(b);
+    return new BigInteger(bytes.toByteArray());
   }
 
   private static ByteString intToDecimalBytes(int value) {
-    byte[] b = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(value).array();
+    byte[] b = ByteBuffer.allocate(4).order(ByteOrder.BIG_ENDIAN).putInt(value).array();
     return ByteString.copyFrom(b);
   }
 
   private static ByteString longToDecimalBytes(long value) {
-    byte[] b = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).putLong(value).array();
+    byte[] b = ByteBuffer.allocate(8).order(ByteOrder.BIG_ENDIAN).putLong(value).array();
     return ByteString.copyFrom(b);
   }
 
@@ -280,19 +274,10 @@ final class ScalarValueProtoConverter {
     // Sign-extend: fill with 0xFF if negative, 0x00 if positive
     byte fill = (byte) (value.signum() < 0 ? 0xFF : 0x00);
     java.util.Arrays.fill(result, fill);
-    // Copy big-endian bytes into result (right-aligned), then reverse to little-endian
+    // Copy big-endian bytes into result (right-aligned)
     int srcStart = Math.max(0, bigEndian.length - byteWidth);
     int destStart = Math.max(0, byteWidth - bigEndian.length);
     System.arraycopy(bigEndian, srcStart, result, destStart, bigEndian.length - srcStart);
-    reverseBytesInPlace(result);
     return ByteString.copyFrom(result);
-  }
-
-  private static void reverseBytesInPlace(byte[] b) {
-    for (int i = 0, j = b.length - 1; i < j; i++, j--) {
-      byte tmp = b[i];
-      b[i] = b[j];
-      b[j] = tmp;
-    }
   }
 }

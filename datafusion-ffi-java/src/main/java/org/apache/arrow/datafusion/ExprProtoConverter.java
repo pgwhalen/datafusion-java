@@ -638,41 +638,12 @@ final class ExprProtoConverter {
 
   private static TableReference convertTableReference(
       org.apache.arrow.datafusion.proto.TableReference proto) {
-    if (proto == null) return null;
-    return switch (proto.getTableReferenceEnumCase()) {
-      case BARE -> new TableReference.Bare(proto.getBare().getTable());
-      case PARTIAL ->
-          new TableReference.Partial(proto.getPartial().getSchema(), proto.getPartial().getTable());
-      case FULL ->
-          new TableReference.Full(
-              proto.getFull().getCatalog(),
-              proto.getFull().getSchema(),
-              proto.getFull().getTable());
-      default -> null;
-    };
+    return TableReferenceFfi.convertTableReference(proto);
   }
 
   private static org.apache.arrow.datafusion.proto.TableReference toProtoTableReference(
       TableReference ref) {
-    var builder = org.apache.arrow.datafusion.proto.TableReference.newBuilder();
-    switch (ref) {
-      case TableReference.Bare b ->
-          builder.setBare(
-              org.apache.arrow.datafusion.proto.BareTableReference.newBuilder()
-                  .setTable(b.table()));
-      case TableReference.Partial p ->
-          builder.setPartial(
-              org.apache.arrow.datafusion.proto.PartialTableReference.newBuilder()
-                  .setSchema(p.schema())
-                  .setTable(p.table()));
-      case TableReference.Full f ->
-          builder.setFull(
-              org.apache.arrow.datafusion.proto.FullTableReference.newBuilder()
-                  .setCatalog(f.catalog())
-                  .setSchema(f.schema())
-                  .setTable(f.table()));
-    }
-    return builder.build();
+    return TableReferenceFfi.toProtoTableReference(ref);
   }
 
   private static String getRelationString(TableReference ref) {

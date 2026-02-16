@@ -7,14 +7,18 @@ use std::ffi::{c_char, c_void};
 use std::sync::Arc;
 
 use crate::error::{clear_error, set_error_return, set_error_return_null};
-use crate::scalar_value::{scalar_to_ffi, FFI_ScalarValue};
-use crate::table_reference::write_table_reference;
+use crate::scalar_value::scalar_to_proto_bytes;
+use crate::table_reference::table_reference_to_proto_bytes;
 
 /// Holds the results of LiteralGuarantee::analyze() for indexed access from Java.
 struct GuaranteesHandle {
     guarantees: Vec<LiteralGuarantee>,
     /// Indexed literals for each guarantee (deterministic ordering).
     indexed_literals: Vec<Vec<ScalarValue>>,
+    /// Pre-serialized proto bytes for each literal in each guarantee.
+    serialized_literals: Vec<Vec<Vec<u8>>>,
+    /// Pre-serialized proto bytes for each guarantee's table reference.
+    table_ref_protos: Vec<Vec<u8>>,
 }
 
 /// Analyze a physical expression for literal guarantees.
@@ -50,6 +54,8 @@ pub unsafe extern "C" fn datafusion_literal_guarantee_analyze(
         let handle = Box::new(GuaranteesHandle {
             guarantees: Vec::new(),
             indexed_literals: Vec::new(),
+            serialized_literals: Vec::new(),
+            table_ref_protos: Vec::new(),
         });
         return Box::into_raw(handle) as *mut c_void;
     }
@@ -64,9 +70,31 @@ pub unsafe extern "C" fn datafusion_literal_guarantee_analyze(
         })
         .collect();
 
+    // Pre-serialize all literals to proto bytes
+    let serialized_literals: Vec<Vec<Vec<u8>>> = indexed_literals
+        .iter()
+        .map(|literals| {
+            literals
+                .iter()
+                .map(|sv| {
+                    scalar_to_proto_bytes(sv)
+                        .unwrap_or_else(|_| Vec::new())
+                })
+                .collect()
+        })
+        .collect();
+
+    // Pre-serialize all table references to proto bytes
+    let table_ref_protos: Vec<Vec<u8>> = guarantees
+        .iter()
+        .map(|g| table_reference_to_proto_bytes(&g.column.relation))
+        .collect();
+
     let handle = Box::new(GuaranteesHandle {
         guarantees,
         indexed_literals,
+        serialized_literals,
+        table_ref_protos,
     });
     Box::into_raw(handle) as *mut c_void
 }
@@ -82,8 +110,8 @@ pub unsafe extern "C" fn datafusion_guarantee_get_info(
     idx: usize,
     name_out: *mut *const u8,
     name_len_out: *mut usize,
-    rel_type_out: *mut i32,
-    rel_strs_out: *mut *const c_char,
+    rel_proto_out: *mut *const u8,
+    rel_proto_len_out: *mut usize,
     guarantee_type_out: *mut i32,
     literal_count_out: *mut usize,
     spans_count_out: *mut usize,
@@ -107,8 +135,15 @@ pub unsafe extern "C" fn datafusion_guarantee_get_info(
     *name_out = name.as_ptr();
     *name_len_out = name.len();
 
-    // Table reference
-    write_table_reference(&g.column.relation, rel_type_out, rel_strs_out);
+    // Table reference (pre-serialized proto bytes, borrowed from handle)
+    let proto_bytes = &h.table_ref_protos[idx];
+    if proto_bytes.is_empty() {
+        *rel_proto_out = std::ptr::null();
+        *rel_proto_len_out = 0;
+    } else {
+        *rel_proto_out = proto_bytes.as_ptr();
+        *rel_proto_len_out = proto_bytes.len();
+    }
 
     // Guarantee type
     *guarantee_type_out = match g.guarantee {
@@ -166,17 +201,19 @@ pub unsafe extern "C" fn datafusion_guarantee_get_span(
     0
 }
 
-/// Get a literal value for a specific guarantee.
+/// Get proto-serialized bytes for a literal value of a specific guarantee.
 ///
 /// # Safety
 /// - `handle` must be a valid GuaranteesHandle pointer
-/// - `scalar_out` must point to an FFI_ScalarValue-sized allocation
+/// - `bytes_out` must be a valid pointer to write a `*const u8`
+/// - `len_out` must be a valid pointer to write a `usize`
 #[no_mangle]
 pub unsafe extern "C" fn datafusion_guarantee_get_literal(
     handle: *mut c_void,
     g_idx: usize,
     l_idx: usize,
-    scalar_out: *mut FFI_ScalarValue,
+    bytes_out: *mut *const u8,
+    len_out: *mut usize,
     error_out: *mut *mut c_char,
 ) -> i32 {
     clear_error(error_out);
@@ -184,21 +221,27 @@ pub unsafe extern "C" fn datafusion_guarantee_get_literal(
     if handle.is_null() {
         return set_error_return(error_out, "GuaranteesHandle is null");
     }
-    if scalar_out.is_null() {
-        return set_error_return(error_out, "scalar_out is null");
+    if bytes_out.is_null() {
+        return set_error_return(error_out, "bytes_out is null");
+    }
+    if len_out.is_null() {
+        return set_error_return(error_out, "len_out is null");
     }
 
     let h = &*(handle as *const GuaranteesHandle);
-    if g_idx >= h.indexed_literals.len() {
+    if g_idx >= h.serialized_literals.len() {
         return set_error_return(error_out, &format!("Guarantee index {} out of bounds", g_idx));
     }
 
-    let literals = &h.indexed_literals[g_idx];
+    let literals = &h.serialized_literals[g_idx];
     if l_idx >= literals.len() {
         return set_error_return(error_out, &format!("Literal index {} out of bounds", l_idx));
     }
 
-    scalar_to_ffi(&literals[l_idx], &mut *scalar_out);
+    let bytes = &literals[l_idx];
+    *bytes_out = bytes.as_ptr();
+    *len_out = bytes.len();
+
     0
 }
 

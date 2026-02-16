@@ -40,8 +40,8 @@ final class LiteralGuaranteeFfi {
               ValueLayout.JAVA_LONG.withName("idx"),
               ValueLayout.ADDRESS.withName("name_out"),
               ValueLayout.ADDRESS.withName("name_len_out"),
-              ValueLayout.ADDRESS.withName("rel_type_out"),
-              ValueLayout.ADDRESS.withName("rel_strs_out"),
+              ValueLayout.ADDRESS.withName("rel_proto_out"),
+              ValueLayout.ADDRESS.withName("rel_proto_len_out"),
               ValueLayout.ADDRESS.withName("guarantee_type_out"),
               ValueLayout.ADDRESS.withName("literal_count_out"),
               ValueLayout.ADDRESS.withName("spans_count_out"),
@@ -69,7 +69,8 @@ final class LiteralGuaranteeFfi {
               ValueLayout.ADDRESS.withName("handle"),
               ValueLayout.JAVA_LONG.withName("g_idx"),
               ValueLayout.JAVA_LONG.withName("l_idx"),
-              ValueLayout.ADDRESS.withName("scalar_out"),
+              ValueLayout.ADDRESS.withName("bytes_out"),
+              ValueLayout.ADDRESS.withName("len_out"),
               ValueLayout.ADDRESS.withName("error_out")));
 
   private LiteralGuaranteeFfi() {}
@@ -123,8 +124,8 @@ final class LiteralGuaranteeFfi {
     for (int gIdx = 0; gIdx < (int) count; gIdx++) {
       MemorySegment nameOut = arena.allocate(ValueLayout.ADDRESS);
       MemorySegment nameLenOut = arena.allocate(ValueLayout.JAVA_LONG);
-      MemorySegment relTypeOut = arena.allocate(ValueLayout.JAVA_INT);
-      MemorySegment relStrsOut = arena.allocate(ValueLayout.ADDRESS, 3);
+      MemorySegment relProtoOut = arena.allocate(ValueLayout.ADDRESS);
+      MemorySegment relProtoLenOut = arena.allocate(ValueLayout.JAVA_LONG);
       MemorySegment guaranteeTypeOut = arena.allocate(ValueLayout.JAVA_INT);
       MemorySegment literalCountOut = arena.allocate(ValueLayout.JAVA_LONG);
       MemorySegment spansCountOut = arena.allocate(ValueLayout.JAVA_LONG);
@@ -140,8 +141,8 @@ final class LiteralGuaranteeFfi {
                       (long) guaranteeIdx,
                       nameOut,
                       nameLenOut,
-                      relTypeOut,
-                      relStrsOut,
+                      relProtoOut,
+                      relProtoLenOut,
                       guaranteeTypeOut,
                       literalCountOut,
                       spansCountOut,
@@ -155,9 +156,10 @@ final class LiteralGuaranteeFfi {
           namePtr.reinterpret(nameLen), ValueLayout.JAVA_BYTE, 0, nameBytes, 0, (int) nameLen);
       String columnName = new String(nameBytes, StandardCharsets.UTF_8);
 
-      // Read table reference
-      int relType = relTypeOut.get(ValueLayout.JAVA_INT, 0);
-      TableReference relation = TableReferenceFfi.readTableReference(relType, relStrsOut);
+      // Read table reference (proto bytes borrowed from Rust handle)
+      MemorySegment relProtoPtr = relProtoOut.get(ValueLayout.ADDRESS, 0);
+      long relProtoLen = relProtoLenOut.get(ValueLayout.JAVA_LONG, 0);
+      TableReference relation = TableReferenceFfi.readTableReference(relProtoPtr, relProtoLen);
 
       // Read spans
       long spansCount = spansCountOut.get(ValueLayout.JAVA_LONG, 0);
@@ -207,7 +209,8 @@ final class LiteralGuaranteeFfi {
       long literalCount = literalCountOut.get(ValueLayout.JAVA_LONG, 0);
       Set<ScalarValue> literals = new LinkedHashSet<>((int) literalCount);
       for (int lIdx = 0; lIdx < (int) literalCount; lIdx++) {
-        MemorySegment scalarOut = arena.allocate(ScalarValueFfi.FFI_SCALAR_VALUE_LAYOUT);
+        MemorySegment bytesOut = arena.allocate(ValueLayout.ADDRESS);
+        MemorySegment lenOut = arena.allocate(ValueLayout.JAVA_LONG);
 
         final int litIdx = lIdx;
         NativeUtil.call(
@@ -216,9 +219,11 @@ final class LiteralGuaranteeFfi {
             errorOut ->
                 (int)
                     GUARANTEE_GET_LITERAL.invokeExact(
-                        handle, (long) guaranteeIdx, (long) litIdx, scalarOut, errorOut));
+                        handle, (long) guaranteeIdx, (long) litIdx, bytesOut, lenOut, errorOut));
 
-        literals.add(ScalarValueFfi.fromFfi(scalarOut));
+        MemorySegment ptr = bytesOut.get(ValueLayout.ADDRESS, 0);
+        long len = lenOut.get(ValueLayout.JAVA_LONG, 0);
+        literals.add(ScalarValueFfi.fromProtoBytes(ptr, len));
       }
 
       Column column = new Column(columnName, relation, new Spans(spans));
