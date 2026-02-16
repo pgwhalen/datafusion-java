@@ -221,10 +221,10 @@ pub struct JavaCallbacks {
 
 Each function pointer in a `Java*Callbacks` struct must correspond 1:1 to a method on the DataFusion trait **and** the Java interface it mirrors. Do not split one trait method into multiple callbacks, and do not merge multiple trait methods into one callback.
 
-When a trait method returns a compound type (e.g., `properties() -> &PlanProperties`), create an `FFI_*` bridge struct in `java_provider.rs` to carry the data across FFI, and use a single callback that writes to that struct:
+When a trait method returns a compound type (e.g., `properties() -> &PlanProperties`), create an `FFI_*` bridge struct to carry the data across FFI, and use a single callback that writes to that struct:
 
 ```rust
-// Bridge struct in java_provider.rs
+// Bridge struct
 #[repr(C)]
 pub struct FFI_PlanProperties {
     pub output_partitioning: i32,
