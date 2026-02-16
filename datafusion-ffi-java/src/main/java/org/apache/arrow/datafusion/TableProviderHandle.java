@@ -82,28 +82,6 @@ final class TableProviderHandle implements TraitHandle {
           FunctionDescriptor.ofVoid(
               ValueLayout.ADDRESS, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
 
-  private static final MethodHandle DESERIALIZE_FILTERS =
-      NativeUtil.downcall(
-          "datafusion_table_deserialize_filters",
-          FunctionDescriptor.of(
-              ValueLayout.ADDRESS,
-              ValueLayout.ADDRESS.withName("filter_bytes"),
-              ValueLayout.JAVA_LONG.withName("filter_len"),
-              ValueLayout.ADDRESS.withName("count_out"),
-              ValueLayout.ADDRESS.withName("error_out")));
-
-  private static final MethodHandle FILTER_PTR =
-      NativeUtil.downcall(
-          "datafusion_table_filter_ptr",
-          FunctionDescriptor.of(
-              ValueLayout.ADDRESS,
-              ValueLayout.ADDRESS.withName("handle"),
-              ValueLayout.JAVA_LONG.withName("index")));
-
-  private static final MethodHandle FREE_FILTERS =
-      NativeUtil.downcall(
-          "datafusion_table_free_filters", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
-
   private static final MethodHandle CREATE_SESSION_HANDLE =
       NativeUtil.downcall(
           "datafusion_table_create_session_handle", FunctionDescriptor.of(ValueLayout.ADDRESS));
@@ -502,27 +480,15 @@ final class TableProviderHandle implements TraitHandle {
         limitValue = limitReinterpreted.get(ValueLayout.JAVA_LONG, 8);
       }
 
-      // Deserialize filters from RVec<u8> (proto-encoded LogicalExprList)
+      // Decode filters from RVec<u8> (proto-encoded LogicalExprList)
       MemorySegment filterReinterpreted = filters.reinterpret(RVEC_U8_LAYOUT.byteSize());
       MemorySegment filterBuf = filterReinterpreted.get(ValueLayout.ADDRESS, 0);
       long filterLen = filterReinterpreted.get(ValueLayout.JAVA_LONG, 8);
 
       Expr[] filterExprs;
-      MemorySegment filterHandle = MemorySegment.NULL;
       if (filterLen > 0 && !filterBuf.equals(MemorySegment.NULL)) {
-        MemorySegment countOut = arena.allocate(ValueLayout.JAVA_LONG);
-        MemorySegment errorOut = NativeUtil.allocateErrorOut(arena);
-        filterHandle =
-            (MemorySegment)
-                DESERIALIZE_FILTERS.invokeExact(filterBuf, filterLen, countOut, errorOut);
-        NativeUtil.checkResult(
-            filterHandle.equals(MemorySegment.NULL) ? -1 : 0, errorOut, "Deserialize filters");
-        long filterCount = countOut.get(ValueLayout.JAVA_LONG, 0);
-        filterExprs = new Expr[(int) filterCount];
-        for (int i = 0; i < filterCount; i++) {
-          MemorySegment exprPtr = (MemorySegment) FILTER_PTR.invokeExact(filterHandle, (long) i);
-          filterExprs[i] = new Expr(new ExprFfi(exprPtr));
-        }
+        byte[] filterBytes = filterBuf.reinterpret(filterLen).toArray(ValueLayout.JAVA_BYTE);
+        filterExprs = ExprProtoConverter.fromProtoBytes(filterBytes);
       } else {
         filterExprs = new Expr[0];
       }
@@ -550,9 +516,6 @@ final class TableProviderHandle implements TraitHandle {
       } finally {
         // Free native handles
         FREE_SESSION_HANDLE.invokeExact(sessionHandle);
-        if (!filterHandle.equals(MemorySegment.NULL)) {
-          FREE_FILTERS.invokeExact(filterHandle);
-        }
       }
     } catch (Throwable e) {
       // Create FfiFuture wrapping error
@@ -576,36 +539,22 @@ final class TableProviderHandle implements TraitHandle {
   @SuppressWarnings("unused") // Called via upcall stub
   MemorySegment supportsFiltersPushdown(MemorySegment selfRef, MemorySegment filtersSerialized) {
     MemorySegment buffer = arena.allocate(FILTER_PUSHDOWN_RESULT_LAYOUT);
-    MemorySegment filterHandle = MemorySegment.NULL;
     try {
       // Read filter bytes from RVec<u8>
       MemorySegment filterReinterpreted = filtersSerialized.reinterpret(RVEC_U8_LAYOUT.byteSize());
       MemorySegment filterBuf = filterReinterpreted.get(ValueLayout.ADDRESS, 0);
       long filterLen = filterReinterpreted.get(ValueLayout.JAVA_LONG, 8);
 
-      FilterPushDown[] pushdowns;
+      Expr[] filterExprs;
       if (filterLen > 0 && !filterBuf.equals(MemorySegment.NULL)) {
-        // Deserialize filters
-        MemorySegment countOut = arena.allocate(ValueLayout.JAVA_LONG);
-        MemorySegment errorOut = NativeUtil.allocateErrorOut(arena);
-        filterHandle =
-            (MemorySegment)
-                DESERIALIZE_FILTERS.invokeExact(filterBuf, filterLen, countOut, errorOut);
-        NativeUtil.checkResult(
-            filterHandle.equals(MemorySegment.NULL) ? -1 : 0, errorOut, "Deserialize filters");
-        long filterCount = countOut.get(ValueLayout.JAVA_LONG, 0);
-
-        Expr[] filterExprs = new Expr[(int) filterCount];
-        for (int i = 0; i < filterCount; i++) {
-          MemorySegment exprPtr = (MemorySegment) FILTER_PTR.invokeExact(filterHandle, (long) i);
-          filterExprs[i] = new Expr(new ExprFfi(exprPtr));
-        }
-
-        // Call Java provider
-        pushdowns = provider.supportsFiltersPushdown(filterExprs);
+        byte[] filterBytes = filterBuf.reinterpret(filterLen).toArray(ValueLayout.JAVA_BYTE);
+        filterExprs = ExprProtoConverter.fromProtoBytes(filterBytes);
       } else {
-        pushdowns = provider.supportsFiltersPushdown(new Expr[0]);
+        filterExprs = new Expr[0];
       }
+
+      // Call Java provider
+      FilterPushDown[] pushdowns = provider.supportsFiltersPushdown(filterExprs);
 
       // Convert to int discriminants
       MemorySegment discriminants = arena.allocate(ValueLayout.JAVA_INT, pushdowns.length);
@@ -633,14 +582,6 @@ final class TableProviderHandle implements TraitHandle {
         // Best effort
       }
       return buffer;
-    } finally {
-      if (!filterHandle.equals(MemorySegment.NULL)) {
-        try {
-          FREE_FILTERS.invokeExact(filterHandle);
-        } catch (Throwable ignored) {
-          // Best effort
-        }
-      }
     }
   }
 

@@ -4,6 +4,7 @@ plugins {
     id 'datafusion.java-conventions'
     id 'com.diffplug.spotless'
     id 'com.google.osdetector'
+    id 'com.google.protobuf' version '0.9.4'
 }
 
 // FFM API is stable in Java 22+
@@ -24,15 +25,23 @@ dependencies {
     api 'org.apache.arrow:arrow-vector:18.1.0'
     implementation 'org.apache.arrow:arrow-c-data:18.1.0'
     implementation 'org.scijava:native-lib-loader:2.5.0'
+    implementation 'com.google.protobuf:protobuf-java:4.29.3'
     runtimeOnly 'org.apache.arrow:arrow-memory-unsafe:18.0.0'
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
     testImplementation 'com.tngtech.archunit:archunit-junit5:1.3.0'
     testRuntimeOnly 'ch.qos.logback:logback-classic:1.5.12'
 }
 
+protobuf {
+    protoc {
+        artifact = 'com.google.protobuf:protoc:4.29.3'
+    }
+}
+
 spotless {
     java {
         googleJavaFormat()
+        targetExclude 'build/generated/**'
     }
 }
 

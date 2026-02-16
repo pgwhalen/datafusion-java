@@ -1,7 +1,6 @@
 package org.apache.arrow.datafusion;
 
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
 
 /**
  * Common interface for all Handle classes that bridge a Java interface to a DataFusion Rust trait.

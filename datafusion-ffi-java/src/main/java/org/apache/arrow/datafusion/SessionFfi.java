@@ -22,17 +22,15 @@ import org.apache.arrow.vector.types.pojo.Schema;
  * management.
  */
 final class SessionFfi {
-  private static final MethodHandle SESSION_CREATE_PHYSICAL_EXPR =
+  private static final MethodHandle SESSION_CREATE_PHYSICAL_EXPR_FROM_PROTO =
       NativeUtil.downcall(
-          "datafusion_session_create_physical_expr",
+          "datafusion_session_create_physical_expr_from_proto",
           FunctionDescriptor.of(
               ValueLayout.ADDRESS,
-              ValueLayout.ADDRESS, // session
-              ValueLayout.ADDRESS, // filter_ptrs
-              ValueLayout.JAVA_LONG, // filter_count
-              ValueLayout.ADDRESS, // schema_ffi
-              ValueLayout.ADDRESS // error_out
-              ));
+              ValueLayout.ADDRESS.withName("filter_bytes"),
+              ValueLayout.JAVA_LONG.withName("filter_len"),
+              ValueLayout.ADDRESS.withName("schema_ffi"),
+              ValueLayout.ADDRESS.withName("error_out")));
 
   private static final long ARROW_SCHEMA_SIZE = 72;
 
@@ -45,20 +43,21 @@ final class SessionFfi {
   /**
    * Creates a physical expression from the given filter expressions using the session state.
    *
+   * <p>Serializes the filter expressions to protobuf bytes and passes them to Rust, which
+   * deserializes, conjoins with AND, and compiles into a physical expression.
+   *
    * @param allocator the buffer allocator for Arrow schema export
    * @param tableSchema the schema of the table being scanned
-   * @param filters the filter expressions to compile (borrowed, from the scan callback)
+   * @param filters the filter expressions to compile
    * @return a new PhysicalExpr wrapping the created native physical expression
    * @throws DataFusionException if the physical expression cannot be created
    */
   PhysicalExprFfi createPhysicalExpr(
       BufferAllocator allocator, Schema tableSchema, Expr[] filters) {
     try (Arena arena = Arena.ofConfined()) {
-      // Build the filter pointer array
-      MemorySegment filterPtrArray = arena.allocate(ValueLayout.ADDRESS, (long) filters.length);
-      for (int i = 0; i < filters.length; i++) {
-        filterPtrArray.setAtIndex(ValueLayout.ADDRESS, i, filters[i].ffi().nativeHandle());
-      }
+      // Serialize filter expressions to proto bytes
+      byte[] filterBytes = ExprProtoConverter.toProtoBytes(filters);
+      MemorySegment filterSegment = arena.allocateFrom(ValueLayout.JAVA_BYTE, filterBytes);
 
       // Allocate the FFI schema struct in the arena.
       MemorySegment ffiSchemaSegment = arena.allocate(ARROW_SCHEMA_SIZE);
@@ -80,8 +79,8 @@ final class SessionFfi {
                 "Create physical expression",
                 errorOut ->
                     (MemorySegment)
-                        SESSION_CREATE_PHYSICAL_EXPR.invokeExact(
-                            pointer, filterPtrArray, (long) filters.length, schemaAddr, errorOut));
+                        SESSION_CREATE_PHYSICAL_EXPR_FROM_PROTO.invokeExact(
+                            filterSegment, (long) filterBytes.length, schemaAddr, errorOut));
 
         return new PhysicalExprFfi(result);
       } finally {

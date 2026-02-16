@@ -58,7 +58,48 @@ grep -rn "error_text" ~/.cargo/registry/src/*/datafusion-*NEW_VERSION/
 
 Repeat until it compiles cleanly.
 
-## Step 5: Run Tests
+## Step 5: Re-vendor Proto Files
+
+The vendored proto files in `datafusion-ffi-java/src/main/proto/datafusion/` must be updated to match the new DataFusion version. These files are used by `ExprProtoConverter` for Expr serialization/deserialization across FFI.
+
+1. **Find the upstream proto files** for the target version. They live in the DataFusion repo:
+   - `datafusion/proto/proto/datafusion.proto`
+   - `datafusion/proto-common/proto/datafusion_common.proto`
+
+   Check the target version's tag on GitHub.
+
+2. **Copy each file** to `datafusion-ffi-java/src/main/proto/datafusion/`, preserving the modifications documented in the vendored file header comment (`// Vendored from apache/datafusion vX.Y.Z`):
+
+   For `datafusion_common.proto`:
+   - Update the version in the header comment
+   - Keep the added Java options after `package datafusion_common;`:
+     ```
+     option java_multiple_files = true;
+     option java_package = "org.apache.arrow.datafusion.proto";
+     option java_outer_classname = "DatafusionCommonProto";
+     ```
+
+   For `datafusion.proto`:
+   - Update the version in the header comment
+   - Keep `java_package` set to `"org.apache.arrow.datafusion.proto"` (not the upstream value)
+   - Keep the import path as `"datafusion/datafusion_common.proto"` (not the upstream nested path)
+
+3. **Regenerate** the proto Java sources:
+   ```bash
+   ./gradlew :datafusion-ffi-java:generateProto
+   ```
+
+4. **Check for compilation errors** in the proto converter classes:
+   ```bash
+   ./gradlew :datafusion-ffi-java:compileJava
+   ```
+
+   Common issues after proto changes:
+   - **Renamed/removed proto fields**: Update `ExprProtoConverter`, `ScalarValueProtoConverter`, or `ArrowTypeProtoConverter` to match new field names
+   - **New oneof variants**: Add handling in the relevant converter's `fromProto`/`toProto` switch
+   - **Changed message structure**: Update the converter logic to match
+
+## Step 6: Run Tests
 
 ```bash
 ./gradlew :datafusion-ffi-java:test
@@ -70,20 +111,20 @@ If tests fail:
 3. Compare with built-in implementations (e.g., `CsvSource`, `MemTable`) for correct patterns
 4. Fix and re-run until all tests pass
 
-## Step 6: Update Java SessionConfig Option Records
+## Step 7: Update Java SessionConfig Option Records
 
 The Java option records mirror DataFusion's `ConfigOptions` from `datafusion-common/src/config.rs`. Fetch that file from the new version's tag and diff against the current Java records.
 
 For detailed instructions on which files to update and how, see [config-options.md](config-options.md).
 
-## Step 7: Format and Final Validation
+## Step 8: Format and Final Validation
 
 ```bash
 ./gradlew :datafusion-ffi-java:spotlessApply
 ./gradlew :datafusion-ffi-java:test
 ```
 
-## Step 8: Summary
+## Step 9: Summary
 
 Provide a summary including:
 - Previous version -> new version for each dependency

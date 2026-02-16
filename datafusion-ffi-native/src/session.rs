@@ -1,6 +1,11 @@
 use arrow::ffi::FFI_ArrowSchema;
 use datafusion::catalog::Session;
 use datafusion::logical_expr::Expr;
+use datafusion::prelude::SessionContext;
+use datafusion_proto::logical_plan::from_proto::parse_exprs;
+use datafusion_proto::logical_plan::DefaultLogicalExtensionCodec;
+use datafusion_proto::protobuf::LogicalExprList;
+use prost::Message;
 use std::ffi::{c_char, c_void};
 use std::sync::Arc;
 
@@ -75,6 +80,96 @@ pub unsafe extern "C" fn datafusion_session_create_physical_expr(
     };
 
     let physical_expr = match session_ref.create_physical_expr(combined, &df_schema) {
+        Ok(expr) => expr,
+        Err(e) => {
+            return set_error_return_null(
+                error_out,
+                &format!("Failed to create physical expression: {}", e),
+            );
+        }
+    };
+
+    Box::into_raw(Box::new(physical_expr)) as *mut c_void
+}
+
+/// Creates a physical expression from proto-encoded filter bytes using a default session.
+///
+/// The filter bytes are a `prost`-encoded `LogicalExprList`, as produced by
+/// `ExprProtoConverter.toProtoBytes()` in Java. The expressions are conjoined
+/// with AND and compiled using a default `SessionState`.
+///
+/// # Safety
+/// - `filter_bytes` must point to `filter_len` valid bytes
+/// - `schema_ffi` must be a valid FFI_ArrowSchema pointer
+/// - `error_out` must be a valid pointer
+#[no_mangle]
+pub unsafe extern "C" fn datafusion_session_create_physical_expr_from_proto(
+    filter_bytes: *const u8,
+    filter_len: usize,
+    schema_ffi: *const FFI_ArrowSchema,
+    error_out: *mut *mut c_char,
+) -> *mut c_void {
+    clear_error(error_out);
+
+    if schema_ffi.is_null() {
+        return set_error_return_null(error_out, "Schema is null");
+    }
+    if filter_len == 0 || filter_bytes.is_null() {
+        return set_error_return_null(error_out, "No filters to create physical expression from");
+    }
+
+    // Decode proto bytes into logical expressions
+    let bytes = std::slice::from_raw_parts(filter_bytes, filter_len);
+    let proto_list = match LogicalExprList::decode(bytes) {
+        Ok(l) => l,
+        Err(e) => {
+            return set_error_return_null(
+                error_out,
+                &format!("Failed to decode filter protobuf: {}", e),
+            );
+        }
+    };
+
+    // Use a default session state for parsing and physical expr creation
+    let session_state = SessionContext::new().state();
+    let codec = DefaultLogicalExtensionCodec {};
+    let exprs: Vec<Expr> = match parse_exprs(proto_list.expr.iter(), &session_state, &codec) {
+        Ok(e) => e,
+        Err(e) => {
+            return set_error_return_null(
+                error_out,
+                &format!("Failed to parse filter expressions: {}", e),
+            );
+        }
+    };
+
+    if exprs.is_empty() {
+        return set_error_return_null(error_out, "No filters after parsing");
+    }
+
+    // Convert FFI schema to Arrow schema
+    let schema = match arrow::datatypes::Schema::try_from(&*schema_ffi) {
+        Ok(s) => Arc::new(s),
+        Err(e) => {
+            return set_error_return_null(error_out, &format!("Invalid schema: {}", e));
+        }
+    };
+
+    // Conjoin all filters with AND
+    let combined = exprs.into_iter().reduce(|a, b| a.and(b)).unwrap();
+
+    // Create physical expression from the logical expression
+    let df_schema = match datafusion::common::DFSchema::try_from(schema.as_ref().clone()) {
+        Ok(s) => s,
+        Err(e) => {
+            return set_error_return_null(
+                error_out,
+                &format!("Failed to create DFSchema: {}", e),
+            );
+        }
+    };
+
+    let physical_expr = match session_state.create_physical_expr(combined, &df_schema) {
         Ok(expr) => expr,
         Err(e) => {
             return set_error_return_null(

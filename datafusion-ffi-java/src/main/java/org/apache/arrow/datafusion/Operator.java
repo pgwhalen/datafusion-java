@@ -1,0 +1,36 @@
+package org.apache.arrow.datafusion;
+
+/** Operators for binary expressions, corresponding to DataFusion's {@code Operator} enum. */
+public enum Operator {
+  Eq,
+  NotEq,
+  Lt,
+  LtEq,
+  Gt,
+  GtEq,
+  Plus,
+  Minus,
+  Multiply,
+  Divide,
+  Modulo,
+  And,
+  Or,
+  IsDistinctFrom,
+  IsNotDistinctFrom,
+  RegexMatch,
+  RegexIMatch,
+  RegexNotMatch,
+  RegexNotIMatch,
+  LikeMatch,
+  ILikeMatch,
+  NotLikeMatch,
+  NotILikeMatch,
+  BitwiseAnd,
+  BitwiseOr,
+  BitwiseXor,
+  BitwiseShiftRight,
+  BitwiseShiftLeft,
+  StringConcat,
+  AtArrow,
+  ArrowAt
+}

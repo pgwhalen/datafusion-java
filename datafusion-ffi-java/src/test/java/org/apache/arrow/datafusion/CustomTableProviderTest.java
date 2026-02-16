@@ -597,6 +597,158 @@ public class CustomTableProviderTest {
     }
   }
 
+  @Test
+  void testFilterExprStructure() {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+
+      Schema schema = createUsersSchema();
+
+      // Capture the Expr[] from scan callback
+      AtomicReference<Expr[]> capturedFilters = new AtomicReference<>();
+      TableProvider filterCapturingTable =
+          new TableProvider() {
+            @Override
+            public Schema schema() {
+              return schema;
+            }
+
+            @Override
+            public ExecutionPlan scan(
+                Session session, Expr[] filters, int[] projection, Long limit) {
+              capturedFilters.set(filters);
+              return new TestExecutionPlan(schema, List.of(usersDataBatch()));
+            }
+          };
+
+      SchemaProvider mySchema = new SimpleSchemaProvider(Map.of("expr_test", filterCapturingTable));
+      CatalogProvider myCatalog = new SimpleCatalogProvider(Map.of("test", mySchema));
+
+      ctx.registerCatalog("expr_catalog", myCatalog, allocator);
+
+      // Query with WHERE clause - filter is "id > 1"
+      try (DataFrame df = ctx.sql("SELECT * FROM expr_catalog.test.expr_test WHERE id > 1");
+          RecordBatchStream stream = df.executeStream(allocator)) {
+        VectorSchemaRoot root = stream.getVectorSchemaRoot();
+        while (stream.loadNextBatch()) {
+          // consume all batches
+        }
+      }
+
+      // Verify the captured filter structure
+      Expr[] filters = capturedFilters.get();
+      assertNotNull(filters, "Filters should have been captured");
+      assertTrue(filters.length > 0, "Should have at least one filter");
+
+      // The filter should be a BinaryExpr: id > 1
+      Expr filter = filters[0];
+      assertInstanceOf(Expr.BinaryExpr.class, filter, "Filter should be a BinaryExpr");
+      Expr.BinaryExpr binExpr = (Expr.BinaryExpr) filter;
+
+      assertEquals(Operator.Gt, binExpr.op(), "Operator should be Gt (>)");
+
+      // Left side should be a Column reference to "id"
+      assertInstanceOf(Expr.ColumnExpr.class, binExpr.left(), "Left should be a ColumnExpr");
+      Expr.ColumnExpr colExpr = (Expr.ColumnExpr) binExpr.left();
+      assertEquals("id", colExpr.column().name(), "Column name should be 'id'");
+
+      // Right side should be a literal value
+      assertInstanceOf(Expr.LiteralExpr.class, binExpr.right(), "Right should be a LiteralExpr");
+      Expr.LiteralExpr litExpr = (Expr.LiteralExpr) binExpr.right();
+      assertInstanceOf(ScalarValue.Int64.class, litExpr.value(), "Literal should be Int64");
+      assertEquals(1L, ((ScalarValue.Int64) litExpr.value()).value(), "Literal value should be 1");
+    }
+  }
+
+  @Test
+  void testComplexFilterExprStructure() {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+
+      Schema schema = createUsersSchema();
+
+      // Capture the Expr[] from supportsFiltersPushdown callback
+      AtomicReference<Expr[]> capturedFilters = new AtomicReference<>();
+      TableProvider filterCapturingTable =
+          new TableProvider() {
+            @Override
+            public Schema schema() {
+              return schema;
+            }
+
+            @Override
+            public FilterPushDown[] supportsFiltersPushdown(Expr[] filters) {
+              capturedFilters.set(filters);
+              FilterPushDown[] result = new FilterPushDown[filters.length];
+              Arrays.fill(result, FilterPushDown.INEXACT);
+              return result;
+            }
+
+            @Override
+            public ExecutionPlan scan(
+                Session session, Expr[] filters, int[] projection, Long limit) {
+              return new TestExecutionPlan(schema, List.of(usersDataBatch()));
+            }
+          };
+
+      SchemaProvider mySchema =
+          new SimpleSchemaProvider(Map.of("complex_test", filterCapturingTable));
+      CatalogProvider myCatalog = new SimpleCatalogProvider(Map.of("test", mySchema));
+
+      ctx.registerCatalog("complex_catalog", myCatalog, allocator);
+
+      // Query with complex WHERE clause: id > 1 AND name = 'Bob'
+      try (DataFrame df =
+              ctx.sql(
+                  "SELECT * FROM complex_catalog.test.complex_test WHERE id > 1 AND name = 'Bob'");
+          RecordBatchStream stream = df.executeStream(allocator)) {
+        VectorSchemaRoot root = stream.getVectorSchemaRoot();
+        while (stream.loadNextBatch()) {
+          // consume all batches
+        }
+      }
+
+      // Verify the captured filters from supportsFiltersPushdown
+      Expr[] filters = capturedFilters.get();
+      assertNotNull(filters, "Filters should have been captured from supportsFiltersPushdown");
+
+      // DataFusion may send the AND as a single compound filter or two separate filters.
+      // With our proto deserialization, we should be able to see the structure either way.
+      boolean foundIdGt = false;
+      boolean foundNameEq = false;
+
+      for (Expr filter : filters) {
+        // Recursively check the expression tree for our expected patterns
+        if (containsBinaryOp(filter, Operator.Gt, "id")) {
+          foundIdGt = true;
+        }
+        if (containsBinaryOp(filter, Operator.Eq, "name")) {
+          foundNameEq = true;
+        }
+      }
+
+      assertTrue(foundIdGt, "Should find 'id > ...' filter");
+      assertTrue(foundNameEq, "Should find 'name = ...' filter");
+    }
+  }
+
+  /**
+   * Recursively checks if an expression tree contains a BinaryExpr with the given op and column.
+   */
+  private boolean containsBinaryOp(Expr expr, Operator op, String columnName) {
+    if (expr instanceof Expr.BinaryExpr bin) {
+      if (bin.op() == op) {
+        if (bin.left() instanceof Expr.ColumnExpr col && col.column().name().equals(columnName)) {
+          return true;
+        }
+      }
+      // Check children recursively (e.g., AND combining two BinaryExprs)
+      return containsBinaryOp(bin.left(), op, columnName)
+          || containsBinaryOp(bin.right(), op, columnName);
+    }
+    return false;
+  }
+
   // Helper methods to create test schemas
 
   private Schema createUsersSchema() {
