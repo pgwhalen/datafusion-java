@@ -27,8 +27,15 @@ use crate::error::{clear_error, set_error_return, set_error_return_null};
 use crate::file_format::{FFI_FileFormat, ForeignFileFormat};
 use crate::session_state::SessionStateWithRuntime;
 
+use arrow::datatypes::DataType;
+use arrow::datatypes::FieldRef;
 use datafusion::catalog::CatalogProvider;
+use datafusion::logical_expr::{
+    ColumnarValue, ReturnFieldArgs, ScalarFunctionArgs, ScalarUDF, ScalarUDFImpl, Signature,
+};
+use datafusion::common::Result as DFResult;
 use datafusion_ffi::catalog_provider::FFI_CatalogProvider;
+use datafusion_ffi::udf::FFI_ScalarUDF;
 
 // ============================================================================
 // Tokio Runtime
@@ -566,4 +573,109 @@ pub unsafe extern "C" fn datafusion_context_session_start_time(
     *millis_out = start_time.timestamp_millis();
 
     0
+}
+
+// ============================================================================
+// UDF registration
+// ============================================================================
+
+/// Register a scalar UDF with the session context.
+///
+/// Java constructs an `FFI_ScalarUDF` in arena memory and passes a pointer.
+/// Rust reads the struct (taking ownership), converts it to a `ForeignScalarUDF`
+/// via the upstream `From<&FFI_ScalarUDF>`, and registers it with the context.
+///
+/// # Arguments
+/// * `ctx` - Pointer to the SessionContext
+/// * `ffi_udf` - Pointer to FFI_ScalarUDF (read/consumed)
+/// * `error_out` - Pointer to receive error message
+///
+/// # Returns
+/// 0 on success, -1 on error.
+///
+/// # Safety
+/// All pointers must be valid. `ffi_udf` must point to a valid FFI_ScalarUDF.
+#[no_mangle]
+pub unsafe extern "C" fn datafusion_context_register_udf(
+    ctx: *mut c_void,
+    ffi_udf: *const FFI_ScalarUDF,
+    error_out: *mut *mut c_char,
+) -> i32 {
+    clear_error(error_out);
+
+    if ctx.is_null() || ffi_udf.is_null() {
+        return set_error_return(error_out, "Null pointer argument");
+    }
+
+    let context = &*(ctx as *mut SessionContext);
+
+    // Convert FFI_ScalarUDF -> Arc<dyn ScalarUDFImpl>
+    // This clones the FFI struct (via our clone callback) and creates a ForeignScalarUDF
+    let udf_impl: Arc<dyn ScalarUDFImpl> = (&*ffi_udf).into();
+
+    // Wrap in DynScalarUdf so we can pass to ScalarUDF::new_from_impl
+    // (which requires a concrete type, not Arc<dyn ScalarUDFImpl>)
+    let wrapper = DynScalarUdf(udf_impl);
+    context.register_udf(ScalarUDF::new_from_impl(wrapper));
+
+    0
+}
+
+/// Thin wrapper that delegates `ScalarUDFImpl` to an `Arc<dyn ScalarUDFImpl>`.
+///
+/// Needed because `ScalarUDF::new_from_impl` requires a concrete `F: ScalarUDFImpl`,
+/// while `From<&FFI_ScalarUDF>` returns `Arc<dyn ScalarUDFImpl>`.
+#[derive(Debug)]
+struct DynScalarUdf(Arc<dyn ScalarUDFImpl>);
+
+impl PartialEq for DynScalarUdf {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+impl Eq for DynScalarUdf {}
+
+impl std::hash::Hash for DynScalarUdf {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        Arc::as_ptr(&self.0).hash(state);
+    }
+}
+
+impl ScalarUDFImpl for DynScalarUdf {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn name(&self) -> &str {
+        self.0.name()
+    }
+
+    fn signature(&self) -> &Signature {
+        self.0.signature()
+    }
+
+    fn return_type(&self, args: &[DataType]) -> DFResult<DataType> {
+        self.0.return_type(args)
+    }
+
+    fn return_field_from_args(&self, args: ReturnFieldArgs) -> DFResult<FieldRef> {
+        self.0.return_field_from_args(args)
+    }
+
+    fn invoke_with_args(&self, args: ScalarFunctionArgs) -> DFResult<ColumnarValue> {
+        self.0.invoke_with_args(args)
+    }
+
+    fn aliases(&self) -> &[String] {
+        self.0.aliases()
+    }
+
+    fn short_circuits(&self) -> bool {
+        self.0.short_circuits()
+    }
+
+    fn coerce_types(&self, args: &[DataType]) -> DFResult<Vec<DataType>> {
+        self.0.coerce_types(args)
+    }
 }

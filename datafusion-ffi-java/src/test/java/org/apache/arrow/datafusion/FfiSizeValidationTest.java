@@ -47,4 +47,9 @@ class FfiSizeValidationTest {
   void fileOpenerSizes() {
     FileOpenerHandle.validateSizes();
   }
+
+  @Test
+  void scalarUdfSizes() {
+    ScalarUdfHandle.validateSizes();
+  }
 }

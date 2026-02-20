@@ -108,6 +108,15 @@ final class SessionContextFfi implements AutoCloseable {
               ValueLayout.ADDRESS.withName("millis_out"),
               ValueLayout.ADDRESS.withName("error_out")));
 
+  private static final MethodHandle CONTEXT_REGISTER_UDF =
+      NativeUtil.downcall(
+          "datafusion_context_register_udf",
+          FunctionDescriptor.of(
+              ValueLayout.JAVA_INT,
+              ValueLayout.ADDRESS.withName("ctx"),
+              ValueLayout.ADDRESS.withName("ffi_udf"),
+              ValueLayout.ADDRESS.withName("error_out")));
+
   private static final MethodHandle CONTEXT_REGISTER_LISTING_TABLE =
       NativeUtil.downcall(
           "datafusion_context_register_listing_table",
@@ -139,6 +148,11 @@ final class SessionContextFfi implements AutoCloseable {
   // Keep references to prevent GC
   private final List<FileFormatHandle> formatHandles = new ArrayList<>();
 
+  // Shared arena for UDFs (needs to live as long as the context)
+  private final Arena udfArena;
+  // Keep references to prevent GC
+  private final List<ScalarUdfHandle> udfHandles = new ArrayList<>();
+
   /**
    * Creates a new SessionContextFfi, including the native runtime and context.
    *
@@ -163,6 +177,7 @@ final class SessionContextFfi implements AutoCloseable {
       }
       this.catalogArena = Arena.ofShared();
       this.listingTableArena = Arena.ofShared();
+      this.udfArena = Arena.ofShared();
       logger.debug("Created SessionContext: runtime={}, context={}", runtime, context);
     } catch (DataFusionException e) {
       throw e;
@@ -431,6 +446,35 @@ final class SessionContextFfi implements AutoCloseable {
   }
 
   /**
+   * Registers a scalar UDF with the session context.
+   *
+   * @param udf The scalar UDF implementation
+   * @param allocator The buffer allocator to use for Arrow data transfers
+   * @throws DataFusionException if registration fails
+   */
+  void registerUdf(ScalarUdf udf, BufferAllocator allocator) {
+    try (Arena arena = Arena.ofConfined()) {
+      // Create a handle for the UDF (uses the shared UDF arena)
+      ScalarUdfHandle handle =
+          new ScalarUdfHandle(udf, allocator, udfArena, config.fullStackTrace());
+      udfHandles.add(handle);
+
+      MemorySegment udfStruct = handle.getTraitStruct();
+
+      NativeUtil.call(
+          arena,
+          "Register UDF '" + udf.name() + "'",
+          errorOut -> (int) CONTEXT_REGISTER_UDF.invokeExact(context, udfStruct, errorOut));
+
+      logger.debug("Registered UDF '{}'", udf.name());
+    } catch (DataFusionException e) {
+      throw e;
+    } catch (Throwable e) {
+      throw new DataFusionException("Failed to register UDF", e);
+    }
+  }
+
+  /**
    * Closes the session context and all associated resources.
    *
    * <p>The close order is important:
@@ -447,6 +491,7 @@ final class SessionContextFfi implements AutoCloseable {
       // Close handles first
       closeCatalogHandles();
       closeFormatHandles();
+      closeUdfHandles();
 
       // Destroy native objects
       CONTEXT_DESTROY.invokeExact(context);
@@ -455,6 +500,7 @@ final class SessionContextFfi implements AutoCloseable {
       // Now safe to close arenas
       catalogArena.close();
       listingTableArena.close();
+      udfArena.close();
 
       logger.debug("Closed SessionContext");
     } catch (Throwable e) {
@@ -482,5 +528,16 @@ final class SessionContextFfi implements AutoCloseable {
       }
     }
     formatHandles.clear();
+  }
+
+  private void closeUdfHandles() {
+    for (ScalarUdfHandle handle : udfHandles) {
+      try {
+        handle.close();
+      } catch (Exception e) {
+        logger.warn("Error closing UDF handle", e);
+      }
+    }
+    udfHandles.clear();
   }
 }

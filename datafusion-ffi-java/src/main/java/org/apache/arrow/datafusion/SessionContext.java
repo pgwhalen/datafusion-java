@@ -93,6 +93,30 @@ public class SessionContext implements AutoCloseable {
   }
 
   /**
+   * Registers a scalar UDF with the session context.
+   *
+   * <p>Once registered, the UDF can be used in SQL queries by name. For example:
+   *
+   * <pre>{@code
+   * ScalarUdf pow = ScalarUdf.simple("pow", Volatility.IMMUTABLE,
+   *     List.of(new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE),
+   *             new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE)),
+   *     new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE),
+   *     (args, numRows, allocator) -> { ... });
+   * ctx.registerUdf(pow, allocator);
+   * DataFrame result = ctx.sql("SELECT pow(a, b) FROM t");
+   * }</pre>
+   *
+   * @param udf The scalar UDF implementation
+   * @param allocator The buffer allocator to use for Arrow data transfers
+   * @throws DataFusionException if registration fails
+   */
+  public void registerUdf(ScalarUdf udf, BufferAllocator allocator) {
+    checkNotClosed();
+    ffi.registerUdf(udf, allocator);
+  }
+
+  /**
    * Registers a listing table with the session context.
    *
    * <p>A listing table scans files in a directory using a user-provided {@link FileFormat}. For
