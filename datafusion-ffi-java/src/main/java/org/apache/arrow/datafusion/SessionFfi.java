@@ -9,10 +9,7 @@ import java.util.List;
 import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
 import org.apache.arrow.memory.BufferAllocator;
-import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.types.pojo.Schema;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Internal FFI helper for Session.
@@ -25,8 +22,6 @@ import org.slf4j.LoggerFactory;
  * management.
  */
 final class SessionFfi {
-  private static final Logger logger = LoggerFactory.getLogger(SessionFfi.class);
-
   private static final MethodHandle SESSION_CREATE_PHYSICAL_EXPR_FROM_PROTO =
       NativeUtil.downcall(
           "datafusion_session_create_physical_expr_from_proto",
@@ -36,8 +31,6 @@ final class SessionFfi {
               ValueLayout.JAVA_LONG.withName("filter_len"),
               ValueLayout.ADDRESS.withName("schema_ffi"),
               ValueLayout.ADDRESS.withName("error_out")));
-
-  private static final long ARROW_SCHEMA_SIZE = 72;
 
   private final MemorySegment pointer;
 
@@ -64,20 +57,11 @@ final class SessionFfi {
       byte[] filterBytes = ExprProtoConverter.toProtoBytes(filters);
       MemorySegment filterSegment = arena.allocateFrom(ValueLayout.JAVA_BYTE, filterBytes);
 
-      // Allocate the FFI schema struct in the arena.
-      MemorySegment ffiSchemaSegment = arena.allocate(ARROW_SCHEMA_SIZE);
+      // Export schema via Arrow C Data Interface
+      try (ArrowSchema ffiSchema = ArrowSchema.allocateNew(allocator)) {
+        Data.exportSchema(allocator, tableSchema, null, ffiSchema);
+        MemorySegment schemaAddr = MemorySegment.ofAddress(ffiSchema.memoryAddress());
 
-      // Use a separate RootAllocator for the schema export. Data.exportSchema allocates
-      // internal buffers that are freed by the ArrowSchema release callback, but
-      // ArrowSchema.close() does not always release every byte. Using a separate allocator
-      // prevents leak accounting from affecting the caller's allocator.
-      BufferAllocator schemaAllocator = new RootAllocator();
-      ArrowSchema ffiSchema = ArrowSchema.wrap(ffiSchemaSegment.address());
-      Data.exportSchema(schemaAllocator, tableSchema, null, ffiSchema);
-
-      MemorySegment schemaAddr = MemorySegment.ofAddress(ffiSchemaSegment.address());
-
-      try {
         MemorySegment result =
             NativeUtil.callForPointer(
                 arena,
@@ -88,14 +72,6 @@ final class SessionFfi {
                             filterSegment, (long) filterBytes.length, schemaAddr, errorOut));
 
         return new PhysicalExprFfi(result);
-      } finally {
-        // Release the exported schema data.
-        ffiSchema.close();
-        try {
-          schemaAllocator.close();
-        } catch (IllegalStateException e) {
-          logger.debug("Suppressed allocator leak from Arrow schema export", e);
-        }
       }
     } catch (DataFusionException e) {
       throw e;

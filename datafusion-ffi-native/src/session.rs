@@ -19,13 +19,14 @@ use crate::error::{clear_error, set_error_return_null};
 /// # Safety
 /// - `session` must be a valid pointer to a boxed `*const dyn Session` fat pointer
 /// - `filter_ptrs` must point to `filter_count` valid `*const Expr` pointers
-/// - `schema_ffi` must be a valid FFI_ArrowSchema pointer
+/// - `schema_ffi` must be a valid FFI_ArrowSchema pointer. Ownership is taken via
+///   `ptr::read`; the caller must not use the schema after this call.
 #[no_mangle]
 pub unsafe extern "C" fn datafusion_session_create_physical_expr(
     session: *mut c_void,
     filter_ptrs: *const *const c_void,
     filter_count: usize,
-    schema_ffi: *const FFI_ArrowSchema,
+    schema_ffi: *mut FFI_ArrowSchema,
     error_out: *mut *mut c_char,
 ) -> *mut c_void {
     clear_error(error_out);
@@ -47,8 +48,10 @@ pub unsafe extern "C" fn datafusion_session_create_physical_expr(
     let session_fat_ptr = *(session as *const *const dyn Session);
     let session_ref = &*session_fat_ptr;
 
-    // Convert FFI schema to Arrow schema
-    let schema = match arrow::datatypes::Schema::try_from(&*schema_ffi) {
+    // Import schema from FFI. We read the FFI_ArrowSchema into an owned value so that
+    // its Drop impl will call the release callback, freeing Java-allocated buffers.
+    let ffi_schema = std::ptr::read(schema_ffi);
+    let schema = match arrow::datatypes::Schema::try_from(&ffi_schema) {
         Ok(s) => Arc::new(s),
         Err(e) => {
             return set_error_return_null(error_out, &format!("Invalid schema: {}", e));
@@ -100,13 +103,14 @@ pub unsafe extern "C" fn datafusion_session_create_physical_expr(
 ///
 /// # Safety
 /// - `filter_bytes` must point to `filter_len` valid bytes
-/// - `schema_ffi` must be a valid FFI_ArrowSchema pointer
+/// - `schema_ffi` must be a valid FFI_ArrowSchema pointer. Ownership is taken via
+///   `ptr::read`; the caller must not use the schema after this call.
 /// - `error_out` must be a valid pointer
 #[no_mangle]
 pub unsafe extern "C" fn datafusion_session_create_physical_expr_from_proto(
     filter_bytes: *const u8,
     filter_len: usize,
-    schema_ffi: *const FFI_ArrowSchema,
+    schema_ffi: *mut FFI_ArrowSchema,
     error_out: *mut *mut c_char,
 ) -> *mut c_void {
     clear_error(error_out);
@@ -147,8 +151,10 @@ pub unsafe extern "C" fn datafusion_session_create_physical_expr_from_proto(
         return set_error_return_null(error_out, "No filters after parsing");
     }
 
-    // Convert FFI schema to Arrow schema
-    let schema = match arrow::datatypes::Schema::try_from(&*schema_ffi) {
+    // Import schema from FFI. We read the FFI_ArrowSchema into an owned value so that
+    // its Drop impl will call the release callback, freeing Java-allocated buffers.
+    let ffi_schema = std::ptr::read(schema_ffi);
+    let schema = match arrow::datatypes::Schema::try_from(&ffi_schema) {
         Ok(s) => Arc::new(s),
         Err(e) => {
             return set_error_return_null(error_out, &format!("Invalid schema: {}", e));
