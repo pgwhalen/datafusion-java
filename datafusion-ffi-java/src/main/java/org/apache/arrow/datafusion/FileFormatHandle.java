@@ -53,13 +53,13 @@ final class FileFormatHandle implements TraitHandle {
 
   // ======== FFIResult<FFI_FileSource> layout ========
   // RResult<T, RString> with #[repr(C, u8)]: disc(u8 padded to 8B) + payload union
-  // payload = max(sizeof(FFI_FileSource)=48, sizeof(RString)) = 48
-  // Total = 8 + 48 = 56 bytes
+  // payload = max(sizeof(FFI_FileSource)=56, sizeof(RString)) = 56
+  // Total = 8 + 56 = 64 bytes
 
   private static final StructLayout FFI_RESULT_FILE_SOURCE_LAYOUT =
       MemoryLayout.structLayout(
           ValueLayout.JAVA_LONG.withName("discriminant"),
-          MemoryLayout.sequenceLayout(6, ValueLayout.JAVA_LONG).withName("payload"));
+          MemoryLayout.sequenceLayout(7, ValueLayout.JAVA_LONG).withName("payload"));
 
   private static final VarHandle VH_RESULT_DISC =
       FFI_RESULT_FILE_SOURCE_LAYOUT.varHandle(PathElement.groupElement("discriminant"));
@@ -96,7 +96,7 @@ final class FileFormatHandle implements TraitHandle {
 
   // ======== Callback FunctionDescriptors ========
 
-  // file_source: (ADDRESS) -> STRUCT (FFIResult<FFI_FileSource>, 56 bytes)
+  // file_source: (ADDRESS) -> STRUCT (FFIResult<FFI_FileSource>, 64 bytes)
   private static final FunctionDescriptor FILE_SOURCE_DESC =
       FunctionDescriptor.of(FFI_RESULT_FILE_SOURCE_LAYOUT, ValueLayout.ADDRESS);
 
@@ -184,7 +184,7 @@ final class FileFormatHandle implements TraitHandle {
 
   /**
    * Callback: Create a FileSource from the FileFormat. Returns an FFIResult&lt;FFI_FileSource&gt;
-   * struct (56 bytes): discriminant (8B) + payload (48B).
+   * struct (64 bytes): discriminant (8B) + payload (56B).
    */
   @SuppressWarnings("unused") // Called via upcall stub
   MemorySegment fileSource(MemorySegment selfPtr) {

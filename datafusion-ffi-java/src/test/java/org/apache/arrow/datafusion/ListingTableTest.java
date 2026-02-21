@@ -6,10 +6,12 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.BigIntVector;
@@ -92,11 +94,108 @@ public class ListingTableTest {
     }
   }
 
+  /**
+   * A projection-aware FileOpener that only reads columns specified in the projection list. When
+   * DataFusion pushes a projection down, it expects the opener to return only the projected
+   * columns.
+   */
+  static class ProjectionAwareTsvFileOpener implements FileOpener {
+    private final Schema schema;
+    private final BufferAllocator allocator;
+    private final List<Integer> projection;
+
+    ProjectionAwareTsvFileOpener(
+        Schema schema, BufferAllocator allocator, List<Integer> projection) {
+      this.schema = schema;
+      this.allocator = allocator;
+      this.projection = projection;
+    }
+
+    @Override
+    public RecordBatchReader open(PartitionedFile file) {
+      String text;
+      try {
+        text = Files.readString(Path.of(file.path()));
+      } catch (IOException e) {
+        throw new RuntimeException("Failed to read file: " + file.path(), e);
+      }
+      String[] lines = text.split("\n");
+
+      // Determine which original column indices to read.
+      // The schema passed here is the full table schema. When projection is
+      // non-empty, build a projected schema containing only those columns.
+      List<Integer> colIndices;
+      Schema outputSchema;
+      if (!projection.isEmpty()) {
+        colIndices = projection;
+        List<Field> projectedFields = new ArrayList<>();
+        for (int idx : projection) {
+          projectedFields.add(schema.getFields().get(idx));
+        }
+        outputSchema = new Schema(projectedFields);
+      } else {
+        colIndices = new ArrayList<>();
+        for (int i = 0; i < schema.getFields().size(); i++) {
+          colIndices.add(i);
+        }
+        outputSchema = schema;
+      }
+
+      VectorSchemaRoot root = VectorSchemaRoot.create(outputSchema, allocator);
+      int dataRowCount = lines.length - 1;
+
+      // Allocate vectors
+      for (int outCol = 0; outCol < outputSchema.getFields().size(); outCol++) {
+        Field field = outputSchema.getFields().get(outCol);
+        if (field.getType() instanceof ArrowType.Int) {
+          ((BigIntVector) root.getVector(outCol)).allocateNew(dataRowCount);
+        } else if (field.getType() instanceof ArrowType.Utf8) {
+          ((VarCharVector) root.getVector(outCol)).allocateNew(dataRowCount);
+        }
+      }
+
+      // Fill vectors — read from original column positions
+      for (int row = 0; row < dataRowCount; row++) {
+        String[] cells = lines[row + 1].split("\t");
+        for (int outCol = 0; outCol < colIndices.size(); outCol++) {
+          int srcCol = colIndices.get(outCol);
+          String value = cells[srcCol].trim();
+          Field field = outputSchema.getFields().get(outCol);
+          if (field.getType() instanceof ArrowType.Int) {
+            ((BigIntVector) root.getVector(outCol)).set(row, Long.parseLong(value));
+          } else if (field.getType() instanceof ArrowType.Utf8) {
+            ((VarCharVector) root.getVector(outCol))
+                .setSafe(row, value.getBytes(StandardCharsets.UTF_8));
+          }
+        }
+      }
+
+      // Set value counts
+      for (int outCol = 0; outCol < outputSchema.getFields().size(); outCol++) {
+        Field field = outputSchema.getFields().get(outCol);
+        if (field.getType() instanceof ArrowType.Int) {
+          ((BigIntVector) root.getVector(outCol)).setValueCount(dataRowCount);
+        } else if (field.getType() instanceof ArrowType.Utf8) {
+          ((VarCharVector) root.getVector(outCol)).setValueCount(dataRowCount);
+        }
+      }
+      root.setRowCount(dataRowCount);
+
+      return new SingleBatchReader(root);
+    }
+  }
+
   /** A FileSource that creates TsvFileOpener instances. */
   static class TsvFileSource implements FileSource {
     @Override
-    public FileOpener createFileOpener(Schema schema, BufferAllocator allocator) {
+    public FileOpener createFileOpener(
+        Schema schema, BufferAllocator allocator, FileScanContext scanContext) {
       return new TsvFileOpener(schema, allocator);
+    }
+
+    @Override
+    public String fileType() {
+      return "tsv";
     }
   }
 
@@ -304,6 +403,216 @@ public class ListingTableTest {
 
           assertEquals(4, totalRows, "Should have 4 total rows from 2 directories");
           assertEquals(Set.of(1L, 2L, 3L, 4L), allIds, "Should have ids 1-4");
+        }
+      }
+
+      allocator.close();
+    }
+  }
+
+  @Test
+  void testScanContextProjectionReceived() throws IOException {
+    // Write a TSV file with 3 columns
+    Path tsvFile = tempDir.resolve("data.tsv");
+    Files.writeString(tsvFile, "id\tname\tvalue\n1\tAlice\t100\n2\tBob\t200\n");
+
+    Schema schema =
+        new Schema(
+            Arrays.asList(
+                new Field("id", FieldType.nullable(new ArrowType.Int(64, true)), null),
+                new Field("name", FieldType.nullable(new ArrowType.Utf8()), null),
+                new Field("value", FieldType.nullable(new ArrowType.Int(64, true)), null)));
+
+    // Capture the scan context from the callback
+    AtomicReference<FileScanContext> capturedContext = new AtomicReference<>();
+
+    try (BufferAllocator rootAllocator = new RootAllocator()) {
+      BufferAllocator allocator = rootAllocator.newChildAllocator("test", 0, Long.MAX_VALUE);
+
+      try (SessionContext ctx = new SessionContext()) {
+        FileSource contextCapturingSource =
+            new FileSource() {
+              @Override
+              public FileOpener createFileOpener(
+                  Schema s, BufferAllocator a, FileScanContext scanContext) {
+                capturedContext.set(scanContext);
+                // When projection is pushed, we must return only projected columns
+                return new ProjectionAwareTsvFileOpener(s, a, scanContext.projection());
+              }
+
+              @Override
+              public String fileType() {
+                return "tsv";
+              }
+            };
+        FileFormat format =
+            new FileFormat() {
+              @Override
+              public String getExtension() {
+                return ".tsv";
+              }
+
+              @Override
+              public FileSource fileSource() {
+                return contextCapturingSource;
+              }
+            };
+
+        ListingOptions options = ListingOptions.builder(format).fileExtension(".tsv").build();
+        ListingTableUrl url = ListingTableUrl.parse(tempDir.toUri().toString());
+        ListingTable table =
+            ListingTable.builder(url).withListingOptions(options).withSchema(schema).build();
+
+        ctx.registerListingTable("ctx_data", table, allocator);
+
+        // SELECT only 'id' column — DataFusion should push projection
+        try (DataFrame df = ctx.sql("SELECT id FROM ctx_data");
+            RecordBatchStream stream = df.executeStream(allocator)) {
+          while (stream.loadNextBatch()) {
+            // consume all batches
+          }
+        }
+      }
+
+      allocator.close();
+    }
+
+    // Verify scan context was received
+    FileScanContext scanCtx = capturedContext.get();
+    assertNotNull(scanCtx, "Scan context should have been captured");
+    // Projection should contain column index 0 (the 'id' column)
+    assertFalse(scanCtx.projection().isEmpty(), "Projection should not be empty for column subset");
+    assertTrue(scanCtx.projection().contains(0), "Projection should include column 0 (id)");
+  }
+
+  @Test
+  void testScanContextLimitReceived() throws IOException {
+    // Write a TSV file with multiple rows
+    Path tsvFile = tempDir.resolve("data.tsv");
+    Files.writeString(tsvFile, "id\tname\n1\tAlice\n2\tBob\n3\tCharlie\n4\tDave\n5\tEve\n");
+
+    Schema schema =
+        new Schema(
+            Arrays.asList(
+                new Field("id", FieldType.nullable(new ArrowType.Int(64, true)), null),
+                new Field("name", FieldType.nullable(new ArrowType.Utf8()), null)));
+
+    List<FileScanContext> capturedContexts = new ArrayList<>();
+
+    try (BufferAllocator rootAllocator = new RootAllocator()) {
+      BufferAllocator allocator = rootAllocator.newChildAllocator("test", 0, Long.MAX_VALUE);
+
+      try (SessionContext ctx = new SessionContext()) {
+        FileSource limitCapturingSource =
+            new FileSource() {
+              @Override
+              public FileOpener createFileOpener(
+                  Schema s, BufferAllocator a, FileScanContext scanContext) {
+                capturedContexts.add(scanContext);
+                return new TsvFileOpener(s, a);
+              }
+
+              @Override
+              public String fileType() {
+                return "tsv";
+              }
+            };
+        FileFormat format =
+            new FileFormat() {
+              @Override
+              public String getExtension() {
+                return ".tsv";
+              }
+
+              @Override
+              public FileSource fileSource() {
+                return limitCapturingSource;
+              }
+            };
+
+        ListingOptions options = ListingOptions.builder(format).fileExtension(".tsv").build();
+        ListingTableUrl url = ListingTableUrl.parse(tempDir.toUri().toString());
+        ListingTable table =
+            ListingTable.builder(url).withListingOptions(options).withSchema(schema).build();
+
+        ctx.registerListingTable("limit_data", table, allocator);
+
+        // LIMIT 2 — DataFusion should push limit to scan
+        try (DataFrame df = ctx.sql("SELECT * FROM limit_data LIMIT 2");
+            RecordBatchStream stream = df.executeStream(allocator)) {
+          while (stream.loadNextBatch()) {
+            // consume all batches
+          }
+        }
+      }
+
+      allocator.close();
+    }
+
+    // Verify at least one scan context was captured with a limit
+    assertFalse(capturedContexts.isEmpty(), "At least one scan context should be captured");
+    boolean foundLimit =
+        capturedContexts.stream().anyMatch(c -> c.limit() != null && c.limit() <= 2);
+    assertTrue(foundLimit, "At least one scan context should have limit <= 2");
+  }
+
+  @Test
+  void testCustomFileType() throws IOException {
+    // Write a TSV file
+    Path tsvFile = tempDir.resolve("data.tsv");
+    Files.writeString(tsvFile, "id\tname\n1\tAlice\n");
+
+    Schema schema =
+        new Schema(
+            Arrays.asList(
+                new Field("id", FieldType.nullable(new ArrowType.Int(64, true)), null),
+                new Field("name", FieldType.nullable(new ArrowType.Utf8()), null)));
+
+    try (BufferAllocator rootAllocator = new RootAllocator()) {
+      BufferAllocator allocator = rootAllocator.newChildAllocator("test", 0, Long.MAX_VALUE);
+
+      try (SessionContext ctx = new SessionContext()) {
+        FileSource customTypeSource =
+            new FileSource() {
+              @Override
+              public FileOpener createFileOpener(
+                  Schema s, BufferAllocator a, FileScanContext scanContext) {
+                return new TsvFileOpener(s, a);
+              }
+
+              @Override
+              public String fileType() {
+                return "custom_tab_separated";
+              }
+            };
+        FileFormat format =
+            new FileFormat() {
+              @Override
+              public String getExtension() {
+                return ".tsv";
+              }
+
+              @Override
+              public FileSource fileSource() {
+                return customTypeSource;
+              }
+            };
+
+        ListingOptions options = ListingOptions.builder(format).fileExtension(".tsv").build();
+        ListingTableUrl url = ListingTableUrl.parse(tempDir.toUri().toString());
+        ListingTable table =
+            ListingTable.builder(url).withListingOptions(options).withSchema(schema).build();
+
+        ctx.registerListingTable("custom_type_data", table, allocator);
+
+        // Just verify the query works — the file type flows to Rust but isn't
+        // directly observable from Java. The fact that the query succeeds
+        // without crashes verifies the string was correctly transmitted.
+        try (DataFrame df = ctx.sql("SELECT id, name FROM custom_type_data");
+            RecordBatchStream stream = df.executeStream(allocator)) {
+          assertTrue(stream.loadNextBatch());
+          assertEquals(1, stream.getVectorSchemaRoot().getRowCount());
+          assertFalse(stream.loadNextBatch());
         }
       }
 

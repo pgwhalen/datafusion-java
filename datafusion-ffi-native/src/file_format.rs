@@ -169,6 +169,7 @@ impl FileFormat for ForeignFileFormat {
             table_schema,
             schema: Arc::clone(&self.schema),
             projection,
+            projection_pushed: false,
             metrics: Arc::new(ExecutionPlanMetricsSet::new()),
         })
     }

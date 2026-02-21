@@ -6,6 +6,9 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.invoke.VarHandle;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.types.pojo.Schema;
 
@@ -15,15 +18,16 @@ import org.apache.arrow.vector.types.pojo.Schema;
  * <p>This class allocates an {@code FFI_FileSource} struct in Java arena memory and populates it
  * with upcall stub function pointers. Rust copies the struct via {@code ptr::read}.
  *
- * <p>Layout of FFI_FileSource (48 bytes, align 8):
+ * <p>Layout of FFI_FileSource (56 bytes, align 8):
  *
  * <pre>
  * offset  0: create_file_opener fn ptr (ADDRESS)
- * offset  8: clone fn ptr              (ADDRESS)
- * offset 16: release fn ptr            (ADDRESS)
- * offset 24: version fn ptr            (ADDRESS)
- * offset 32: private_data ptr          (ADDRESS)
- * offset 40: library_marker_id fn ptr  (ADDRESS)
+ * offset  8: file_type fn ptr          (ADDRESS)
+ * offset 16: clone fn ptr              (ADDRESS)
+ * offset 24: release fn ptr            (ADDRESS)
+ * offset 32: version fn ptr            (ADDRESS)
+ * offset 40: private_data ptr          (ADDRESS)
+ * offset 48: library_marker_id fn ptr  (ADDRESS)
  * </pre>
  */
 final class FileSourceHandle implements TraitHandle {
@@ -32,6 +36,7 @@ final class FileSourceHandle implements TraitHandle {
   private static final StructLayout FFI_FILE_SOURCE_LAYOUT =
       MemoryLayout.structLayout(
           ValueLayout.ADDRESS.withName("create_file_opener"),
+          ValueLayout.ADDRESS.withName("file_type"),
           ValueLayout.ADDRESS.withName("clone"),
           ValueLayout.ADDRESS.withName("release"),
           ValueLayout.ADDRESS.withName("version"),
@@ -40,6 +45,8 @@ final class FileSourceHandle implements TraitHandle {
 
   private static final VarHandle VH_CREATE_FILE_OPENER =
       FFI_FILE_SOURCE_LAYOUT.varHandle(PathElement.groupElement("create_file_opener"));
+  private static final VarHandle VH_FILE_TYPE =
+      FFI_FILE_SOURCE_LAYOUT.varHandle(PathElement.groupElement("file_type"));
   private static final VarHandle VH_CLONE =
       FFI_FILE_SOURCE_LAYOUT.varHandle(PathElement.groupElement("clone"));
   private static final VarHandle VH_RELEASE =
@@ -107,9 +114,22 @@ final class FileSourceHandle implements TraitHandle {
 
   // ======== Callback FunctionDescriptors ========
 
-  // create_file_opener: (ADDRESS) -> STRUCT (FFIResult<FFI_FileOpener>, 56 bytes)
+  // create_file_opener: (ADDRESS, ADDRESS, LONG, INT, LONG, LONG) -> STRUCT
+  //   selfPtr, projection_ptr, projection_len, has_limit, limit_value, partition
+  //   Returns FFIResult<FFI_FileOpener> (56 bytes)
   private static final FunctionDescriptor CREATE_FILE_OPENER_DESC =
-      FunctionDescriptor.of(FFI_RESULT_FILE_OPENER_LAYOUT, ValueLayout.ADDRESS);
+      FunctionDescriptor.of(
+          FFI_RESULT_FILE_OPENER_LAYOUT,
+          ValueLayout.ADDRESS, // selfPtr
+          ValueLayout.ADDRESS, // projection_ptr
+          ValueLayout.JAVA_LONG, // projection_len
+          ValueLayout.JAVA_INT, // has_limit (i32 not bool per FFI rules)
+          ValueLayout.JAVA_LONG, // limit_value
+          ValueLayout.JAVA_LONG); // partition
+
+  // file_type: (ADDRESS) -> ADDRESS (null-terminated UTF-8 pointer)
+  private static final FunctionDescriptor FILE_TYPE_DESC =
+      FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS);
 
   // release: (ADDRESS) -> void
   private static final FunctionDescriptor RELEASE_DESC =
@@ -118,6 +138,7 @@ final class FileSourceHandle implements TraitHandle {
   // ======== Static MethodHandles ========
 
   private static final MethodHandle CREATE_FILE_OPENER_MH = initCreateFileOpenerMethodHandle();
+  private static final MethodHandle FILE_TYPE_MH = initFileTypeMethodHandle();
   private static final MethodHandle RELEASE_MH = initReleaseMethodHandle();
 
   private static MethodHandle initCreateFileOpenerMethodHandle() {
@@ -126,6 +147,25 @@ final class FileSourceHandle implements TraitHandle {
           .findVirtual(
               FileSourceHandle.class,
               "createFileOpener",
+              MethodType.methodType(
+                  MemorySegment.class,
+                  MemorySegment.class,
+                  MemorySegment.class,
+                  long.class,
+                  int.class,
+                  long.class,
+                  long.class));
+    } catch (NoSuchMethodException | IllegalAccessException e) {
+      throw new ExceptionInInitializerError(e);
+    }
+  }
+
+  private static MethodHandle initFileTypeMethodHandle() {
+    try {
+      return MethodHandles.lookup()
+          .findVirtual(
+              FileSourceHandle.class,
+              "getFileType",
               MethodType.methodType(MemorySegment.class, MemorySegment.class));
     } catch (NoSuchMethodException | IllegalAccessException e) {
       throw new ExceptionInInitializerError(e);
@@ -152,9 +192,11 @@ final class FileSourceHandle implements TraitHandle {
   private final BufferAllocator allocator;
   private final boolean fullStackTrace;
   private final MemorySegment callbackStruct;
+  private final MemorySegment fileTypePtr;
 
   // Keep references to upcall stubs to prevent GC
   private final UpcallStub createFileOpenerStub;
+  private final UpcallStub fileTypeStub;
   private final UpcallStub releaseStub;
 
   FileSourceHandle(
@@ -169,14 +211,19 @@ final class FileSourceHandle implements TraitHandle {
     this.allocator = allocator;
     this.fullStackTrace = fullStackTrace;
 
+    // Pre-allocate null-terminated file type string in arena memory
+    this.fileTypePtr = arena.allocateFrom(source.fileType());
+
     // Create upcall stubs
     this.createFileOpenerStub =
         UpcallStub.create(CREATE_FILE_OPENER_MH.bindTo(this), CREATE_FILE_OPENER_DESC, arena);
+    this.fileTypeStub = UpcallStub.create(FILE_TYPE_MH.bindTo(this), FILE_TYPE_DESC, arena);
     this.releaseStub = UpcallStub.create(RELEASE_MH.bindTo(this), RELEASE_DESC, arena);
 
     // Allocate and populate the FFI struct in Java arena memory
     this.callbackStruct = arena.allocate(FFI_FILE_SOURCE_LAYOUT);
     VH_CREATE_FILE_OPENER.set(callbackStruct, 0L, createFileOpenerStub.segment());
+    VH_FILE_TYPE.set(callbackStruct, 0L, fileTypeStub.segment());
     VH_CLONE.set(callbackStruct, 0L, CLONE_FN);
     VH_RELEASE.set(callbackStruct, 0L, RELEASE_FN);
     VH_VERSION.set(callbackStruct, 0L, NativeUtil.VERSION_FN);
@@ -197,13 +244,38 @@ final class FileSourceHandle implements TraitHandle {
   /**
    * Callback: Create a FileOpener from the FileSource. Returns an FFIResult&lt;FFI_FileOpener&gt;
    * struct (56 bytes): discriminant (8B) + payload (48B).
+   *
+   * <p>Parameters from Rust: selfPtr, projection_ptr, projection_len, has_limit, limit_value,
+   * partition.
    */
   @SuppressWarnings("unused") // Called via upcall stub
-  MemorySegment createFileOpener(MemorySegment selfPtr) {
+  MemorySegment createFileOpener(
+      MemorySegment selfPtr,
+      MemorySegment projectionPtr,
+      long projectionLen,
+      int hasLimit,
+      long limitValue,
+      long partition) {
     MemorySegment buffer = arena.allocate(FFI_RESULT_FILE_OPENER_LAYOUT);
     try {
+      // Build projection list from Rust-side usize array
+      List<Integer> projList;
+      if (projectionLen > 0 && !projectionPtr.equals(MemorySegment.NULL)) {
+        MemorySegment data = projectionPtr.reinterpret(projectionLen * 8);
+        projList = new ArrayList<>((int) projectionLen);
+        for (int i = 0; i < projectionLen; i++) {
+          projList.add((int) data.getAtIndex(ValueLayout.JAVA_LONG, i));
+        }
+        projList = Collections.unmodifiableList(projList);
+      } else {
+        projList = Collections.emptyList();
+      }
+
+      Long limit = hasLimit != 0 ? limitValue : null;
+      FileScanContext scanContext = new FileScanContext(projList, limit, (int) partition);
+
       // Call Java FileSource implementation
-      FileOpener opener = source.createFileOpener(schema, allocator);
+      FileOpener opener = source.createFileOpener(schema, allocator, scanContext);
 
       // Wrap the opener using FileOpenerHandle
       FileOpenerHandle openerHandle =
@@ -223,6 +295,12 @@ final class FileSourceHandle implements TraitHandle {
 
       return buffer;
     }
+  }
+
+  /** Callback: Return the file type as a null-terminated UTF-8 string pointer. */
+  @SuppressWarnings("unused") // Called via upcall stub
+  MemorySegment getFileType(MemorySegment selfPtr) {
+    return fileTypePtr;
   }
 
   /** Callback: Release the source. Called by Rust when done. */

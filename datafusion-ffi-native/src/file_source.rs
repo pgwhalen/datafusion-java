@@ -10,9 +10,9 @@ use datafusion::physical_plan::{DisplayAs, DisplayFormatType, ExecutionPlan, Pla
 use datafusion_datasource::TableSchema;
 use object_store::ObjectStore;
 use std::any::Any;
+use std::ffi::{c_void, CStr};
 use datafusion::error::DataFusionError;
 use datafusion_ffi::util::FFIResult;
-use std::ffi::c_void;
 use std::sync::Arc;
 
 use crate::file_opener::{FFI_FileOpener, ForeignFileOpener};
@@ -22,23 +22,40 @@ use crate::file_opener::{FFI_FileOpener, ForeignFileOpener};
 /// Follows the upstream `datafusion-ffi` convention. Java allocates this struct
 /// in arena memory and populates all fields. Rust copies it via `ptr::read`.
 ///
-/// Layout (48 bytes, align 8):
+/// Layout (56 bytes, align 8):
 /// ```text
 /// offset  0: create_file_opener fn ptr (ADDRESS)
-/// offset  8: clone fn ptr              (ADDRESS)
-/// offset 16: release fn ptr            (ADDRESS)
-/// offset 24: version fn ptr            (ADDRESS)
-/// offset 32: private_data ptr          (ADDRESS)
-/// offset 40: library_marker_id fn ptr  (ADDRESS)
+/// offset  8: file_type fn ptr          (ADDRESS)
+/// offset 16: clone fn ptr              (ADDRESS)
+/// offset 24: release fn ptr            (ADDRESS)
+/// offset 32: version fn ptr            (ADDRESS)
+/// offset 40: private_data ptr          (ADDRESS)
+/// offset 48: library_marker_id fn ptr  (ADDRESS)
 /// ```
 #[repr(C)]
 #[derive(Debug, StableAbi)]
 pub struct FFI_FileSource {
     /// Create a FileOpener, returning an `FFIResult<FFI_FileOpener>`.
     ///
+    /// Parameters passed from Rust to Java:
+    /// - `projection_ptr` / `projection_len`: file column indices (null + 0 = no projection)
+    /// - `has_limit` / `limit_value`: row limit (has_limit=0 means no limit; i32 not bool per FFI rules)
+    /// - `partition`: partition index
+    ///
     /// Returns `FFIResult::ROk(FFI_FileOpener)` on success,
     /// `FFIResult::RErr(RString)` on error.
-    pub create_file_opener: unsafe extern "C" fn(source: &Self) -> FFIResult<FFI_FileOpener>,
+    pub create_file_opener: unsafe extern "C" fn(
+        source: &Self,
+        projection_ptr: *const usize,
+        projection_len: usize,
+        has_limit: i32,
+        limit_value: usize,
+        partition: usize,
+    ) -> FFIResult<FFI_FileOpener>,
+
+    /// Return the file type identifier as a null-terminated UTF-8 string.
+    /// The pointer is valid for the lifetime of the source (Java arena memory).
+    pub file_type: unsafe extern "C" fn(source: &Self) -> *const u8,
 
     /// Clone this FFI_FileSource struct. Implemented in Rust.
     pub clone: unsafe extern "C" fn(source: &Self) -> Self,
@@ -79,6 +96,7 @@ impl Drop for FFI_FileSource {
 pub unsafe extern "C" fn datafusion_file_source_clone(source: &FFI_FileSource) -> FFI_FileSource {
     FFI_FileSource {
         create_file_opener: source.create_file_opener,
+        file_type: source.file_type,
         clone: source.clone,
         release: source.release,
         version: source.version,
@@ -109,6 +127,8 @@ pub(crate) struct ForeignFileSource {
     pub(crate) table_schema: TableSchema,
     pub(crate) schema: SchemaRef,
     pub(crate) projection: datafusion_datasource::projection::SplitProjection,
+    /// Whether `try_pushdown_projection` has been called (projection was pushed).
+    pub(crate) projection_pushed: bool,
     pub(crate) metrics: Arc<ExecutionPlanMetricsSet>,
 }
 
@@ -125,16 +145,32 @@ impl FileSource for ForeignFileSource {
     fn create_file_opener(
         &self,
         _object_store: Arc<dyn ObjectStore>,
-        _base_config: &FileScanConfig,
-        _partition: usize,
+        base_config: &FileScanConfig,
+        partition: usize,
     ) -> Result<Arc<dyn FileOpener>> {
         // Propagate deferred error from file_source() if any
         let cb = self.ffi.as_ref().map_err(|e| {
             DataFusionError::Execution(format!("FileSource creation failed: {}", e))
         })?;
 
+        // Extract projection file column indices
+        let file_indices = &self.projection.file_indices;
+        let (proj_ptr, proj_len) = if self.projection_pushed {
+            (file_indices.as_ptr(), file_indices.len())
+        } else {
+            (std::ptr::null(), 0usize)
+        };
+
+        // Extract limit
+        let (has_limit, limit_value) = match base_config.limit {
+            Some(l) => (1i32, l),
+            None => (0i32, 0usize),
+        };
+
         // Call Java to get a FileOpener via FFIResult
-        let result: FFIResult<FFI_FileOpener> = unsafe { (cb.create_file_opener)(cb) };
+        let result: FFIResult<FFI_FileOpener> = unsafe {
+            (cb.create_file_opener)(cb, proj_ptr, proj_len, has_limit, limit_value, partition)
+        };
         match result {
             FFIResult::ROk(opener_ffi) => Ok(Arc::new(ForeignFileOpener {
                 ffi: Arc::new(opener_ffi),
@@ -160,6 +196,7 @@ impl FileSource for ForeignFileSource {
             table_schema: self.table_schema.clone(),
             schema: Arc::clone(&self.schema),
             projection: self.projection.clone(),
+            projection_pushed: self.projection_pushed,
             metrics: Arc::new(ExecutionPlanMetricsSet::new()),
         })
     }
@@ -169,7 +206,16 @@ impl FileSource for ForeignFileSource {
     }
 
     fn file_type(&self) -> &str {
-        "java"
+        let cb = match &self.ffi {
+            Ok(cb) => cb,
+            Err(_) => return "java",
+        };
+        let ptr = unsafe { (cb.file_type)(cb) };
+        if ptr.is_null() {
+            return "java";
+        }
+        // SAFETY: ptr points to arena-allocated memory that outlives ForeignFileSource
+        unsafe { CStr::from_ptr(ptr as *const i8).to_str().unwrap_or("java") }
     }
 
     fn try_pushdown_projection(
@@ -184,6 +230,7 @@ impl FileSource for ForeignFileSource {
         let split_projection =
             SplitProjection::new(self.table_schema.file_schema(), &new_projection);
         source.projection = split_projection;
+        source.projection_pushed = true;
         Ok(Some(Arc::new(source)))
     }
 
