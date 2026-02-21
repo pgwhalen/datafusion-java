@@ -106,8 +106,8 @@ final class LiteralGuaranteeFfi {
       } finally {
         try {
           GUARANTEES_DESTROY.invokeExact(handle);
-        } catch (Throwable ignored) {
-          // Best effort cleanup
+        } catch (Throwable e) {
+          throw new DataFusionException("Failed to destroy guarantees handle", e);
         }
       }
     }

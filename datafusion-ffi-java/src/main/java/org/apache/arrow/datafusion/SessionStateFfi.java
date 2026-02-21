@@ -83,7 +83,7 @@ final class SessionStateFfi implements AutoCloseable {
         SESSION_STATE_DESTROY.invokeExact(stateWithRuntime);
         logger.debug("Closed SessionState");
       } catch (Throwable e) {
-        logger.error("Error closing SessionState", e);
+        throw new DataFusionException("Error closing SessionState", e);
       }
     }
   }

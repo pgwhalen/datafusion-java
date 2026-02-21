@@ -82,7 +82,7 @@ final class DataFrameFfi implements AutoCloseable {
         DATAFRAME_DESTROY.invokeExact(dataframe);
         logger.debug("Closed DataFrame");
       } catch (Throwable e) {
-        logger.error("Error closing DataFrame", e);
+        throw new DataFusionException("Error closing DataFrame", e);
       }
     }
   }

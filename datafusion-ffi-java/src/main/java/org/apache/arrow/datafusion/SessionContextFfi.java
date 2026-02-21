@@ -475,27 +475,44 @@ final class SessionContextFfi implements AutoCloseable {
    */
   @Override
   public void close() {
-    try {
-      // Close handles first (but NOT the arena - upcalls may still fire during context destruction)
-      for (TraitHandle handle : handles) {
-        try {
-          handle.close();
-        } catch (Exception e) {
-          logger.warn("Error closing handle", e);
-        }
+    Throwable firstError = null;
+
+    // Close handles first (but NOT the arena - upcalls may still fire during context destruction)
+    for (TraitHandle handle : handles) {
+      try {
+        handle.close();
+      } catch (Exception e) {
+        if (firstError == null) firstError = e;
+        else firstError.addSuppressed(e);
       }
-      handles.clear();
-
-      // Destroy native objects
-      CONTEXT_DESTROY.invokeExact(context);
-      RUNTIME_DESTROY.invokeExact(runtime);
-
-      // Now safe to close arena - no more upcalls possible
-      sharedArena.close();
-
-      logger.debug("Closed SessionContext");
-    } catch (Throwable e) {
-      logger.error("Error closing SessionContext", e);
     }
+    handles.clear();
+
+    // Destroy native objects
+    try {
+      CONTEXT_DESTROY.invokeExact(context);
+    } catch (Throwable e) {
+      if (firstError == null) firstError = e;
+      else firstError.addSuppressed(e);
+    }
+    try {
+      RUNTIME_DESTROY.invokeExact(runtime);
+    } catch (Throwable e) {
+      if (firstError == null) firstError = e;
+      else firstError.addSuppressed(e);
+    }
+
+    // Now safe to close arena - no more upcalls possible
+    try {
+      sharedArena.close();
+    } catch (Exception e) {
+      if (firstError == null) firstError = e;
+      else firstError.addSuppressed(e);
+    }
+
+    if (firstError != null) {
+      throw new DataFusionException("Error closing SessionContext", firstError);
+    }
+    logger.debug("Closed SessionContext");
   }
 }

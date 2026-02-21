@@ -47,7 +47,7 @@ final class PhysicalExprFfi implements AutoCloseable {
         PHYSICAL_EXPR_DESTROY.invokeExact(pointer);
         logger.debug("Closed PhysicalExpr");
       } catch (Throwable e) {
-        logger.error("Error closing PhysicalExpr", e);
+        throw new DataFusionException("Error closing PhysicalExpr", e);
       }
     }
   }

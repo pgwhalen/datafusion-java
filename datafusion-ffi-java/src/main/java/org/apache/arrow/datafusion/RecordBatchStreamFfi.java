@@ -172,16 +172,32 @@ final class RecordBatchStreamFfi implements AutoCloseable {
   public void close() {
     if (!closed) {
       closed = true;
+      Throwable firstError = null;
+
       try {
         STREAM_DESTROY.invokeExact(stream);
-        dictionaryProvider.close();
-        if (initialized && vectorSchemaRoot != null) {
-          vectorSchemaRoot.close();
-        }
-        logger.debug("Closed RecordBatchStream");
       } catch (Throwable e) {
-        logger.error("Error closing RecordBatchStream", e);
+        firstError = e;
       }
+      try {
+        dictionaryProvider.close();
+      } catch (Exception e) {
+        if (firstError == null) firstError = e;
+        else firstError.addSuppressed(e);
+      }
+      if (initialized && vectorSchemaRoot != null) {
+        try {
+          vectorSchemaRoot.close();
+        } catch (Exception e) {
+          if (firstError == null) firstError = e;
+          else firstError.addSuppressed(e);
+        }
+      }
+
+      if (firstError != null) {
+        throw new DataFusionException("Error closing RecordBatchStream", firstError);
+      }
+      logger.debug("Closed RecordBatchStream");
     }
   }
 }

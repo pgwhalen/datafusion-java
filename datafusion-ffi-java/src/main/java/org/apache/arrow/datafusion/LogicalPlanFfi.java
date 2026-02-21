@@ -47,7 +47,7 @@ final class LogicalPlanFfi implements AutoCloseable {
         LOGICAL_PLAN_DESTROY.invokeExact(plan);
         logger.debug("Closed LogicalPlan");
       } catch (Throwable e) {
-        logger.error("Error closing LogicalPlan", e);
+        throw new DataFusionException("Error closing LogicalPlan", e);
       }
     }
   }

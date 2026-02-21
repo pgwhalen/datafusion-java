@@ -11,6 +11,8 @@ import org.apache.arrow.c.Data;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.types.pojo.Schema;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Internal FFI helper for Session.
@@ -23,6 +25,8 @@ import org.apache.arrow.vector.types.pojo.Schema;
  * management.
  */
 final class SessionFfi {
+  private static final Logger logger = LoggerFactory.getLogger(SessionFfi.class);
+
   private static final MethodHandle SESSION_CREATE_PHYSICAL_EXPR_FROM_PROTO =
       NativeUtil.downcall(
           "datafusion_session_create_physical_expr_from_proto",
@@ -90,7 +94,7 @@ final class SessionFfi {
         try {
           schemaAllocator.close();
         } catch (IllegalStateException e) {
-          // Suppress allocator leak errors from Arrow's schema export.
+          logger.debug("Suppressed allocator leak from Arrow schema export", e);
         }
       }
     } catch (DataFusionException e) {
