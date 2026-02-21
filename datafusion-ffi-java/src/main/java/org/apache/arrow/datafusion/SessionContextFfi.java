@@ -138,20 +138,10 @@ final class SessionContextFfi implements AutoCloseable {
   private final MemorySegment context;
   private final SessionConfig config;
 
-  // Shared arena for catalog providers (needs to live as long as the context)
-  private final Arena catalogArena;
-  // Keep references to prevent GC
-  private final List<CatalogProviderHandle> catalogHandles = new ArrayList<>();
-
-  // Shared arena for listing table formats (needs to live as long as the context)
-  private final Arena listingTableArena;
-  // Keep references to prevent GC
-  private final List<FileFormatHandle> formatHandles = new ArrayList<>();
-
-  // Shared arena for UDFs (needs to live as long as the context)
-  private final Arena udfArena;
-  // Keep references to prevent GC
-  private final List<ScalarUdfHandle> udfHandles = new ArrayList<>();
+  // Shared arena for all registered providers/UDFs (needs to live as long as the context)
+  private final Arena sharedArena;
+  // Keep references to prevent GC of upcall stubs while Rust holds pointers
+  private final List<TraitHandle> handles = new ArrayList<>();
 
   /**
    * Creates a new SessionContextFfi, including the native runtime and context.
@@ -175,9 +165,7 @@ final class SessionContextFfi implements AutoCloseable {
         RUNTIME_DESTROY.invokeExact(runtime);
         throw new DataFusionException("Failed to create SessionContext");
       }
-      this.catalogArena = Arena.ofShared();
-      this.listingTableArena = Arena.ofShared();
-      this.udfArena = Arena.ofShared();
+      this.sharedArena = Arena.ofShared();
       logger.debug("Created SessionContext: runtime={}, context={}", runtime, context);
     } catch (DataFusionException e) {
       throw e;
@@ -361,8 +349,8 @@ final class SessionContextFfi implements AutoCloseable {
     try (Arena arena = Arena.ofConfined()) {
       // Create a handle for the catalog (uses the shared catalog arena)
       CatalogProviderHandle handle =
-          new CatalogProviderHandle(catalog, allocator, catalogArena, config.fullStackTrace());
-      catalogHandles.add(handle);
+          new CatalogProviderHandle(catalog, allocator, sharedArena, config.fullStackTrace());
+      handles.add(handle);
 
       MemorySegment nameSegment = arena.allocateFrom(name);
       MemorySegment callbacks = handle.getTraitStruct();
@@ -398,9 +386,9 @@ final class SessionContextFfi implements AutoCloseable {
               table.options().format(),
               table.schema(),
               allocator,
-              listingTableArena,
+              sharedArena,
               config.fullStackTrace());
-      formatHandles.add(handle);
+      handles.add(handle);
 
       MemorySegment nameSegment = arena.allocateFrom(name);
       MemorySegment extSegment = arena.allocateFrom(table.options().fileExtension());
@@ -456,8 +444,8 @@ final class SessionContextFfi implements AutoCloseable {
     try (Arena arena = Arena.ofConfined()) {
       // Create a handle for the UDF (uses the shared UDF arena)
       ScalarUdfHandle handle =
-          new ScalarUdfHandle(udf, allocator, udfArena, config.fullStackTrace());
-      udfHandles.add(handle);
+          new ScalarUdfHandle(udf, allocator, sharedArena, config.fullStackTrace());
+      handles.add(handle);
 
       MemorySegment udfStruct = handle.getTraitStruct();
 
@@ -488,56 +476,26 @@ final class SessionContextFfi implements AutoCloseable {
   @Override
   public void close() {
     try {
-      // Close handles first
-      closeCatalogHandles();
-      closeFormatHandles();
-      closeUdfHandles();
+      // Close handles first (but NOT the arena - upcalls may still fire during context destruction)
+      for (TraitHandle handle : handles) {
+        try {
+          handle.close();
+        } catch (Exception e) {
+          logger.warn("Error closing handle", e);
+        }
+      }
+      handles.clear();
 
       // Destroy native objects
       CONTEXT_DESTROY.invokeExact(context);
       RUNTIME_DESTROY.invokeExact(runtime);
 
-      // Now safe to close arenas
-      catalogArena.close();
-      listingTableArena.close();
-      udfArena.close();
+      // Now safe to close arena - no more upcalls possible
+      sharedArena.close();
 
       logger.debug("Closed SessionContext");
     } catch (Throwable e) {
       logger.error("Error closing SessionContext", e);
     }
-  }
-
-  private void closeCatalogHandles() {
-    for (CatalogProviderHandle handle : catalogHandles) {
-      try {
-        handle.close();
-      } catch (Exception e) {
-        logger.warn("Error closing catalog handle", e);
-      }
-    }
-    catalogHandles.clear();
-  }
-
-  private void closeFormatHandles() {
-    for (FileFormatHandle handle : formatHandles) {
-      try {
-        handle.close();
-      } catch (Exception e) {
-        logger.warn("Error closing format handle", e);
-      }
-    }
-    formatHandles.clear();
-  }
-
-  private void closeUdfHandles() {
-    for (ScalarUdfHandle handle : udfHandles) {
-      try {
-        handle.close();
-      } catch (Exception e) {
-        logger.warn("Error closing UDF handle", e);
-      }
-    }
-    udfHandles.clear();
   }
 }
