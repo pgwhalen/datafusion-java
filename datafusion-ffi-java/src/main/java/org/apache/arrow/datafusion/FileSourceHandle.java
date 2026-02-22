@@ -114,8 +114,9 @@ final class FileSourceHandle implements TraitHandle {
 
   // ======== Callback FunctionDescriptors ========
 
-  // create_file_opener: (ADDRESS, ADDRESS, LONG, INT, LONG, LONG) -> STRUCT
-  //   selfPtr, projection_ptr, projection_len, has_limit, limit_value, partition
+  // create_file_opener: (ADDRESS, ADDRESS, LONG, INT, LONG, INT, LONG, INT, LONG) -> STRUCT
+  //   selfPtr, projection_ptr, projection_len, has_limit, limit_value,
+  //   has_batch_size, batch_size_value, partitioned_by_file_group, partition
   //   Returns FFIResult<FFI_FileOpener> (56 bytes)
   private static final FunctionDescriptor CREATE_FILE_OPENER_DESC =
       FunctionDescriptor.of(
@@ -125,6 +126,9 @@ final class FileSourceHandle implements TraitHandle {
           ValueLayout.JAVA_LONG, // projection_len
           ValueLayout.JAVA_INT, // has_limit (i32 not bool per FFI rules)
           ValueLayout.JAVA_LONG, // limit_value
+          ValueLayout.JAVA_INT, // has_batch_size (i32 not bool per FFI rules)
+          ValueLayout.JAVA_LONG, // batch_size_value
+          ValueLayout.JAVA_INT, // partitioned_by_file_group (i32 not bool per FFI rules)
           ValueLayout.JAVA_LONG); // partition
 
   // file_type: (ADDRESS) -> ADDRESS (null-terminated UTF-8 pointer)
@@ -154,6 +158,9 @@ final class FileSourceHandle implements TraitHandle {
                   long.class,
                   int.class,
                   long.class,
+                  int.class,
+                  long.class,
+                  int.class,
                   long.class));
     } catch (NoSuchMethodException | IllegalAccessException e) {
       throw new ExceptionInInitializerError(e);
@@ -246,7 +253,7 @@ final class FileSourceHandle implements TraitHandle {
    * struct (56 bytes): discriminant (8B) + payload (48B).
    *
    * <p>Parameters from Rust: selfPtr, projection_ptr, projection_len, has_limit, limit_value,
-   * partition.
+   * has_batch_size, batch_size_value, partitioned_by_file_group, partition.
    */
   @SuppressWarnings("unused") // Called via upcall stub
   MemorySegment createFileOpener(
@@ -255,6 +262,9 @@ final class FileSourceHandle implements TraitHandle {
       long projectionLen,
       int hasLimit,
       long limitValue,
+      int hasBatchSize,
+      long batchSizeValue,
+      int partitionedByFileGroup,
       long partition) {
     MemorySegment buffer = arena.allocate(FFI_RESULT_FILE_OPENER_LAYOUT);
     try {
@@ -272,10 +282,13 @@ final class FileSourceHandle implements TraitHandle {
       }
 
       Long limit = hasLimit != 0 ? limitValue : null;
-      FileScanContext scanContext = new FileScanContext(projList, limit, (int) partition);
+      Long batchSize = hasBatchSize != 0 ? batchSizeValue : null;
+      FileScanConfig scanConfig =
+          new FileScanConfig(
+              projList, limit, batchSize, partitionedByFileGroup != 0, (int) partition);
 
       // Call Java FileSource implementation
-      FileOpener opener = source.createFileOpener(schema, allocator, scanContext);
+      FileOpener opener = source.createFileOpener(schema, allocator, scanConfig);
 
       // Wrap the opener using FileOpenerHandle
       FileOpenerHandle openerHandle =

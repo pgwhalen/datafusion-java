@@ -17,7 +17,7 @@ import org.apache.arrow.vector.types.pojo.Schema;
  * class TsvFileSource implements FileSource {
  *     @Override
  *     public FileOpener createFileOpener(Schema schema, BufferAllocator allocator,
- *                                        FileScanContext scanContext) {
+ *                                        FileScanConfig scanConfig) {
  *         return new TsvFileOpener(schema, allocator);
  *     }
  *
@@ -30,18 +30,17 @@ import org.apache.arrow.vector.types.pojo.Schema;
  */
 public interface FileSource {
   /**
-   * Creates a FileOpener bound to the given schema, allocator, and scan context.
+   * Creates a FileOpener bound to the given schema, allocator, and scan configuration.
    *
-   * <p>The scan context provides query-specific parameters such as column projection, row limit,
-   * and partition index that implementations can use to optimize file reading.
+   * <p>The scan configuration provides query-specific parameters such as column projection, row
+   * limit, batch size, and partition index that implementations can use to optimize file reading.
    *
    * @param schema the expected output schema
    * @param allocator allocator for Arrow vectors
-   * @param scanContext scan context with projection, limit, and partition info
+   * @param scanConfig scan configuration with projection, limit, batch size, and partition info
    * @return a FileOpener that can parse file content into record batches
    */
-  FileOpener createFileOpener(
-      Schema schema, BufferAllocator allocator, FileScanContext scanContext);
+  FileOpener createFileOpener(Schema schema, BufferAllocator allocator, FileScanConfig scanConfig);
 
   /**
    * Returns a string identifier for this file source's type.

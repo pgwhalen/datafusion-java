@@ -196,11 +196,18 @@ impl FileFormat for ForeignFileFormat {
 
     async fn create_physical_plan(
         &self,
-        _state: &dyn Session,
-        conf: FileScanConfig,
+        state: &dyn Session,
+        mut conf: FileScanConfig,
     ) -> Result<Arc<dyn ExecutionPlan>> {
         // In DataFusion 52+, we create the plan through file_source().
         // This method is still called by ListingTable, so we delegate to our FileSource.
+
+        // Resolve batch_size from session config when not explicitly set,
+        // so Java callbacks can observe the configured value.
+        if conf.batch_size.is_none() {
+            conf.batch_size = Some(state.config().batch_size());
+        }
+
         let file_source = Arc::clone(conf.file_source());
 
         let projected_schema = conf.projected_schema()?;

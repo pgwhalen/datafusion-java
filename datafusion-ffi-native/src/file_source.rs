@@ -40,6 +40,8 @@ pub struct FFI_FileSource {
     /// Parameters passed from Rust to Java:
     /// - `projection_ptr` / `projection_len`: file column indices (null + 0 = no projection)
     /// - `has_limit` / `limit_value`: row limit (has_limit=0 means no limit; i32 not bool per FFI rules)
+    /// - `has_batch_size` / `batch_size_value`: batch size (has_batch_size=0 means default)
+    /// - `partitioned_by_file_group`: whether scan is partitioned by file group (i32: 0=false, 1=true)
     /// - `partition`: partition index
     ///
     /// Returns `FFIResult::ROk(FFI_FileOpener)` on success,
@@ -50,6 +52,9 @@ pub struct FFI_FileSource {
         projection_len: usize,
         has_limit: i32,
         limit_value: usize,
+        has_batch_size: i32,
+        batch_size_value: usize,
+        partitioned_by_file_group: i32,
         partition: usize,
     ) -> FFIResult<FFI_FileOpener>,
 
@@ -167,9 +172,18 @@ impl FileSource for ForeignFileSource {
             None => (0i32, 0usize),
         };
 
+        // Extract batch_size
+        let (has_batch_size, batch_size_value) = match base_config.batch_size {
+            Some(bs) => (1i32, bs),
+            None => (0i32, 0usize),
+        };
+
+        // Extract partitioned_by_file_group
+        let partitioned_by_file_group = if base_config.partitioned_by_file_group { 1i32 } else { 0i32 };
+
         // Call Java to get a FileOpener via FFIResult
         let result: FFIResult<FFI_FileOpener> = unsafe {
-            (cb.create_file_opener)(cb, proj_ptr, proj_len, has_limit, limit_value, partition)
+            (cb.create_file_opener)(cb, proj_ptr, proj_len, has_limit, limit_value, has_batch_size, batch_size_value, partitioned_by_file_group, partition)
         };
         match result {
             FFIResult::ROk(opener_ffi) => Ok(Arc::new(ForeignFileOpener {

@@ -12,6 +12,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
+import org.apache.arrow.datafusion.config.ExecutionOptions;
+import org.apache.arrow.datafusion.config.SessionConfig;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.BigIntVector;
@@ -189,7 +191,7 @@ public class ListingTableTest {
   static class TsvFileSource implements FileSource {
     @Override
     public FileOpener createFileOpener(
-        Schema schema, BufferAllocator allocator, FileScanContext scanContext) {
+        Schema schema, BufferAllocator allocator, FileScanConfig scanConfig) {
       return new TsvFileOpener(schema, allocator);
     }
 
@@ -424,7 +426,7 @@ public class ListingTableTest {
                 new Field("value", FieldType.nullable(new ArrowType.Int(64, true)), null)));
 
     // Capture the scan context from the callback
-    AtomicReference<FileScanContext> capturedContext = new AtomicReference<>();
+    AtomicReference<FileScanConfig> capturedContext = new AtomicReference<>();
 
     try (BufferAllocator rootAllocator = new RootAllocator()) {
       BufferAllocator allocator = rootAllocator.newChildAllocator("test", 0, Long.MAX_VALUE);
@@ -434,10 +436,10 @@ public class ListingTableTest {
             new FileSource() {
               @Override
               public FileOpener createFileOpener(
-                  Schema s, BufferAllocator a, FileScanContext scanContext) {
-                capturedContext.set(scanContext);
+                  Schema s, BufferAllocator a, FileScanConfig scanConfig) {
+                capturedContext.set(scanConfig);
                 // When projection is pushed, we must return only projected columns
-                return new ProjectionAwareTsvFileOpener(s, a, scanContext.projection());
+                return new ProjectionAwareTsvFileOpener(s, a, scanConfig.projection());
               }
 
               @Override
@@ -477,12 +479,15 @@ public class ListingTableTest {
       allocator.close();
     }
 
-    // Verify scan context was received
-    FileScanContext scanCtx = capturedContext.get();
-    assertNotNull(scanCtx, "Scan context should have been captured");
+    // Verify scan config was received
+    FileScanConfig scanCfg = capturedContext.get();
+    assertNotNull(scanCfg, "Scan config should have been captured");
     // Projection should contain column index 0 (the 'id' column)
-    assertFalse(scanCtx.projection().isEmpty(), "Projection should not be empty for column subset");
-    assertTrue(scanCtx.projection().contains(0), "Projection should include column 0 (id)");
+    assertFalse(scanCfg.projection().isEmpty(), "Projection should not be empty for column subset");
+    assertTrue(scanCfg.projection().contains(0), "Projection should include column 0 (id)");
+    // New fields should be populated with defaults
+    assertEquals(8192L, scanCfg.batchSize(), "batchSize should be DataFusion default (8192)");
+    assertFalse(scanCfg.partitionedByFileGroup(), "partitionedByFileGroup should be false");
   }
 
   @Test
@@ -497,7 +502,7 @@ public class ListingTableTest {
                 new Field("id", FieldType.nullable(new ArrowType.Int(64, true)), null),
                 new Field("name", FieldType.nullable(new ArrowType.Utf8()), null)));
 
-    List<FileScanContext> capturedContexts = new ArrayList<>();
+    List<FileScanConfig> capturedContexts = new ArrayList<>();
 
     try (BufferAllocator rootAllocator = new RootAllocator()) {
       BufferAllocator allocator = rootAllocator.newChildAllocator("test", 0, Long.MAX_VALUE);
@@ -507,8 +512,8 @@ public class ListingTableTest {
             new FileSource() {
               @Override
               public FileOpener createFileOpener(
-                  Schema s, BufferAllocator a, FileScanContext scanContext) {
-                capturedContexts.add(scanContext);
+                  Schema s, BufferAllocator a, FileScanConfig scanConfig) {
+                capturedContexts.add(scanConfig);
                 return new TsvFileOpener(s, a);
               }
 
@@ -549,11 +554,90 @@ public class ListingTableTest {
       allocator.close();
     }
 
-    // Verify at least one scan context was captured with a limit
-    assertFalse(capturedContexts.isEmpty(), "At least one scan context should be captured");
+    // Verify at least one scan config was captured with a limit
+    assertFalse(capturedContexts.isEmpty(), "At least one scan config should be captured");
     boolean foundLimit =
         capturedContexts.stream().anyMatch(c -> c.limit() != null && c.limit() <= 2);
-    assertTrue(foundLimit, "At least one scan context should have limit <= 2");
+    assertTrue(foundLimit, "At least one scan config should have limit <= 2");
+    // Verify new fields are present
+    for (FileScanConfig cfg : capturedContexts) {
+      assertEquals(8192L, cfg.batchSize(), "batchSize should be DataFusion default (8192)");
+    }
+  }
+
+  @Test
+  void testScanConfigBatchSizeFromSessionConfig() throws IOException {
+    // Write a TSV file
+    Path tsvFile = tempDir.resolve("data.tsv");
+    Files.writeString(tsvFile, "id\tname\n1\tAlice\n2\tBob\n");
+
+    Schema schema =
+        new Schema(
+            Arrays.asList(
+                new Field("id", FieldType.nullable(new ArrowType.Int(64, true)), null),
+                new Field("name", FieldType.nullable(new ArrowType.Utf8()), null)));
+
+    AtomicReference<FileScanConfig> capturedConfig = new AtomicReference<>();
+
+    try (BufferAllocator rootAllocator = new RootAllocator()) {
+      BufferAllocator allocator = rootAllocator.newChildAllocator("test", 0, Long.MAX_VALUE);
+
+      // Create a SessionContext with a custom batch size
+      SessionConfig config =
+          SessionConfig.builder()
+              .execution(ExecutionOptions.builder().batchSize(4096).build())
+              .build();
+
+      try (SessionContext ctx = new SessionContext(config)) {
+        FileSource capturingSource =
+            new FileSource() {
+              @Override
+              public FileOpener createFileOpener(
+                  Schema s, BufferAllocator a, FileScanConfig scanConfig) {
+                capturedConfig.set(scanConfig);
+                return new TsvFileOpener(s, a);
+              }
+
+              @Override
+              public String fileType() {
+                return "tsv";
+              }
+            };
+        FileFormat format =
+            new FileFormat() {
+              @Override
+              public String getExtension() {
+                return ".tsv";
+              }
+
+              @Override
+              public FileSource fileSource() {
+                return capturingSource;
+              }
+            };
+
+        ListingOptions options = ListingOptions.builder(format).fileExtension(".tsv").build();
+        ListingTableUrl url = ListingTableUrl.parse(tempDir.toUri().toString());
+        ListingTable table =
+            ListingTable.builder(url).withListingOptions(options).withSchema(schema).build();
+
+        ctx.registerListingTable("batch_data", table, allocator);
+
+        try (DataFrame df = ctx.sql("SELECT * FROM batch_data");
+            RecordBatchStream stream = df.executeStream(allocator)) {
+          while (stream.loadNextBatch()) {
+            // consume all batches
+          }
+        }
+      }
+
+      allocator.close();
+    }
+
+    // Verify the custom batch size was propagated to the scan config
+    FileScanConfig scanCfg = capturedConfig.get();
+    assertNotNull(scanCfg, "Scan config should have been captured");
+    assertEquals(4096L, scanCfg.batchSize(), "batchSize should match configured value");
   }
 
   @Test
@@ -576,7 +660,7 @@ public class ListingTableTest {
             new FileSource() {
               @Override
               public FileOpener createFileOpener(
-                  Schema s, BufferAllocator a, FileScanContext scanContext) {
+                  Schema s, BufferAllocator a, FileScanConfig scanConfig) {
                 return new TsvFileOpener(s, a);
               }
 
