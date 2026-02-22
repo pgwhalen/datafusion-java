@@ -15,8 +15,7 @@ import org.apache.arrow.vector.types.pojo.Schema;
  */
 public class SessionContext implements AutoCloseable {
   private final SessionContextFfi ffi;
-  private final SessionConfig config;
-  private volatile boolean closed = false;
+    private volatile boolean closed = false;
 
   /** Creates a new session context with default configuration. */
   public SessionContext() {
@@ -29,8 +28,7 @@ public class SessionContext implements AutoCloseable {
    * @param config the session configuration
    */
   public SessionContext(SessionConfig config) {
-    this.config = config;
-    this.ffi = new SessionContextFfi(config);
+      this.ffi = new SessionContextFfi(config);
   }
 
   /**
