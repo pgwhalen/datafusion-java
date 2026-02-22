@@ -36,6 +36,11 @@ final class NativeUtil {
   static final MethodHandle FREE_STRING =
       downcall("datafusion_free_string", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
 
+  static final MethodHandle FREE_BYTES =
+      downcall(
+          "datafusion_free_bytes",
+          FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.JAVA_LONG));
+
   private static final MethodHandle RSTRING_SIZE =
       downcall("datafusion_rstring_size", FunctionDescriptor.of(ValueLayout.JAVA_LONG));
 

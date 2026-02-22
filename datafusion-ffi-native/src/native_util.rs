@@ -34,6 +34,17 @@ pub unsafe extern "C" fn datafusion_free_string(s: *mut c_char) {
     }
 }
 
+/// Free a byte buffer that was allocated by Rust.
+///
+/// # Safety
+/// The pointer must have been allocated by Rust as a `Box<[u8]>` with the given length.
+#[no_mangle]
+pub unsafe extern "C" fn datafusion_free_bytes(ptr: *mut u8, len: usize) {
+    if !ptr.is_null() {
+        drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut(ptr, len)));
+    }
+}
+
 /// Return sizeof(RString) for Java to know error payload size.
 #[no_mangle]
 pub extern "C" fn datafusion_rstring_size() -> usize {
@@ -283,6 +294,26 @@ mod tests {
             drop(dest_codec);
             drop(src_codec);
         }
+    }
+
+    #[test]
+    fn test_free_bytes_non_null() {
+        let data: Vec<u8> = vec![1, 2, 3, 4, 5];
+        let len = data.len();
+        let boxed = data.into_boxed_slice();
+        let ptr = Box::into_raw(boxed) as *mut u8;
+        unsafe {
+            datafusion_free_bytes(ptr, len);
+        }
+        // No crash = success
+    }
+
+    #[test]
+    fn test_free_bytes_null() {
+        unsafe {
+            datafusion_free_bytes(std::ptr::null_mut(), 0);
+        }
+        // No crash = success
     }
 
     #[test]

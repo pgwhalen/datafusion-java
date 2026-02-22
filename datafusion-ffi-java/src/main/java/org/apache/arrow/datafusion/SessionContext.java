@@ -5,6 +5,7 @@ import org.apache.arrow.datafusion.config.SessionConfig;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.dictionary.DictionaryProvider;
+import org.apache.arrow.vector.types.pojo.Schema;
 
 /**
  * A session context for executing DataFusion queries using the FFM API.
@@ -153,6 +154,29 @@ public class SessionContext implements AutoCloseable {
   public SessionState state() {
     checkNotClosed();
     return new SessionState(ffi.state());
+  }
+
+  /**
+   * Parses a SQL expression string into an {@link Expr}.
+   *
+   * <p>The expression is parsed against the given schema, which defines the available column names
+   * and types. For example:
+   *
+   * <pre>{@code
+   * Schema schema = new Schema(List.of(
+   *     Field.nullable("a", new ArrowType.Int(32, true)),
+   *     Field.nullable("b", new ArrowType.Int(32, true))));
+   * Expr expr = ctx.parseSqlExpr("a + b > 10", schema);
+   * }</pre>
+   *
+   * @param sql the SQL expression string to parse
+   * @param schema the Arrow schema describing the available columns
+   * @return the parsed expression
+   * @throws DataFusionException if the expression cannot be parsed
+   */
+  public Expr parseSqlExpr(String sql, Schema schema) {
+    checkNotClosed();
+    return ffi.parseSqlExpr(sql, schema);
   }
 
   /**

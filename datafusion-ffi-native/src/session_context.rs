@@ -27,6 +27,12 @@ use crate::error::{clear_error, set_error_return, set_error_return_null};
 use crate::file_format::{FFI_FileFormat, ForeignFileFormat};
 use crate::session_state::SessionStateWithRuntime;
 
+use datafusion::common::DFSchema;
+use datafusion_proto::logical_plan::to_proto::serialize_exprs;
+use datafusion_proto::logical_plan::DefaultLogicalExtensionCodec;
+use datafusion_proto::protobuf::LogicalExprList;
+use prost::Message;
+
 use arrow::datatypes::DataType;
 use arrow::datatypes::FieldRef;
 use datafusion::catalog::CatalogProvider;
@@ -617,6 +623,107 @@ pub unsafe extern "C" fn datafusion_context_register_udf(
     // (which requires a concrete type, not Arc<dyn ScalarUDFImpl>)
     let wrapper = DynScalarUdf(udf_impl);
     context.register_udf(ScalarUDF::new_from_impl(wrapper));
+
+    0
+}
+
+// ============================================================================
+// SQL expression parsing
+// ============================================================================
+
+/// Parse a SQL expression string into a serialized protobuf byte buffer.
+///
+/// Uses `SessionState::create_logical_expr` to parse the expression against
+/// the provided Arrow schema, then serializes the result via `datafusion-proto`.
+///
+/// # Arguments
+/// * `ctx` - Pointer to the SessionContext
+/// * `sql` - SQL expression string (null-terminated C string)
+/// * `schema_ffi` - Pointer to FFI_ArrowSchema describing the input schema
+/// * `bytes_out` - Receives a pointer to the serialized bytes (caller must free)
+/// * `bytes_len_out` - Receives the length of the serialized bytes
+/// * `error_out` - Pointer to receive error message
+///
+/// # Returns
+/// 0 on success, -1 on error.
+///
+/// # Safety
+/// All pointers must be valid. The schema is consumed by this function.
+/// The caller must free the returned bytes with `datafusion_free_bytes`.
+#[no_mangle]
+pub unsafe extern "C" fn datafusion_context_parse_sql_expr(
+    ctx: *mut c_void,
+    sql: *const c_char,
+    schema_ffi: *mut FFI_ArrowSchema,
+    bytes_out: *mut *mut u8,
+    bytes_len_out: *mut usize,
+    error_out: *mut *mut c_char,
+) -> i32 {
+    clear_error(error_out);
+
+    if ctx.is_null()
+        || sql.is_null()
+        || schema_ffi.is_null()
+        || bytes_out.is_null()
+        || bytes_len_out.is_null()
+    {
+        return set_error_return(error_out, "Null pointer argument");
+    }
+
+    let context = &*(ctx as *mut SessionContext);
+
+    let sql_str = match CStr::from_ptr(sql).to_str() {
+        Ok(s) => s,
+        Err(e) => return set_error_return(error_out, &format!("Invalid SQL string: {}", e)),
+    };
+
+    // Import Arrow schema from FFI (consumes the FFI struct)
+    let ffi_schema = std::ptr::read(schema_ffi);
+    let arrow_schema = match Schema::try_from(&ffi_schema) {
+        Ok(s) => Arc::new(s),
+        Err(e) => return set_error_return(error_out, &format!("Failed to import schema: {}", e)),
+    };
+
+    // Convert to DFSchema
+    let df_schema = match DFSchema::try_from(arrow_schema.as_ref().clone()) {
+        Ok(s) => s,
+        Err(e) => {
+            return set_error_return(error_out, &format!("Failed to create DFSchema: {}", e))
+        }
+    };
+
+    // Parse the SQL expression
+    let state = context.state();
+    let expr = match state.create_logical_expr(sql_str, &df_schema) {
+        Ok(e) => e,
+        Err(e) => {
+            return set_error_return(
+                error_out,
+                &format!("Failed to parse SQL expression: {}", e),
+            )
+        }
+    };
+
+    // Serialize to protobuf
+    let codec = DefaultLogicalExtensionCodec {};
+    let serialized = match serialize_exprs(&[expr], &codec) {
+        Ok(s) => s,
+        Err(e) => {
+            return set_error_return(
+                error_out,
+                &format!("Failed to serialize expression: {}", e),
+            )
+        }
+    };
+    let proto_list = LogicalExprList { expr: serialized };
+    let bytes = proto_list.encode_to_vec();
+
+    // Transfer ownership to caller via Box
+    let len = bytes.len();
+    let boxed = bytes.into_boxed_slice();
+    let ptr = Box::into_raw(boxed) as *mut u8;
+    *bytes_out = ptr;
+    *bytes_len_out = len;
 
     0
 }

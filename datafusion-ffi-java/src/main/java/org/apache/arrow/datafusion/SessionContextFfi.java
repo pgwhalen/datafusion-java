@@ -117,6 +117,18 @@ final class SessionContextFfi implements AutoCloseable {
               ValueLayout.ADDRESS.withName("ffi_udf"),
               ValueLayout.ADDRESS.withName("error_out")));
 
+  private static final MethodHandle CONTEXT_PARSE_SQL_EXPR =
+      NativeUtil.downcall(
+          "datafusion_context_parse_sql_expr",
+          FunctionDescriptor.of(
+              ValueLayout.JAVA_INT,
+              ValueLayout.ADDRESS.withName("ctx"),
+              ValueLayout.ADDRESS.withName("sql"),
+              ValueLayout.ADDRESS.withName("schema"),
+              ValueLayout.ADDRESS.withName("bytes_out"),
+              ValueLayout.ADDRESS.withName("bytes_len_out"),
+              ValueLayout.ADDRESS.withName("error_out")));
+
   private static final MethodHandle CONTEXT_REGISTER_LISTING_TABLE =
       NativeUtil.downcall(
           "datafusion_context_register_listing_table",
@@ -288,6 +300,50 @@ final class SessionContextFfi implements AutoCloseable {
       throw e;
     } catch (Throwable e) {
       throw new DataFusionException("Failed to get session state", e);
+    }
+  }
+
+  /**
+   * Parses a SQL expression string into an {@link Expr}.
+   *
+   * @param sql the SQL expression string to parse (e.g., "a + b > 10")
+   * @param schema the Arrow schema describing the input columns
+   * @return the parsed expression
+   * @throws DataFusionException if parsing fails
+   */
+  Expr parseSqlExpr(String sql, org.apache.arrow.vector.types.pojo.Schema schema) {
+    try (Arena arena = Arena.ofConfined();
+        org.apache.arrow.memory.RootAllocator tempAllocator =
+            new org.apache.arrow.memory.RootAllocator();
+        ArrowSchema ffiSchema = ArrowSchema.allocateNew(tempAllocator)) {
+
+      Data.exportSchema(tempAllocator, schema, null, ffiSchema);
+      MemorySegment schemaAddr = MemorySegment.ofAddress(ffiSchema.memoryAddress());
+      MemorySegment sqlSegment = arena.allocateFrom(sql);
+      MemorySegment bytesOut = arena.allocate(ValueLayout.ADDRESS);
+      MemorySegment bytesLenOut = arena.allocate(ValueLayout.JAVA_LONG);
+
+      NativeUtil.call(
+          arena,
+          "Parse SQL expression",
+          errorOut ->
+              (int)
+                  CONTEXT_PARSE_SQL_EXPR.invokeExact(
+                      context, sqlSegment, schemaAddr, bytesOut, bytesLenOut, errorOut));
+
+      MemorySegment bytesPtr = bytesOut.get(ValueLayout.ADDRESS, 0);
+      long len = bytesLenOut.get(ValueLayout.JAVA_LONG, 0);
+
+      try {
+        byte[] protoBytes = bytesPtr.reinterpret(len).toArray(ValueLayout.JAVA_BYTE);
+        return ExprProtoConverter.fromProtoBytes(protoBytes).get(0);
+      } finally {
+        NativeUtil.FREE_BYTES.invokeExact(bytesPtr, len);
+      }
+    } catch (DataFusionException e) {
+      throw e;
+    } catch (Throwable e) {
+      throw new DataFusionException("Failed to parse SQL expression", e);
     }
   }
 
