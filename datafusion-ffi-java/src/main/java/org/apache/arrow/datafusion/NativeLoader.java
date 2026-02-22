@@ -42,6 +42,20 @@ final class NativeLoader {
   }
 
   private static SymbolLookup loadLibrary() {
+    // Strategy 0: Native image — symbols are statically linked into the binary.
+    // Use libraryLookup on the executable itself so dlopen returns a handle to the
+    // current process, making all statically linked symbols available via dlsym.
+    // We cannot use Linker.nativeLinker().defaultLookup() because GraalVM's
+    // RuntimeSystemLookup tries to load libc.so.6 even on macOS.
+    if (System.getProperty("org.graalvm.nativeimage.imagecode") != null) {
+      String exe = ProcessHandle.current().info().command().orElse(null);
+      if (exe != null) {
+        logger.info("Running in GraalVM native image, loading symbols from executable: {}", exe);
+        return SymbolLookup.libraryLookup(Path.of(exe), Arena.global());
+      }
+      logger.warn("Running in GraalVM native image but could not determine executable path");
+    }
+
     // Strategy 1: Try java.library.path (development/test mode)
     SymbolLookup result = tryLoadFromLibraryPath();
     if (result != null) {

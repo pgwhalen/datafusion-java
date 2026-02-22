@@ -1,0 +1,160 @@
+plugins {
+    id 'application'
+    id 'org.graalvm.buildtools.native' version '0.11.1'
+}
+
+group = 'io.github.datafusion-contrib'
+version = '0.17.0-SNAPSHOT'
+
+// Force all Arrow deps to arrowVersion (including transitive from datafusion-ffi-java)
+// to pick up the FindClass JNI fix for GraalVM native image compatibility.
+def arrowVersion = '19.0.0-SNAPSHOT'
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+configurations.all {
+    resolutionStrategy.force(
+        "org.apache.arrow:arrow-vector:${arrowVersion}",
+        "org.apache.arrow:arrow-c-data:${arrowVersion}",
+        "org.apache.arrow:arrow-format:${arrowVersion}",
+        "org.apache.arrow:arrow-memory-core:${arrowVersion}",
+        "org.apache.arrow:arrow-memory-unsafe:${arrowVersion}",
+    )
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+        vendor = JvmVendorSpec.ORACLE
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release.set(22)
+}
+
+dependencies {
+    implementation project(':datafusion-ffi-java')
+    implementation "org.apache.arrow:arrow-vector:${arrowVersion}"
+    implementation "org.apache.arrow:arrow-c-data:${arrowVersion}"
+    runtimeOnly "org.apache.arrow:arrow-memory-unsafe:${arrowVersion}"
+    runtimeOnly 'ch.qos.logback:logback-classic:1.5.12'
+    compileOnly 'org.graalvm.sdk:nativeimage:25.0.2'
+}
+
+application {
+    mainClass = 'org.apache.arrow.datafusion.graaltest.GraalNativeImageTest'
+}
+
+// Resolve the native dynamic library path for JVM-mode execution.
+ext.resolveNativeLibPath = {
+    def ffiDevDir = project(':datafusion-ffi-java').layout.buildDirectory.dir("ffi_libs/dev").get().asFile
+    if (ffiDevDir.exists() && ffiDevDir.listFiles()?.length > 0) {
+        return ffiDevDir.path
+    }
+    def rustDebugDir = new File(rootDir, "datafusion-ffi-native/target/debug")
+    if (rustDebugDir.exists()) {
+        return rustDebugDir.path
+    }
+    throw new GradleException(
+        "Native library not found. Run './gradlew :datafusion-ffi-java:copyDevLibrary' first.")
+}
+
+// Resolve the static library (.a) for native image linking.
+// Prefers the default target directory (matches host architecture), then checks
+// cross-compiled targets (e.g., x86_64-apple-darwin when cross-compiling).
+ext.resolveStaticLibPath = {
+    def libName = "libdatafusion_ffi_native.a"
+    def targetDir = new File(rootDir, "datafusion-ffi-native/target")
+
+    // Prefer default target (matches host architecture)
+    def staticLib = new File(targetDir, "debug/${libName}")
+    if (staticLib.exists()) return staticLib
+
+    // Check cross-compiled target directories
+    def crossTargets = ['x86_64-apple-darwin', 'aarch64-apple-darwin',
+                        'x86_64-unknown-linux-gnu', 'aarch64-unknown-linux-gnu']
+    for (target in crossTargets) {
+        staticLib = new File(targetDir, "${target}/debug/${libName}")
+        if (staticLib.exists()) return staticLib
+    }
+
+    throw new GradleException(
+        "Static library not found. " +
+        "Ensure crate-type includes 'staticlib' and run cargo build.")
+}
+
+tasks.named('run') {
+    def libPath = resolveNativeLibPath()
+    jvmArgs += [
+        "--enable-native-access=ALL-UNNAMED",
+        "-Djava.library.path=$libPath",
+        '--add-opens=java.base/java.nio=ALL-UNNAMED'
+    ]
+}
+
+graalvmNative {
+    // Agent is only activated when running with -Pagent (GraalVM JDK required)
+    agent {
+        defaultMode = 'standard'
+        metadataCopy {
+            inputTaskNames.add('run')
+            outputDirectories.add('src/main/resources/META-INF/native-image/graaltest')
+            mergeWithExisting = true
+        }
+    }
+
+    binaries {
+        main {
+            buildArgs.addAll(
+                '--enable-native-access=ALL-UNNAMED',
+                '--no-fallback',
+                '--add-opens=java.base/java.nio=ALL-UNNAMED',
+                '--initialize-at-run-time=org.apache.arrow.datafusion',
+                '-H:+SharedArenaSupport',
+                '--features=org.apache.arrow.datafusion.graaltest.ForeignRegistrationFeature',
+            )
+
+            // Statically link the Rust native library into the native image binary.
+            // This eliminates the need for DYLD_LIBRARY_PATH/LD_LIBRARY_PATH at runtime.
+            def staticLib = resolveStaticLibPath()
+            def os = System.getProperty('os.name').toLowerCase()
+            buildArgs.add("-H:CLibraryPath=${staticLib.parent}")
+            if (os.contains('mac') || os.contains('darwin')) {
+                buildArgs.addAll(
+                    "-H:NativeLinkerOption=-force_load",
+                    "-H:NativeLinkerOption=${staticLib.path}",
+                    "-H:NativeLinkerOption=-framework",
+                    "-H:NativeLinkerOption=CoreFoundation",
+                    "-H:NativeLinkerOption=-liconv",
+                )
+                // Export datafusion symbols so dlsym can find them at runtime.
+                // Individual -exported_symbol flags add to GraalVM's -exported_symbols_list.
+                // Use -Wl, prefix since GraalVM passes NativeLinkerOption through cc, not ld.
+                def symbols = "nm -g ${staticLib.path}".execute()
+                    .text.readLines()
+                    .findAll { it.contains(' T _datafusion_') }
+                    .collect { it.split(/\s+/).last() }
+                symbols.each { sym ->
+                    buildArgs.add("-H:NativeLinkerOption=-Wl,-exported_symbol,${sym}")
+                }
+            } else if (os.contains('linux')) {
+                buildArgs.addAll(
+                    "-H:NativeLinkerOption=-Wl,--whole-archive",
+                    "-H:NativeLinkerOption=${staticLib.path}",
+                    "-H:NativeLinkerOption=-Wl,--no-whole-archive",
+                    // Export all global symbols so dlsym can find them at runtime
+                    "-H:NativeLinkerOption=-Wl,--export-dynamic",
+                )
+            }
+        }
+    }
+}
+
+// nativeRun no longer needs library path — native library is statically linked into the binary
+tasks.matching { it.name == 'nativeRun' }.configureEach {
+    // No DYLD_LIBRARY_PATH, LD_LIBRARY_PATH, or java.library.path needed
+}

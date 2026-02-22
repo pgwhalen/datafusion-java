@@ -1,0 +1,413 @@
+{
+  "reflection": [
+    {
+      "type": "[B"
+    },
+    {
+      "type": "ch.qos.logback.classic.BasicConfigurator",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "ch.qos.logback.classic.joran.SerializedModelConfigurator",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "ch.qos.logback.classic.spi.LogbackServiceProvider"
+    },
+    {
+      "type": "ch.qos.logback.classic.util.DefaultJoranConfigurator",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "com.fasterxml.jackson.databind.ext.Java7SupportImpl",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "java.nio.Buffer",
+      "fields": [
+        {
+          "name": "address"
+        }
+      ]
+    },
+    {
+      "type": "java.nio.DirectByteBuffer",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "long",
+            "long"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "org.apache.arrow.datafusion.CatalogProviderHandle",
+      "methods": [
+        {
+          "name": "getSchema",
+          "parameterTypes": [
+            "java.lang.foreign.MemorySegment",
+            "java.lang.foreign.MemorySegment"
+          ]
+        },
+        {
+          "name": "getSchemaNames",
+          "parameterTypes": [
+            "java.lang.foreign.MemorySegment"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "org.apache.arrow.datafusion.ExecutionPlanHandle",
+      "methods": [
+        {
+          "name": "clonePlan",
+          "parameterTypes": [
+            "java.lang.foreign.MemorySegment"
+          ]
+        },
+        {
+          "name": "execute",
+          "parameterTypes": [
+            "java.lang.foreign.MemorySegment",
+            "long",
+            "java.lang.foreign.MemorySegment"
+          ]
+        },
+        {
+          "name": "getBoundedness",
+          "parameterTypes": [
+            "java.lang.foreign.MemorySegment"
+          ]
+        },
+        {
+          "name": "getChildren",
+          "parameterTypes": [
+            "java.lang.foreign.MemorySegment"
+          ]
+        },
+        {
+          "name": "getEmissionType",
+          "parameterTypes": [
+            "java.lang.foreign.MemorySegment"
+          ]
+        },
+        {
+          "name": "getName",
+          "parameterTypes": [
+            "java.lang.foreign.MemorySegment"
+          ]
+        },
+        {
+          "name": "getOutputOrdering",
+          "parameterTypes": [
+            "java.lang.foreign.MemorySegment"
+          ]
+        },
+        {
+          "name": "getPartitioning",
+          "parameterTypes": [
+            "java.lang.foreign.MemorySegment"
+          ]
+        },
+        {
+          "name": "getProperties",
+          "parameterTypes": [
+            "java.lang.foreign.MemorySegment"
+          ]
+        },
+        {
+          "name": "getPropsSchema",
+          "parameterTypes": [
+            "java.lang.foreign.MemorySegment"
+          ]
+        },
+        {
+          "name": "release",
+          "parameterTypes": [
+            "java.lang.foreign.MemorySegment"
+          ]
+        },
+        {
+          "name": "releaseProps",
+          "parameterTypes": [
+            "java.lang.foreign.MemorySegment"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "org.apache.arrow.datafusion.RecordBatchReaderHandle",
+      "methods": [
+        {
+          "name": "getSchema",
+          "parameterTypes": [
+            "java.lang.foreign.MemorySegment"
+          ]
+        },
+        {
+          "name": "pollNext",
+          "parameterTypes": [
+            "java.lang.foreign.MemorySegment",
+            "java.lang.foreign.MemorySegment"
+          ]
+        },
+        {
+          "name": "release",
+          "parameterTypes": [
+            "java.lang.foreign.MemorySegment"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "org.apache.arrow.datafusion.SchemaProviderHandle",
+      "methods": [
+        {
+          "name": "getTable",
+          "parameterTypes": [
+            "java.lang.foreign.MemorySegment",
+            "java.lang.foreign.MemorySegment"
+          ]
+        },
+        {
+          "name": "getTableNames",
+          "parameterTypes": [
+            "java.lang.foreign.MemorySegment"
+          ]
+        },
+        {
+          "name": "tableExists",
+          "parameterTypes": [
+            "java.lang.foreign.MemorySegment",
+            "java.lang.foreign.MemorySegment"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "org.apache.arrow.datafusion.TableProviderHandle",
+      "methods": [
+        {
+          "name": "getSchema",
+          "parameterTypes": [
+            "java.lang.foreign.MemorySegment"
+          ]
+        },
+        {
+          "name": "getTableType",
+          "parameterTypes": [
+            "java.lang.foreign.MemorySegment"
+          ]
+        },
+        {
+          "name": "scan",
+          "parameterTypes": [
+            "java.lang.foreign.MemorySegment",
+            "java.lang.foreign.MemorySegment",
+            "java.lang.foreign.MemorySegment",
+            "java.lang.foreign.MemorySegment",
+            "java.lang.foreign.MemorySegment"
+          ]
+        },
+        {
+          "name": "supportsFiltersPushdown",
+          "parameterTypes": [
+            "java.lang.foreign.MemorySegment",
+            "java.lang.foreign.MemorySegment"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "org.apache.arrow.memory.unsafe.DefaultAllocationManagerFactory",
+      "fields": [
+        {
+          "name": "FACTORY"
+        }
+      ]
+    },
+    {
+      "type": "org.apache.arrow.vector.types.pojo.ArrowType",
+      "allDeclaredFields": true
+    },
+    {
+      "type": "org.apache.arrow.vector.types.pojo.ArrowType$Int",
+      "allDeclaredFields": true
+    },
+    {
+      "type": "org.apache.arrow.vector.types.pojo.ArrowType$PrimitiveType",
+      "allDeclaredFields": true
+    },
+    {
+      "type": "org.apache.arrow.vector.types.pojo.DictionaryEncoding",
+      "allDeclaredFields": true
+    },
+    {
+      "type": "org.apache.arrow.vector.types.pojo.Field",
+      "allDeclaredFields": true
+    },
+    {
+      "type": "org.apache.arrow.vector.types.pojo.Schema",
+      "allDeclaredFields": true
+    },
+    {
+      "type": "sun.misc.Unsafe",
+      "fields": [
+        {
+          "name": "theUnsafe"
+        }
+      ]
+    },
+    {
+      "type": "sun.security.provider.NativePRNG",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "java.security.SecureRandomParameters"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "sun.security.provider.SHA",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    }
+  ],
+  "resources": [
+    {
+      "glob": "META-INF/services/ch.qos.logback.classic.spi.Configurator"
+    },
+    {
+      "glob": "META-INF/services/java.lang.System$LoggerFinder"
+    },
+    {
+      "glob": "META-INF/services/java.time.zone.ZoneRulesProvider"
+    },
+    {
+      "glob": "META-INF/services/org.apache.arrow.vector.compression.CompressionCodec$Factory"
+    },
+    {
+      "glob": "META-INF/services/org.slf4j.spi.SLF4JServiceProvider"
+    },
+    {
+      "glob": "arrow_cdata_jni/aarch_64/libarrow_cdata_jni.dylib"
+    },
+    {
+      "glob": "arrow_cdata_jni/x86_64/libarrow_cdata_jni.dylib"
+    },
+    {
+      "glob": "logback-test.scmo"
+    },
+    {
+      "glob": "logback-test.xml"
+    },
+    {
+      "glob": "logback.scmo"
+    },
+    {
+      "glob": "logback.xml"
+    },
+    {
+      "glob": "org/apache/arrow/memory/DefaultAllocationManagerFactory.class"
+    },
+    {
+      "glob": "org/apache/arrow/memory/unsafe/DefaultAllocationManagerFactory.class"
+    }
+  ],
+  "bundles": [],
+  "jni": [
+    {
+      "type": "java.lang.Boolean",
+      "methods": [
+        {
+          "name": "getBoolean",
+          "parameterTypes": [
+            "java.lang.String"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "java.lang.Object",
+      "methods": [
+        {
+          "name": "toString",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "org.apache.arrow.c.ArrayStreamExporter$ExportedArrayStreamPrivateData",
+      "fields": [
+        {
+          "name": "lastError"
+        }
+      ],
+      "methods": [
+        {
+          "name": "getNext",
+          "parameterTypes": [
+            "long"
+          ]
+        },
+        {
+          "name": "getSchema",
+          "parameterTypes": [
+            "long"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "org.apache.arrow.c.jni.CDataJniException",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": [
+            "int",
+            "java.lang.String"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "org.apache.arrow.c.jni.PrivateData",
+      "methods": [
+        {
+          "name": "close",
+          "parameterTypes": []
+        }
+      ]
+    }
+  ]
+}
