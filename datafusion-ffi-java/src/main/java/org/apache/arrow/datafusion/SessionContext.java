@@ -15,7 +15,7 @@ import org.apache.arrow.vector.types.pojo.Schema;
  */
 public class SessionContext implements AutoCloseable {
   private final SessionContextFfi ffi;
-    private volatile boolean closed = false;
+  private volatile boolean closed = false;
 
   /** Creates a new session context with default configuration. */
   public SessionContext() {
@@ -28,7 +28,64 @@ public class SessionContext implements AutoCloseable {
    * @param config the session configuration
    */
   public SessionContext(SessionConfig config) {
-      this.ffi = new SessionContextFfi(config);
+    this.ffi = new SessionContextFfi(config);
+  }
+
+  /** Package-private constructor that wraps an existing SessionContextFfi. */
+  SessionContext(SessionContextFfi ffi) {
+    this.ffi = ffi;
+  }
+
+  /**
+   * Creates a new session context with default configuration.
+   *
+   * <p>Equivalent to {@code new SessionContext()}.
+   *
+   * @return a new SessionContext
+   */
+  public static SessionContext create() {
+    return new SessionContext();
+  }
+
+  /**
+   * Creates a new session context with the specified configuration.
+   *
+   * <p>Equivalent to Rust's {@code SessionContext::new_with_config(config)}.
+   *
+   * @param config the session configuration
+   * @return a new SessionContext
+   */
+  public static SessionContext newWithConfig(SessionConfig config) {
+    return new SessionContext(config);
+  }
+
+  /**
+   * Creates a new session context with the specified configuration and runtime environment.
+   *
+   * <p>This mirrors Rust's {@code SessionContext::new_with_config_rt(config, Arc<RuntimeEnv>)}. The
+   * RuntimeEnv is cloned internally, so the caller retains ownership and must close it separately.
+   *
+   * <p>Example:
+   *
+   * <pre>{@code
+   * RuntimeEnv rt = RuntimeEnvBuilder.builder()
+   *     .withMemoryLimit(50_000_000, 1.0)
+   *     .build();
+   * SessionConfig config = SessionConfig.defaults();
+   * try (SessionContext ctx = SessionContext.newWithConfigRt(config, rt)) {
+   *     DataFrame df = ctx.sql("SELECT 1 + 1");
+   *     // ...
+   * }
+   * rt.close();
+   * }</pre>
+   *
+   * @param config the session configuration
+   * @param runtimeEnv the runtime environment (e.g., with memory pool configuration)
+   * @return a new SessionContext
+   * @throws DataFusionException if context creation fails
+   */
+  public static SessionContext newWithConfigRt(SessionConfig config, RuntimeEnv runtimeEnv) {
+    return new SessionContext(new SessionContextFfi(config, runtimeEnv.ffi));
   }
 
   /**

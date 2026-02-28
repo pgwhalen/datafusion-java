@@ -48,6 +48,17 @@ final class SessionContextFfi implements AutoCloseable {
               ValueLayout.JAVA_LONG.withName("len"),
               ValueLayout.ADDRESS.withName("error_out")));
 
+  private static final MethodHandle CONTEXT_CREATE_WITH_CONFIG_RT =
+      NativeUtil.downcall(
+          "datafusion_context_create_with_config_rt",
+          FunctionDescriptor.of(
+              ValueLayout.ADDRESS,
+              ValueLayout.ADDRESS.withName("keys"),
+              ValueLayout.ADDRESS.withName("values"),
+              ValueLayout.JAVA_LONG.withName("len"),
+              ValueLayout.ADDRESS.withName("rt_env"),
+              ValueLayout.ADDRESS.withName("error_out")));
+
   private static final MethodHandle CONTEXT_DESTROY =
       NativeUtil.downcall(
           "datafusion_context_destroy", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
@@ -183,6 +194,62 @@ final class SessionContextFfi implements AutoCloseable {
       throw e;
     } catch (Throwable e) {
       throw new DataFusionException("Failed to create SessionContext", e);
+    }
+  }
+
+  /**
+   * Creates a new SessionContextFfi with a custom RuntimeEnv.
+   *
+   * @param config The session configuration
+   * @param runtimeEnvFfi The RuntimeEnv to use
+   * @throws DataFusionException if runtime or context creation fails
+   */
+  SessionContextFfi(SessionConfig config, RuntimeEnvFfi runtimeEnvFfi) {
+    this.config = config;
+    try {
+      runtime = (MemorySegment) RUNTIME_CREATE.invokeExact();
+      if (runtime.equals(MemorySegment.NULL)) {
+        throw new DataFusionException("Failed to create Tokio runtime");
+      }
+      context = createWithConfigRt(config, runtimeEnvFfi);
+      if (context.equals(MemorySegment.NULL)) {
+        RUNTIME_DESTROY.invokeExact(runtime);
+        throw new DataFusionException("Failed to create SessionContext");
+      }
+      this.sharedArena = Arena.ofShared();
+      logger.debug(
+          "Created SessionContext with RuntimeEnv: runtime={}, context={}", runtime, context);
+    } catch (DataFusionException e) {
+      throw e;
+    } catch (Throwable e) {
+      throw new DataFusionException("Failed to create SessionContext", e);
+    }
+  }
+
+  private static MemorySegment createWithConfigRt(
+      SessionConfig config, RuntimeEnvFfi runtimeEnvFfi) {
+    Map<String, String> options = config.hasOptions() ? config.toOptionsMap() : Map.of();
+
+    try (Arena arena = Arena.ofConfined()) {
+      int size = options.size();
+
+      MemorySegment keys = arena.allocate(ValueLayout.ADDRESS, Math.max(size, 1));
+      MemorySegment values = arena.allocate(ValueLayout.ADDRESS, Math.max(size, 1));
+
+      int i = 0;
+      for (Map.Entry<String, String> entry : options.entrySet()) {
+        keys.setAtIndex(ValueLayout.ADDRESS, i, arena.allocateFrom(entry.getKey()));
+        values.setAtIndex(ValueLayout.ADDRESS, i, arena.allocateFrom(entry.getValue()));
+        i++;
+      }
+
+      return NativeUtil.callForPointer(
+          arena,
+          "Create SessionContext with config and RuntimeEnv",
+          errorOut ->
+              (MemorySegment)
+                  CONTEXT_CREATE_WITH_CONFIG_RT.invokeExact(
+                      keys, values, (long) size, runtimeEnvFfi.nativePointer(), errorOut));
     }
   }
 
