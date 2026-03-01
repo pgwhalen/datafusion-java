@@ -733,6 +733,79 @@ public class DataFrameTest {
   }
 
   // ==========================================================================
+  // Write operations
+  // ==========================================================================
+
+  @Test
+  void testReadParquet() {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext();
+        DataFrame df = ctx.readParquet("src/test/resources/test.parquet");
+        RecordBatchStream stream = df.executeStream(allocator)) {
+      assertTrue(stream.loadNextBatch());
+      VectorSchemaRoot root = stream.getVectorSchemaRoot();
+      assertTrue(root.getRowCount() > 0);
+    }
+  }
+
+  @Test
+  void testWriteParquet(@TempDir Path tempDir) {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+      registerEmployees(ctx, allocator);
+
+      Path outDir = tempDir.resolve("output.parquet");
+      try (DataFrame df = ctx.sql("SELECT * FROM employees")) {
+        df.writeParquet(outDir.toString());
+      }
+
+      // Read back and verify
+      // Note: Parquet read-back may use ViewVarCharVector instead of VarCharVector,
+      // so use getObject().toString() for string comparison.
+      try (DataFrame df = ctx.readParquet(outDir.toString()).sort(col("age").sortAsc());
+          RecordBatchStream stream = df.executeStream(allocator)) {
+        assertTrue(stream.loadNextBatch());
+        VectorSchemaRoot root = stream.getVectorSchemaRoot();
+        assertEquals(3, root.getRowCount());
+
+        BigIntVector age = (BigIntVector) root.getVector("age");
+        assertEquals(25, age.get(0));
+        assertEquals("Bob", root.getVector("name").getObject(0).toString());
+        assertEquals(30, age.get(1));
+        assertEquals("Alice", root.getVector("name").getObject(1).toString());
+        assertEquals(35, age.get(2));
+        assertEquals("Charlie", root.getVector("name").getObject(2).toString());
+      }
+    }
+  }
+
+  @Test
+  void testWriteCsv(@TempDir Path tempDir) throws IOException {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+      registerEmployees(ctx, allocator);
+
+      Path outDir = tempDir.resolve("output.csv");
+      try (DataFrame df = ctx.sql("SELECT * FROM employees")) {
+        df.writeCsv(outDir.toString());
+      }
+
+      // Read back and verify
+      try (DataFrame df = ctx.readCsv(outDir.toString()).sort(col("age").sortAsc());
+          RecordBatchStream stream = df.executeStream(allocator)) {
+        assertTrue(stream.loadNextBatch());
+        VectorSchemaRoot root = stream.getVectorSchemaRoot();
+        assertEquals(3, root.getRowCount());
+
+        BigIntVector age = (BigIntVector) root.getVector("age");
+        assertEquals(25, age.get(0));
+        assertEquals(30, age.get(1));
+        assertEquals(35, age.get(2));
+      }
+    }
+  }
+
+  // ==========================================================================
   // Phase 5: Advanced features
   // ==========================================================================
 

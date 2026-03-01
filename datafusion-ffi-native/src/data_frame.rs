@@ -790,6 +790,94 @@ pub unsafe extern "C" fn datafusion_dataframe_drop_columns(
 }
 
 // ============================================================================
+// Write operations
+// ============================================================================
+
+/// Write DataFrame results to a Parquet file.
+///
+/// # Arguments
+/// * `rt` - Pointer to the Tokio runtime
+/// * `df` - Pointer to the DataFrame
+/// * `path` - C string path to write the Parquet file to
+/// * `error_out` - Pointer to receive error message
+///
+/// # Returns
+/// 0 on success, -1 on error.
+#[no_mangle]
+pub unsafe extern "C" fn datafusion_dataframe_write_parquet(
+    rt: *mut c_void,
+    df: *mut c_void,
+    path: *const c_char,
+    error_out: *mut *mut c_char,
+) -> i32 {
+    clear_error(error_out);
+
+    if rt.is_null() || df.is_null() || path.is_null() {
+        return set_error_return(error_out, "Null pointer argument");
+    }
+
+    let runtime = &*(rt as *mut Runtime);
+    let dataframe = &*(df as *mut DataFrame);
+    let path_str = match CStr::from_ptr(path).to_str() {
+        Ok(s) => s,
+        Err(e) => return set_error_return(error_out, &format!("Invalid path: {}", e)),
+    };
+
+    runtime.block_on(async {
+        match dataframe
+            .clone()
+            .write_parquet(path_str, Default::default(), None)
+            .await
+        {
+            Ok(_) => 0,
+            Err(e) => set_error_return(error_out, &format!("Write parquet failed: {}", e)),
+        }
+    })
+}
+
+/// Write DataFrame results to a CSV file.
+///
+/// # Arguments
+/// * `rt` - Pointer to the Tokio runtime
+/// * `df` - Pointer to the DataFrame
+/// * `path` - C string path to write the CSV file to
+/// * `error_out` - Pointer to receive error message
+///
+/// # Returns
+/// 0 on success, -1 on error.
+#[no_mangle]
+pub unsafe extern "C" fn datafusion_dataframe_write_csv(
+    rt: *mut c_void,
+    df: *mut c_void,
+    path: *const c_char,
+    error_out: *mut *mut c_char,
+) -> i32 {
+    clear_error(error_out);
+
+    if rt.is_null() || df.is_null() || path.is_null() {
+        return set_error_return(error_out, "Null pointer argument");
+    }
+
+    let runtime = &*(rt as *mut Runtime);
+    let dataframe = &*(df as *mut DataFrame);
+    let path_str = match CStr::from_ptr(path).to_str() {
+        Ok(s) => s,
+        Err(e) => return set_error_return(error_out, &format!("Invalid path: {}", e)),
+    };
+
+    runtime.block_on(async {
+        match dataframe
+            .clone()
+            .write_csv(path_str, Default::default(), None)
+            .await
+        {
+            Ok(_) => 0,
+            Err(e) => set_error_return(error_out, &format!("Write CSV failed: {}", e)),
+        }
+    })
+}
+
+// ============================================================================
 // Phase 4: SessionContext readers (table reference)
 // These are in session_context.rs
 // ============================================================================

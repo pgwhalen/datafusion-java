@@ -301,6 +301,28 @@ public class DataFrame implements AutoCloseable {
     return new DataFrame(result);
   }
 
+  // ── Write operations ──
+
+  /**
+   * Write results to a Parquet file.
+   *
+   * @param path path to write the Parquet file to
+   * @throws DataFusionException if writing fails
+   */
+  public void writeParquet(String path) {
+    ffi.writeParquet(path);
+  }
+
+  /**
+   * Write results to a CSV file.
+   *
+   * @param path path to write the CSV file to
+   * @throws DataFusionException if writing fails
+   */
+  public void writeCsv(String path) {
+    ffi.writeCsv(path);
+  }
+
   // ── Terminal operations ──
 
   /**
