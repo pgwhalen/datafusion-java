@@ -803,7 +803,7 @@ The Java backend is early-stage. Adding traits, structs, and fallible returns is
 |-------|--------|-------|
 | Phase 1: Fallible returns + structs | Done | Implemented in local Diplomat fork (`/Users/pgwhalen/code/diplomat/`). Snapshot tests pass. |
 | Phase 2: Minimal bridge | Done | `bridge.rs` with `DfSessionContext`, `DfDataFrame`, `DfError`. Gradle integration with `generateDiplomatBindings` + `postProcessDiplomatBindings` tasks. `DiplomatBridgeTest` (6 tests) passes alongside all 218 existing tests. |
-| Phase 3: Arrow data wrappers | Not started | |
+| Phase 3: Arrow data wrappers | Done | `DfArrowBatch`, `DfArrowSchema`, `DfExprBytes` opaques. `register_table`, `parse_sql_expr` on `DfSessionContext`. `collect_to_string` on `DfDataFrame`. 5 new tests in `DiplomatBridgeTest` (11 total). |
 | Phase 4: Traits in Java backend | Not started | |
 | Phase 5: Catalog/schema/table traits | Not started | |
 | Phase 6: UDF + Listing table traits | Not started | |
