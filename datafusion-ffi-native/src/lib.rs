@@ -1,5 +1,6 @@
 mod bridge;
 mod catalog_provider;
+mod providers;
 mod data_frame;
 mod error;
 mod execution;

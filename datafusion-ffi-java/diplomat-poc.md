@@ -804,8 +804,8 @@ The Java backend is early-stage. Adding traits, structs, and fallible returns is
 | Phase 1: Fallible returns + structs | Done | Implemented in local Diplomat fork (`/Users/pgwhalen/code/diplomat/`). Snapshot tests pass. |
 | Phase 2: Minimal bridge | Done | `bridge.rs` with `DfSessionContext`, `DfDataFrame`, `DfError`. Gradle integration with `generateDiplomatBindings` + `postProcessDiplomatBindings` tasks. `DiplomatBridgeTest` (6 tests) passes alongside all 218 existing tests. |
 | Phase 3: Arrow data wrappers | Done | `DfArrowBatch`, `DfArrowSchema`, `DfExprBytes` opaques. `register_table`, `parse_sql_expr` on `DfSessionContext`. `collect_to_string` on `DfDataFrame`. 5 new tests in `DiplomatBridgeTest` (11 total). |
-| Phase 4: Traits in Java backend | Not started | |
-| Phase 5: Catalog/schema/table traits | Not started | |
+| Phase 4: Traits in Java backend | Done | Implemented in local Diplomat fork. Trait support generates Java interfaces with vtable structs, upcall stubs, callback registry, and destructor plumbing. |
+| Phase 5: Catalog/schema/table traits | Done | Full provider chain via Diplomat traits. `register_catalog` on `DfSessionContext`. 9 new tests in `DiplomatBridgeTest` (20 total). All 239 tests pass. |
 | Phase 6: UDF + Listing table traits | Not started | |
 | Phase 7: Remove hand-written FFI | Not started | |
 
@@ -826,6 +826,44 @@ The Java backend is early-stage. Adding traits, structs, and fallible returns is
 - Both Diplomat and hand-written FFI coexist in the same shared library. No existing code was modified or removed.
 - Generated Java files go to `build/diplomat-generated/` (not checked in). Post-processing makes them package-private and wires in `NativeLoader`.
 - Diplomat's glob import limitation required moving `use` statements inside the `#[diplomat::bridge]` module.
+
+### Phase 4 details
+
+**Files changed (in local Diplomat fork `/Users/pgwhalen/code/diplomat/`):**
+
+- `tool/src/java/mod.rs` — Added trait code generation: Java interfaces with method signatures, inner `Statics` class with upcall stubs and `traitRunner_*` methods, `VTABLE_LAYOUT` and `TRAIT_STRUCT_LAYOUT` StructLayouts, VarHandle accessors, `createNative()` factory method.
+- `core/src/hir/methods.rs` — Enabled `traits = true` and `callbacks = true` in `attr_support()` for the Java backend.
+
+**Key design decisions:**
+
+- **Callback registry pattern**: Each trait implementation is registered in a `ConcurrentHashMap<Long, Object>` (in `DiplomatLib.PREVENT_GC`) keyed by a monotonic ID. The ID is stored as the vtable's `data` pointer. Upcall stubs retrieve the implementation via `DiplomatLib.getCallback(id, TraitClass)`.
+- **Shared destructor**: A single `DESTRUCTOR_STUB` upcall stub (in `DiplomatLib`) is shared across all traits. When Rust drops a trait wrapper, it calls the destructor which removes the callback from the registry.
+- **Global arena for upcall stubs**: All upcall stubs are allocated in `Arena.global()` since they are class-level constants shared by all instances.
+- **Primitive-only limitation**: The Java backend's trait support handles primitives well but has gaps for `&DiplomatStr` params, `&mut DiplomatWrite` output, `Option<Box<Opaque>>` returns, and `Result<T, E>` returns in trait callbacks. These fall through to generic handlers that produce compile errors. The workaround is to use only primitive types in trait method signatures.
+
+### Phase 5 details
+
+**Files added/changed:**
+
+- `datafusion-ffi-native/src/bridge.rs` — Added 5 Diplomat traits (`DfCatalogTrait`, `DfSchemaTrait`, `DfTableTrait`, `DfExecutionPlanTrait`, `DfRecordBatchReaderTrait`) with primitive-only signatures. Added 4 opaque wrappers (`DfSchemaProvider`, `DfTableProvider`, `DfExecutionPlan`, `DfRecordBatchReader`) with `create_raw` factory methods returning `usize`. Added `register_catalog` on `DfSessionContext`. Added `write_json` on `DfDataFrame`.
+- `datafusion-ffi-native/src/providers.rs` — New, ~400 lines. DataFusion trait wrapper structs (`ForeignDfCatalog`, `ForeignDfSchema`, `ForeignDfTable`, `ForeignDfPlan`, `ForeignDfStream`) that implement DataFusion traits by dispatching through Diplomat trait vtables. Handles session passthrough, filter serialization/deserialization via protobuf, projection arrays, limit conversion, error buffer reading, and Arrow FFI import.
+- `datafusion-ffi-native/src/lib.rs` — Added `mod providers;`.
+- `datafusion-ffi-java/.../DfCatalogAdapter.java` — New. Adapts `CatalogProvider` to `DfCatalogTrait`. Writes null-separated schema names to buffer, creates `DfSchemaProvider` via re-entrant downcall. Includes shared `writeError()` and `readString()` static helpers.
+- `datafusion-ffi-java/.../DfSchemaAdapter.java` — New. Adapts `SchemaProvider` to `DfSchemaTrait`. Returns table names, checks table existence, creates `DfTableProvider` via re-entrant downcall.
+- `datafusion-ffi-java/.../DfTableAdapter.java` — New. Adapts `TableProvider` to `DfTableTrait`. Exports Arrow schema via C Data Interface, converts table type enum, deserializes protobuf filters and projection arrays, passes session handle, creates `DfExecutionPlan` via re-entrant downcall. Supports `supportsFiltersPushdown()`.
+- `datafusion-ffi-java/.../DfExecutionPlanAdapter.java` — New. Adapts `ExecutionPlan` to `DfExecutionPlanTrait`. Reports schema, partitioning, emission type, boundedness. Creates `DfRecordBatchReader` via re-entrant downcall.
+- `datafusion-ffi-java/.../DfRecordBatchReaderAdapter.java` — New. Adapts `RecordBatchReader` to `DfRecordBatchReaderTrait`. Implements `AutoCloseable` for cleanup when Rust drops the stream early (e.g., LIMIT queries). Exports Arrow batches via C Data Interface with ownership transfer (clears source release callback after copy).
+- `datafusion-ffi-java/build.gradle` — Added `AutoCloseable` cleanup to `postProcessDiplomatBindings`: when `DiplomatLib.unregisterCallback()` removes a callback, it calls `close()` if the callback implements `AutoCloseable`. This ensures `RecordBatchReader` resources are freed when DataFusion drops the stream.
+- `datafusion-ffi-java/src/test/.../FfiEncapsulationTest.java` — Added `IS_INNER_OF_FFI_CLASS` predicate to exclude inner `Statics` classes of Diplomat-generated trait interfaces from Rule 2 (public classes should not depend on foreign API). These inner classes are implicitly public in Java (interface members) but are FFI implementation details.
+- `datafusion-ffi-java/src/test/.../DiplomatBridgeTest.java` — Added 9 new tests: basic catalog registration + SQL query, filter pushdown, multiple tables, join across tables, LIMIT pushdown, null limit passthrough, EXACT filter pushdown, UNSUPPORTED filter pushdown, filter expression structure verification.
+
+**Key design decisions:**
+
+- **Primitive-only trait methods**: All trait methods use `usize`, `i32`, `i64`, `bool`. Strings passed as `(addr, len)` pairs. Errors reported via `(error_addr, error_cap)` buffer pairs where Java writes UTF-8 to a Rust-allocated buffer.
+- **Arrow schema lifecycle**: Adapters cache an exported `ArrowSchema` for Rust to import during `createRaw()`. After `createRaw()` returns, `closeFfiSchema()` calls both `release()` (frees exported data) and `close()` (frees the 72-byte struct). Rust uses `&*` reference (not `ptr::read`) to avoid double-free.
+- **Session handle passthrough**: `&dyn Session` is passed as a raw pointer address (`session_addr: usize`). Java wraps it in `SessionFfi(MemorySegment.ofAddress(sessionAddr))` → `Session(ffi, allocator)` for the duration of the callback. Same pattern as existing hand-written `TableProviderHandle`.
+- **Filter serialization**: Uses existing protobuf `LogicalExprList` encoding via `serialize_exprs()` on Rust side and `ExprProtoConverter.fromProtoBytes()` on Java side.
+- **AutoCloseable destructor hook**: `DiplomatLib.unregisterCallback()` is post-processed to check if callbacks implement `AutoCloseable` and call `close()`. This ensures `RecordBatchReader` resources are freed when DataFusion drops streams early (LIMIT queries), mirroring the hand-written `RecordBatchReaderHandle.release()` pattern.
 
 ## Success Criteria
 

@@ -71,12 +71,26 @@ public class FfiEncapsulationTest {
               "FFI implementation classes must be package-private"
                   + " to hide FFI details from consumers (ffi.md rule 1)");
 
+  /**
+   * Matches inner classes of FFI implementation classes (e.g., DfCatalogTrait.Statics). These are
+   * implicitly public in Java (interface members) but are inaccessible outside the package because
+   * the enclosing interface is package-private.
+   */
+  private static final DescribedPredicate<JavaClass> IS_INNER_OF_FFI_CLASS =
+      new DescribedPredicate<>("an inner class of an FFI implementation class") {
+        @Override
+        public boolean test(JavaClass javaClass) {
+          return javaClass.getEnclosingClass().map(IS_FFI_CLASS::test).orElse(false);
+        }
+      };
+
   /** Rule 2: Public classes should not depend on java.lang.foreign types. */
   @ArchTest
   static final ArchRule publicClassesShouldNotDependOnForeignApi =
       noClasses()
           .that()
           .arePublic()
+          .and(DescribedPredicate.not(IS_INNER_OF_FFI_CLASS))
           .should()
           .dependOnClassesThat()
           .resideInAPackage("java.lang.foreign..")

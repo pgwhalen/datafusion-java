@@ -81,9 +81,18 @@ tasks.register('postProcessDiplomatBindings') {
                     /System\.loadLibrary\("[^"]+"\);\s*\n\s*LIB = SymbolLookup\.loaderLookup\(\);/,
                     'LIB = org.apache.arrow.datafusion.NativeLoader.get();'
                 )
-                // Make generated classes package-private
+                // Make generated classes and interfaces package-private
                 text = text.replace('public final class ', 'final class ')
                 text = text.replace('public class ', 'class ')
+                text = text.replace('public interface ', 'interface ')
+                // Close AutoCloseable callbacks when Rust drops them
+                if (!text.contains('instanceof AutoCloseable')) {
+                    text = text.replace(
+                        'PREVENT_GC.remove(id);',
+                        'Object cb = PREVENT_GC.remove(id);\n' +
+                        '        if (cb instanceof AutoCloseable ac) { try { ac.close(); } catch (Exception e) { /* ignore */ } }'
+                    )
+                }
                 f.text = text
             }
         }
