@@ -38,6 +38,8 @@ public class FfiEncapsulationTest {
           .map(Class::getSimpleName)
           .collect(Collectors.toUnmodifiableSet());
 
+  private static final String FFI_PACKAGE = "org.apache.arrow.datafusion";
+
   private static final DescribedPredicate<JavaClass> IS_FFI_CLASS =
       new DescribedPredicate<>("an FFI implementation class") {
         @Override
@@ -45,7 +47,16 @@ public class FfiEncapsulationTest {
           String name = javaClass.getSimpleName();
           return name.endsWith("Ffi")
               || name.endsWith("Handle")
+              || isDiplomatGenerated(javaClass)
               || FFI_CLASS_SIMPLE_NAMES.contains(name);
+        }
+
+        private boolean isDiplomatGenerated(JavaClass javaClass) {
+          if (!javaClass.getPackageName().equals(FFI_PACKAGE)) {
+            return false;
+          }
+          String name = javaClass.getSimpleName();
+          return name.startsWith("Df") || name.equals("DiplomatLib");
         }
       };
 

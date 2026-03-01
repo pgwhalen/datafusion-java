@@ -797,6 +797,36 @@ The Java backend is early-stage. Adding traits, structs, and fallible returns is
 
 **Mitigation:** The phased approach lets us validate each feature independently. Phases 1-3 (no traits) already prove significant value. Traits (Phases 4-6) can be deferred if they prove too difficult without blocking the core POC.
 
+## Progress
+
+| Phase | Status | Notes |
+|-------|--------|-------|
+| Phase 1: Fallible returns + structs | Done | Implemented in local Diplomat fork (`/Users/pgwhalen/code/diplomat/`). Snapshot tests pass. |
+| Phase 2: Minimal bridge | Done | `bridge.rs` with `DfSessionContext`, `DfDataFrame`, `DfError`. Gradle integration with `generateDiplomatBindings` + `postProcessDiplomatBindings` tasks. `DiplomatBridgeTest` (6 tests) passes alongside all 218 existing tests. |
+| Phase 3: Arrow data wrappers | Not started | |
+| Phase 4: Traits in Java backend | Not started | |
+| Phase 5: Catalog/schema/table traits | Not started | |
+| Phase 6: UDF + Listing table traits | Not started | |
+| Phase 7: Remove hand-written FFI | Not started | |
+
+### Phase 2 details
+
+**Files added/changed:**
+
+- `datafusion-ffi-native/Cargo.toml` — Added `diplomat` and `diplomat-runtime` path deps
+- `datafusion-ffi-native/src/lib.rs` — Added `mod bridge;`
+- `datafusion-ffi-native/src/bridge.rs` — New, ~63 lines. Defines `DfSessionContext` (new, sql, session_id, session_start_time_millis), `DfDataFrame` (lifecycle only), `DfError` (to_display). Uses `#[diplomat::abi_rename = "datafusion_{0}"]` to avoid symbol collisions with existing hand-written FFI (`datafusion_DfSessionContext_*` vs `datafusion_context_*`).
+- `diplomat-config.toml` — New. Configures package `org.apache.arrow.datafusion`, dylib name `datafusion_ffi_native`.
+- `datafusion-ffi-java/build.gradle` — Added `generateDiplomatBindings` (Exec), `postProcessDiplomatBindings` (replaces `System.loadLibrary` with `NativeLoader.get()`, makes classes package-private), diplomat generated source set, spotless exclusion for `build/diplomat-generated/**`.
+- `datafusion-ffi-java/src/test/.../FfiEncapsulationTest.java` — Updated `IS_FFI_CLASS` predicate to recognize Diplomat-generated classes (`Df*` prefix in FFI package, `DiplomatLib`). Scoped to `org.apache.arrow.datafusion` package to avoid matching protobuf `DfField`/`DfSchema` classes.
+- `datafusion-ffi-java/src/test/.../DiplomatBridgeTest.java` — New. 6 tests: lifecycle, sessionId, sessionStartTimeMillis, SQL success, SQL error (DfError thrown), sessionId stability across operations.
+
+**Key decisions:**
+
+- Both Diplomat and hand-written FFI coexist in the same shared library. No existing code was modified or removed.
+- Generated Java files go to `build/diplomat-generated/` (not checked in). Post-processing makes them package-private and wires in `NativeLoader`.
+- Diplomat's glob import limitation required moving `use` statements inside the `#[diplomat::bridge]` module.
+
 ## Success Criteria
 
 The POC is successful if:

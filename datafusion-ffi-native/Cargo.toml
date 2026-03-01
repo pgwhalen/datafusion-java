@@ -26,6 +26,8 @@ async-trait = "0.1"
 half = "2"
 prost = "0.14"
 object_store = "0.12"
+diplomat = { path = "/Users/pgwhalen/code/diplomat/macro" }
+diplomat-runtime = { path = "/Users/pgwhalen/code/diplomat/runtime" }
 
 [profile.release]
 lto = true

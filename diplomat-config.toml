@@ -1,0 +1,5 @@
+lib_name = "datafusion"
+
+[java]
+domain = "org.apache.arrow"
+dylib_name = "datafusion_ffi_native"

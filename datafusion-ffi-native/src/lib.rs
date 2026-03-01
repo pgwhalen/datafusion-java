@@ -1,3 +1,4 @@
+mod bridge;
 mod catalog_provider;
 mod data_frame;
 mod error;
