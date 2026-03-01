@@ -116,6 +116,7 @@ pub mod ffi {
     }
 
     impl DfSessionContext {
+        #[diplomat::attr(auto, constructor)]
         pub fn new() -> Box<DfSessionContext> {
             let rt = Runtime::new().expect("Failed to create Tokio runtime");
             let ctx = SessionContext::new();

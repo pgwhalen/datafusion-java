@@ -24,14 +24,14 @@ public class DiplomatBridgeTest {
 
   @Test
   void testCreateAndDestroyContext() {
-    try (DfSessionContext ctx = DfSessionContext.new_()) {
+    try (DfSessionContext ctx = new DfSessionContext()) {
       assertNotNull(ctx);
     }
   }
 
   @Test
   void testSessionId() {
-    try (DfSessionContext ctx = DfSessionContext.new_()) {
+    try (DfSessionContext ctx = new DfSessionContext()) {
       String id = ctx.sessionId();
       assertNotNull(id);
       assertFalse(id.isEmpty());
@@ -41,7 +41,7 @@ public class DiplomatBridgeTest {
   @Test
   void testSessionStartTimeMillis() {
     long before = System.currentTimeMillis();
-    try (DfSessionContext ctx = DfSessionContext.new_()) {
+    try (DfSessionContext ctx = new DfSessionContext()) {
       long startTime = ctx.sessionStartTimeMillis();
       long after = System.currentTimeMillis();
       assertTrue(startTime >= before - 1000);
@@ -51,7 +51,7 @@ public class DiplomatBridgeTest {
 
   @Test
   void testSqlSuccess() {
-    try (DfSessionContext ctx = DfSessionContext.new_()) {
+    try (DfSessionContext ctx = new DfSessionContext()) {
       try (DfDataFrame df = ctx.sql("SELECT 1 + 1 AS result")) {
         assertNotNull(df);
       }
@@ -60,7 +60,7 @@ public class DiplomatBridgeTest {
 
   @Test
   void testSqlError() {
-    try (DfSessionContext ctx = DfSessionContext.new_()) {
+    try (DfSessionContext ctx = new DfSessionContext()) {
       DfError error =
           assertThrows(DfError.class, () -> ctx.sql("SELECT * FROM nonexistent_table_xyz"));
       String msg = error.toDisplay();
@@ -71,7 +71,7 @@ public class DiplomatBridgeTest {
 
   @Test
   void testSessionIdStableAcrossOperations() {
-    try (DfSessionContext ctx = DfSessionContext.new_()) {
+    try (DfSessionContext ctx = new DfSessionContext()) {
       String id1 = ctx.sessionId();
       try (DfDataFrame df = ctx.sql("SELECT 42 AS answer")) {
         assertNotNull(df);
@@ -83,7 +83,7 @@ public class DiplomatBridgeTest {
 
   @Test
   void testCollectToString() {
-    try (DfSessionContext ctx = DfSessionContext.new_()) {
+    try (DfSessionContext ctx = new DfSessionContext()) {
       try (DfDataFrame df = ctx.sql("SELECT 1 AS a, 2 AS b")) {
         String output = df.collectToString();
         assertTrue(output.contains("a"), "Output should contain column 'a': " + output);
@@ -97,7 +97,7 @@ public class DiplomatBridgeTest {
   @Test
   void testRegisterTableAndQuery() {
     try (BufferAllocator allocator = new RootAllocator();
-        DfSessionContext ctx = DfSessionContext.new_()) {
+        DfSessionContext ctx = new DfSessionContext()) {
 
       VectorSchemaRoot root = createTestData(allocator);
       try (ArrowSchema ffiSchema = ArrowSchema.allocateNew(allocator);
@@ -125,7 +125,7 @@ public class DiplomatBridgeTest {
   @Test
   void testRegisterTableAggregate() {
     try (BufferAllocator allocator = new RootAllocator();
-        DfSessionContext ctx = DfSessionContext.new_()) {
+        DfSessionContext ctx = new DfSessionContext()) {
 
       VectorSchemaRoot root = createTestData(allocator);
       try (ArrowSchema ffiSchema = ArrowSchema.allocateNew(allocator);
@@ -150,7 +150,7 @@ public class DiplomatBridgeTest {
   @Test
   void testParseSqlExpr() {
     try (BufferAllocator allocator = new RootAllocator();
-        DfSessionContext ctx = DfSessionContext.new_()) {
+        DfSessionContext ctx = new DfSessionContext()) {
 
       Schema schema =
           new Schema(
@@ -189,7 +189,7 @@ public class DiplomatBridgeTest {
   @Test
   void testParseSqlExprError() {
     try (BufferAllocator allocator = new RootAllocator();
-        DfSessionContext ctx = DfSessionContext.new_()) {
+        DfSessionContext ctx = new DfSessionContext()) {
 
       Schema schema = new Schema(List.of());
 
