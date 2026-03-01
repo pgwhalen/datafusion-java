@@ -157,6 +157,48 @@ final class SessionContextFfi implements AutoCloseable {
               ValueLayout.JAVA_LONG.withName("target_partitions"),
               ValueLayout.ADDRESS.withName("error_out")));
 
+  // ── Phase 4: SessionContext readers ──
+
+  private static final MethodHandle CONTEXT_TABLE =
+      NativeUtil.downcall(
+          "datafusion_context_table",
+          FunctionDescriptor.of(
+              ValueLayout.ADDRESS,
+              ValueLayout.ADDRESS.withName("rt"),
+              ValueLayout.ADDRESS.withName("ctx"),
+              ValueLayout.ADDRESS.withName("name"),
+              ValueLayout.ADDRESS.withName("error_out")));
+
+  private static final MethodHandle CONTEXT_READ_PARQUET =
+      NativeUtil.downcall(
+          "datafusion_context_read_parquet",
+          FunctionDescriptor.of(
+              ValueLayout.ADDRESS,
+              ValueLayout.ADDRESS.withName("rt"),
+              ValueLayout.ADDRESS.withName("ctx"),
+              ValueLayout.ADDRESS.withName("path"),
+              ValueLayout.ADDRESS.withName("error_out")));
+
+  private static final MethodHandle CONTEXT_READ_CSV =
+      NativeUtil.downcall(
+          "datafusion_context_read_csv",
+          FunctionDescriptor.of(
+              ValueLayout.ADDRESS,
+              ValueLayout.ADDRESS.withName("rt"),
+              ValueLayout.ADDRESS.withName("ctx"),
+              ValueLayout.ADDRESS.withName("path"),
+              ValueLayout.ADDRESS.withName("error_out")));
+
+  private static final MethodHandle CONTEXT_READ_JSON =
+      NativeUtil.downcall(
+          "datafusion_context_read_json",
+          FunctionDescriptor.of(
+              ValueLayout.ADDRESS,
+              ValueLayout.ADDRESS.withName("rt"),
+              ValueLayout.ADDRESS.withName("ctx"),
+              ValueLayout.ADDRESS.withName("path"),
+              ValueLayout.ADDRESS.withName("error_out")));
+
   private final MemorySegment runtime;
   private final MemorySegment context;
   private final SessionConfig config;
@@ -340,7 +382,7 @@ final class SessionContextFfi implements AutoCloseable {
                       CONTEXT_SQL.invokeExact(runtime, context, querySegment, errorOut));
 
       logger.debug("Executed SQL query, got DataFrame: {}", dataframe);
-      return new DataFrameFfi(runtime, dataframe);
+      return new DataFrameFfi(runtime, dataframe, context);
     } catch (DataFusionException e) {
       throw e;
     } catch (Throwable e) {
@@ -582,6 +624,86 @@ final class SessionContextFfi implements AutoCloseable {
       throw e;
     } catch (Throwable e) {
       throw new DataFusionException("Failed to register UDF", e);
+    }
+  }
+
+  /**
+   * Creates a DataFrame for a registered table.
+   *
+   * @param name The table name
+   * @return A DataFrameFfi wrapping the native runtime and dataframe pointers
+   * @throws DataFusionException if the table is not found
+   */
+  DataFrameFfi table(String name) {
+    try (Arena arena = Arena.ofConfined()) {
+      MemorySegment nameSegment = arena.allocateFrom(name);
+
+      MemorySegment dataframe =
+          NativeUtil.callForPointer(
+              arena,
+              "Table reference",
+              errorOut ->
+                  (MemorySegment)
+                      CONTEXT_TABLE.invokeExact(runtime, context, nameSegment, errorOut));
+
+      logger.debug("Got DataFrame for table '{}': {}", name, dataframe);
+      return new DataFrameFfi(runtime, dataframe, context);
+    } catch (DataFusionException e) {
+      throw e;
+    } catch (Throwable e) {
+      throw new DataFusionException("Failed to get table", e);
+    }
+  }
+
+  /**
+   * Reads a Parquet file/directory into a DataFrame.
+   *
+   * @param path The file or directory path
+   * @return A DataFrameFfi wrapping the native runtime and dataframe pointers
+   * @throws DataFusionException if reading fails
+   */
+  DataFrameFfi readParquet(String path) {
+    return readFile(CONTEXT_READ_PARQUET, path, "Parquet");
+  }
+
+  /**
+   * Reads a CSV file/directory into a DataFrame.
+   *
+   * @param path The file or directory path
+   * @return A DataFrameFfi wrapping the native runtime and dataframe pointers
+   * @throws DataFusionException if reading fails
+   */
+  DataFrameFfi readCsv(String path) {
+    return readFile(CONTEXT_READ_CSV, path, "CSV");
+  }
+
+  /**
+   * Reads a JSON file/directory into a DataFrame.
+   *
+   * @param path The file or directory path
+   * @return A DataFrameFfi wrapping the native runtime and dataframe pointers
+   * @throws DataFusionException if reading fails
+   */
+  DataFrameFfi readJson(String path) {
+    return readFile(CONTEXT_READ_JSON, path, "JSON");
+  }
+
+  private DataFrameFfi readFile(MethodHandle handle, String path, String format) {
+    try (Arena arena = Arena.ofConfined()) {
+      MemorySegment pathSegment = arena.allocateFrom(path);
+
+      MemorySegment dataframe =
+          NativeUtil.callForPointer(
+              arena,
+              "Read " + format,
+              errorOut -> (MemorySegment) handle.invoke(runtime, context, pathSegment, errorOut));
+
+      logger.debug("Read {} file '{}', got DataFrame: {}", format, path, dataframe);
+      return new DataFrameFfi(runtime, dataframe, context);
+    } catch (DataFusionException e) {
+      throw e;
+    } catch (Throwable e) {
+      throw new DataFusionException("Failed to read " + format + " file", e);
     }
   }
 

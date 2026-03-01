@@ -25,6 +25,176 @@ import org.apache.arrow.vector.types.pojo.ArrowType;
  */
 public sealed interface Expr {
 
+  // ── Comparison ──
+
+  /** Equality: this = other */
+  default Expr eq(Expr other) {
+    return new BinaryExpr(this, Operator.Eq, other);
+  }
+
+  /** Not equal: this != other */
+  default Expr notEq(Expr other) {
+    return new BinaryExpr(this, Operator.NotEq, other);
+  }
+
+  /** Less than: this &lt; other */
+  default Expr lt(Expr other) {
+    return new BinaryExpr(this, Operator.Lt, other);
+  }
+
+  /** Less than or equal: this &lt;= other */
+  default Expr ltEq(Expr other) {
+    return new BinaryExpr(this, Operator.LtEq, other);
+  }
+
+  /** Greater than: this &gt; other */
+  default Expr gt(Expr other) {
+    return new BinaryExpr(this, Operator.Gt, other);
+  }
+
+  /** Greater than or equal: this &gt;= other */
+  default Expr gtEq(Expr other) {
+    return new BinaryExpr(this, Operator.GtEq, other);
+  }
+
+  // ── Logical ──
+
+  /** Logical AND: this AND other */
+  default Expr and(Expr other) {
+    return new BinaryExpr(this, Operator.And, other);
+  }
+
+  /** Logical OR: this OR other */
+  default Expr or(Expr other) {
+    return new BinaryExpr(this, Operator.Or, other);
+  }
+
+  /** Logical NOT: NOT this */
+  default Expr not() {
+    return new NotExpr(this);
+  }
+
+  // ── Arithmetic ──
+
+  /** Addition: this + other */
+  default Expr plus(Expr other) {
+    return new BinaryExpr(this, Operator.Plus, other);
+  }
+
+  /** Subtraction: this - other */
+  default Expr minus(Expr other) {
+    return new BinaryExpr(this, Operator.Minus, other);
+  }
+
+  /** Multiplication: this * other */
+  default Expr multiply(Expr other) {
+    return new BinaryExpr(this, Operator.Multiply, other);
+  }
+
+  /** Division: this / other */
+  default Expr divide(Expr other) {
+    return new BinaryExpr(this, Operator.Divide, other);
+  }
+
+  /** Modulo: this % other */
+  default Expr modulo(Expr other) {
+    return new BinaryExpr(this, Operator.Modulo, other);
+  }
+
+  /** Unary negation: -this */
+  default Expr negate() {
+    return new NegativeExpr(this);
+  }
+
+  // ── Pattern matching ──
+
+  /** SQL LIKE pattern match */
+  default Expr like(Expr pattern) {
+    return new LikeExpr(false, this, pattern, null, false);
+  }
+
+  /** SQL NOT LIKE pattern match */
+  default Expr notLike(Expr pattern) {
+    return new LikeExpr(true, this, pattern, null, false);
+  }
+
+  /** Case-insensitive LIKE (ILIKE) */
+  default Expr ilike(Expr pattern) {
+    return new LikeExpr(false, this, pattern, null, true);
+  }
+
+  // ── NULL checks ──
+
+  /** IS NULL */
+  default Expr isNull() {
+    return new IsNullExpr(this);
+  }
+
+  /** IS NOT NULL */
+  default Expr isNotNull() {
+    return new IsNotNullExpr(this);
+  }
+
+  /** IS TRUE */
+  default Expr isTrue() {
+    return new IsTrueExpr(this);
+  }
+
+  /** IS FALSE */
+  default Expr isFalse() {
+    return new IsFalseExpr(this);
+  }
+
+  // ── IN list ──
+
+  /** IN (value1, value2, ...) */
+  default Expr inList(List<Expr> values) {
+    return new InListExpr(this, values, false);
+  }
+
+  /** NOT IN (value1, value2, ...) */
+  default Expr notInList(List<Expr> values) {
+    return new InListExpr(this, values, true);
+  }
+
+  // ── BETWEEN ──
+
+  /** BETWEEN low AND high */
+  default Expr between(Expr low, Expr high) {
+    return new BetweenExpr(this, false, low, high);
+  }
+
+  /** NOT BETWEEN low AND high */
+  default Expr notBetween(Expr low, Expr high) {
+    return new BetweenExpr(this, true, low, high);
+  }
+
+  // ── Aliasing ──
+
+  /** Alias this expression: expr AS name */
+  default Expr alias(String name) {
+    return new AliasExpr(this, name, List.of());
+  }
+
+  // ── Sorting ──
+
+  /** Sort ascending, nulls last (default) */
+  default SortExpr sortAsc() {
+    return new SortExpr(this, true, false);
+  }
+
+  /** Sort descending, nulls first (default) */
+  default SortExpr sortDesc() {
+    return new SortExpr(this, false, true);
+  }
+
+  /** Sort with explicit control */
+  default SortExpr sort(boolean asc, boolean nullsFirst) {
+    return new SortExpr(this, asc, nullsFirst);
+  }
+
+  // ── Record types ──
+
   /**
    * An alias expression ({@code Expr::Alias}).
    *

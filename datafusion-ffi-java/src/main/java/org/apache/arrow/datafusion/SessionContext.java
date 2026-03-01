@@ -199,6 +199,56 @@ public class SessionContext implements AutoCloseable {
   }
 
   /**
+   * Creates a DataFrame for a registered table.
+   *
+   * <p>Equivalent to Rust's {@code ctx.table("name")}.
+   *
+   * @param name The table name
+   * @return A DataFrame for the specified table
+   * @throws DataFusionException if the table is not found
+   */
+  public DataFrame table(String name) {
+    checkNotClosed();
+    return new DataFrame(ffi.table(name));
+  }
+
+  /**
+   * Reads a Parquet file/directory into a DataFrame.
+   *
+   * @param path The file or directory path
+   * @return A DataFrame for the Parquet data
+   * @throws DataFusionException if reading fails
+   */
+  public DataFrame readParquet(String path) {
+    checkNotClosed();
+    return new DataFrame(ffi.readParquet(path));
+  }
+
+  /**
+   * Reads a CSV file/directory into a DataFrame.
+   *
+   * @param path The file or directory path
+   * @return A DataFrame for the CSV data
+   * @throws DataFusionException if reading fails
+   */
+  public DataFrame readCsv(String path) {
+    checkNotClosed();
+    return new DataFrame(ffi.readCsv(path));
+  }
+
+  /**
+   * Reads a JSON file/directory into a DataFrame.
+   *
+   * @param path The file or directory path
+   * @return A DataFrame for the JSON data
+   * @throws DataFusionException if reading fails
+   */
+  public DataFrame readJson(String path) {
+    checkNotClosed();
+    return new DataFrame(ffi.readJson(path));
+  }
+
+  /**
    * Creates a snapshot of this session's state.
    *
    * <p>The returned SessionState owns its own Tokio runtime and can outlive this SessionContext.

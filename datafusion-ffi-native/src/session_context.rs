@@ -795,6 +795,139 @@ pub unsafe extern "C" fn datafusion_context_parse_sql_expr(
     0
 }
 
+// ============================================================================
+// Phase 4: Table reference and file readers
+// ============================================================================
+
+/// Create a DataFrame for a registered table.
+///
+/// # Arguments
+/// * `rt` - Pointer to the Tokio runtime
+/// * `ctx` - Pointer to the SessionContext
+/// * `name` - Table name (null-terminated C string)
+/// * `error_out` - Pointer to receive error message
+///
+/// # Returns
+/// Pointer to DataFrame on success, null on error.
+#[no_mangle]
+pub unsafe extern "C" fn datafusion_context_table(
+    rt: *mut c_void,
+    ctx: *mut c_void,
+    name: *const c_char,
+    error_out: *mut *mut c_char,
+) -> *mut c_void {
+    clear_error(error_out);
+
+    if rt.is_null() || ctx.is_null() || name.is_null() {
+        return set_error_return_null(error_out, "Null pointer argument");
+    }
+
+    let runtime = &*(rt as *mut Runtime);
+    let context = &*(ctx as *mut SessionContext);
+
+    let name_str = match CStr::from_ptr(name).to_str() {
+        Ok(s) => s,
+        Err(e) => return set_error_return_null(error_out, &format!("Invalid table name: {}", e)),
+    };
+
+    runtime.block_on(async {
+        match context.table(name_str).await {
+            Ok(df) => Box::into_raw(Box::new(df)) as *mut c_void,
+            Err(e) => set_error_return_null(error_out, &format!("Table '{}' failed: {}", name_str, e)),
+        }
+    })
+}
+
+/// Read a Parquet file/directory into a DataFrame.
+#[no_mangle]
+pub unsafe extern "C" fn datafusion_context_read_parquet(
+    rt: *mut c_void,
+    ctx: *mut c_void,
+    path: *const c_char,
+    error_out: *mut *mut c_char,
+) -> *mut c_void {
+    clear_error(error_out);
+
+    if rt.is_null() || ctx.is_null() || path.is_null() {
+        return set_error_return_null(error_out, "Null pointer argument");
+    }
+
+    let runtime = &*(rt as *mut Runtime);
+    let context = &*(ctx as *mut SessionContext);
+
+    let path_str = match CStr::from_ptr(path).to_str() {
+        Ok(s) => s,
+        Err(e) => return set_error_return_null(error_out, &format!("Invalid path: {}", e)),
+    };
+
+    runtime.block_on(async {
+        match context.read_parquet(path_str, Default::default()).await {
+            Ok(df) => Box::into_raw(Box::new(df)) as *mut c_void,
+            Err(e) => set_error_return_null(error_out, &format!("Read parquet failed: {}", e)),
+        }
+    })
+}
+
+/// Read a CSV file/directory into a DataFrame.
+#[no_mangle]
+pub unsafe extern "C" fn datafusion_context_read_csv(
+    rt: *mut c_void,
+    ctx: *mut c_void,
+    path: *const c_char,
+    error_out: *mut *mut c_char,
+) -> *mut c_void {
+    clear_error(error_out);
+
+    if rt.is_null() || ctx.is_null() || path.is_null() {
+        return set_error_return_null(error_out, "Null pointer argument");
+    }
+
+    let runtime = &*(rt as *mut Runtime);
+    let context = &*(ctx as *mut SessionContext);
+
+    let path_str = match CStr::from_ptr(path).to_str() {
+        Ok(s) => s,
+        Err(e) => return set_error_return_null(error_out, &format!("Invalid path: {}", e)),
+    };
+
+    runtime.block_on(async {
+        match context.read_csv(path_str, Default::default()).await {
+            Ok(df) => Box::into_raw(Box::new(df)) as *mut c_void,
+            Err(e) => set_error_return_null(error_out, &format!("Read CSV failed: {}", e)),
+        }
+    })
+}
+
+/// Read a JSON file/directory into a DataFrame.
+#[no_mangle]
+pub unsafe extern "C" fn datafusion_context_read_json(
+    rt: *mut c_void,
+    ctx: *mut c_void,
+    path: *const c_char,
+    error_out: *mut *mut c_char,
+) -> *mut c_void {
+    clear_error(error_out);
+
+    if rt.is_null() || ctx.is_null() || path.is_null() {
+        return set_error_return_null(error_out, "Null pointer argument");
+    }
+
+    let runtime = &*(rt as *mut Runtime);
+    let context = &*(ctx as *mut SessionContext);
+
+    let path_str = match CStr::from_ptr(path).to_str() {
+        Ok(s) => s,
+        Err(e) => return set_error_return_null(error_out, &format!("Invalid path: {}", e)),
+    };
+
+    runtime.block_on(async {
+        match context.read_json(path_str, Default::default()).await {
+            Ok(df) => Box::into_raw(Box::new(df)) as *mut c_void,
+            Err(e) => set_error_return_null(error_out, &format!("Read JSON failed: {}", e)),
+        }
+    })
+}
+
 /// Thin wrapper that delegates `ScalarUDFImpl` to an `Arc<dyn ScalarUDFImpl>`.
 ///
 /// Needed because `ScalarUDF::new_from_impl` requires a concrete `F: ScalarUDFImpl`,
