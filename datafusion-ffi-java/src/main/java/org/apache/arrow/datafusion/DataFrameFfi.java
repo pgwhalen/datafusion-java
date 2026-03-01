@@ -278,6 +278,16 @@ final class DataFrameFfi implements AutoCloseable {
               ValueLayout.ADDRESS.withName("path"),
               ValueLayout.ADDRESS.withName("error_out")));
 
+  private static final MethodHandle DATAFRAME_WRITE_JSON =
+      NativeUtil.downcall(
+          "datafusion_dataframe_write_json",
+          FunctionDescriptor.of(
+              ValueLayout.JAVA_INT,
+              ValueLayout.ADDRESS.withName("rt"),
+              ValueLayout.ADDRESS.withName("df"),
+              ValueLayout.ADDRESS.withName("path"),
+              ValueLayout.ADDRESS.withName("error_out")));
+
   private final MemorySegment runtime;
   private final MemorySegment dataframe;
   private final MemorySegment context;
@@ -718,6 +728,22 @@ final class DataFrameFfi implements AutoCloseable {
       throw e;
     } catch (Throwable e) {
       throw new DataFusionException("Failed to write csv", e);
+    }
+  }
+
+  void writeJson(String path) {
+    checkNotClosed();
+    try (Arena arena = Arena.ofConfined()) {
+      MemorySegment pathSegment = arena.allocateFrom(path);
+      NativeUtil.call(
+          arena,
+          "DataFrame write_json",
+          errorOut ->
+              (int) DATAFRAME_WRITE_JSON.invokeExact(runtime, dataframe, pathSegment, errorOut));
+    } catch (DataFusionException e) {
+      throw e;
+    } catch (Throwable e) {
+      throw new DataFusionException("Failed to write json", e);
     }
   }
 

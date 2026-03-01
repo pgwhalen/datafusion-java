@@ -962,6 +962,40 @@ public class DataFrameTest {
     }
   }
 
+  @Test
+  void testWriteJson(@TempDir Path tempDir) throws IOException {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+      registerEmployees(ctx, allocator);
+
+      Path outDir = tempDir.resolve("output.json");
+      try (DataFrame df = ctx.sql("SELECT * FROM employees")) {
+        df.writeJson(outDir.toString());
+      }
+
+      // Read back and verify
+      try (DataFrame df = ctx.readJson(outDir.toString()).sort(col("age").sortAsc());
+          RecordBatchStream stream = df.executeStream(allocator)) {
+        assertTrue(stream.loadNextBatch());
+        VectorSchemaRoot root = stream.getVectorSchemaRoot();
+        assertEquals(3, root.getRowCount());
+
+        BigIntVector age = (BigIntVector) root.getVector("age");
+        VarCharVector name = (VarCharVector) root.getVector("name");
+        BigIntVector salary = (BigIntVector) root.getVector("salary");
+        assertEquals(25, age.get(0));
+        assertEquals("Bob", name.getObject(0).toString());
+        assertEquals(30000, salary.get(0));
+        assertEquals(30, age.get(1));
+        assertEquals("Alice", name.getObject(1).toString());
+        assertEquals(50000, salary.get(1));
+        assertEquals(35, age.get(2));
+        assertEquals("Charlie", name.getObject(2).toString());
+        assertEquals(70000, salary.get(2));
+      }
+    }
+  }
+
   // ==========================================================================
   // Phase 5: Advanced features
   // ==========================================================================

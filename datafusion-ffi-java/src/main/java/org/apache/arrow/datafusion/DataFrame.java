@@ -323,6 +323,16 @@ public class DataFrame implements AutoCloseable {
     ffi.writeCsv(path);
   }
 
+  /**
+   * Write results to a JSON file.
+   *
+   * @param path path to write the JSON file to
+   * @throws DataFusionException if writing fails
+   */
+  public void writeJson(String path) {
+    ffi.writeJson(path);
+  }
+
   // ── Terminal operations ──
 
   /**
