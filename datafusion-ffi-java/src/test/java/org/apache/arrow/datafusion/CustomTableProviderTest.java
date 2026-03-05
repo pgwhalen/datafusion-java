@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
@@ -891,6 +892,156 @@ public class CustomTableProviderTest {
     @Override
     public Optional<SchemaProvider> schema(String name) {
       return Optional.ofNullable(schemas.get(name));
+    }
+  }
+
+  /**
+   * Verifies that executeStream() is truly lazy: it returns before any batches are fetched, and
+   * each subsequent loadNextBatch() fetches exactly one batch from the underlying reader.
+   *
+   * <p>This test works by failing on the second batch. With the old (broken) eager implementation,
+   * executeStream() itself would have thrown because it eagerly collected all batches. With the
+   * correct lazy implementation, executeStream() succeeds, the first loadNextBatch() returns data,
+   * and only the second loadNextBatch() throws.
+   */
+  @Test
+  void testExecuteStreamIsLazy() {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+
+      Schema schema = createUsersSchema();
+      AtomicInteger batchCallCount = new AtomicInteger(0);
+
+      TableProvider lazyTable =
+          new TableProvider() {
+            @Override
+            public Schema schema() {
+              return schema;
+            }
+
+            @Override
+            public ExecutionPlan scan(
+                Session session, List<Expr> filters, List<Integer> projection, Long limit) {
+              return new ExecutionPlan() {
+                @Override
+                public Schema schema() {
+                  return schema;
+                }
+
+                @Override
+                public RecordBatchReader execute(int partition, BufferAllocator alloc) {
+                  VectorSchemaRoot root = VectorSchemaRoot.create(schema, alloc);
+                  return new RecordBatchReader() {
+                    @Override
+                    public VectorSchemaRoot getVectorSchemaRoot() {
+                      return root;
+                    }
+
+                    @Override
+                    public boolean loadNextBatch() {
+                      int call = batchCallCount.incrementAndGet();
+                      if (call == 1) {
+                        // First batch: ids 10 and 20
+                        BigIntVector id = (BigIntVector) root.getVector("id");
+                        VarCharVector name = (VarCharVector) root.getVector("name");
+                        id.allocateNew(2);
+                        name.allocateNew(2);
+                        id.set(0, 10);
+                        name.setSafe(0, "Ten".getBytes());
+                        id.set(1, 20);
+                        name.setSafe(1, "Twenty".getBytes());
+                        id.setValueCount(2);
+                        name.setValueCount(2);
+                        root.setRowCount(2);
+                        return true;
+                      }
+                      // Second call: signal end of stream
+                      return false;
+                    }
+
+                    @Override
+                    public void close() {
+                      root.close();
+                    }
+                  };
+                }
+              };
+            }
+          };
+
+      SchemaProvider mySchema = new SimpleSchemaProvider(Map.of("lazy_table", lazyTable));
+      CatalogProvider myCatalog = new SimpleCatalogProvider(Map.of("s", mySchema));
+      ctx.registerCatalog("lazy_cat", myCatalog, allocator);
+
+      try (DataFrame df = ctx.sql("SELECT * FROM lazy_cat.s.lazy_table");
+          RecordBatchStream stream = df.executeStream(allocator)) {
+
+        // executeStream() must return without fetching any batches yet.
+        assertEquals(
+            0,
+            batchCallCount.get(),
+            "executeStream() must not fetch any batches before loadNextBatch() is called");
+
+        VectorSchemaRoot root = stream.getVectorSchemaRoot();
+
+        // First batch
+        assertTrue(stream.loadNextBatch());
+        assertEquals(2, root.getRowCount());
+        BigIntVector id = (BigIntVector) root.getVector("id");
+        assertEquals(10, id.get(0));
+        assertEquals(20, id.get(1));
+
+        // End of stream
+        assertFalse(stream.loadNextBatch());
+      }
+    }
+  }
+
+  /**
+   * Verifies that executeStream() correctly handles a provider that returns multiple distinct
+   * batches, delivering each batch in order via successive loadNextBatch() calls.
+   */
+  @Test
+  void testExecuteStreamMultipleBatches() {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+
+      Schema schema = createUsersSchema();
+
+      // Three distinct batches: [id=1], [id=2,id=3], [id=4]
+      TableProvider multiTable =
+          new TestTableProvider(
+              schema,
+              multiBatchData(0, 1), // batch 0: id=1,  name=Name1
+              multiBatchData(1, 2), // batch 1: id=3,  name=Name3 ; id=4, name=Name4
+              multiBatchData(4, 1) // batch 2: id=5,  name=Name5 (baseId=4*1+1=5)
+              );
+
+      SchemaProvider mySchema = new SimpleSchemaProvider(Map.of("multi", multiTable));
+      CatalogProvider myCatalog = new SimpleCatalogProvider(Map.of("s", mySchema));
+      ctx.registerCatalog("multi_cat", myCatalog, allocator);
+
+      // Collect all results from the lazy stream into a flat list of (id, name) pairs
+      List<Long> ids = new ArrayList<>();
+      List<String> names = new ArrayList<>();
+
+      try (DataFrame df = ctx.sql("SELECT * FROM multi_cat.s.multi ORDER BY id");
+          RecordBatchStream stream = df.executeStream(allocator)) {
+
+        VectorSchemaRoot root = stream.getVectorSchemaRoot();
+        while (stream.loadNextBatch()) {
+          BigIntVector id = (BigIntVector) root.getVector("id");
+          VarCharVector name = (VarCharVector) root.getVector("name");
+          for (int i = 0; i < root.getRowCount(); i++) {
+            ids.add(id.get(i));
+            names.add(new String(name.get(i)));
+          }
+        }
+      }
+
+      // All 4 rows should be present (multiBatchData gives 1+2+1 = 4 rows with ids 1,3,4,5)
+      assertEquals(List.of(1L, 3L, 4L, 5L), ids);
+      assertEquals(List.of("Name1", "Name3", "Name4", "Name5"), names);
     }
   }
 

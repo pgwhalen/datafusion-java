@@ -14,7 +14,7 @@ import org.apache.arrow.vector.types.pojo.Schema;
  * tables and executing SQL queries.
  */
 public class SessionContext implements AutoCloseable {
-  private final SessionContextFfi ffi;
+  private final SessionContextBridge bridge;
   private volatile boolean closed = false;
 
   /** Creates a new session context with default configuration. */
@@ -28,12 +28,12 @@ public class SessionContext implements AutoCloseable {
    * @param config the session configuration
    */
   public SessionContext(SessionConfig config) {
-    this.ffi = new SessionContextFfi(config);
+    this.bridge = new SessionContextBridge(config);
   }
 
-  /** Package-private constructor that wraps an existing SessionContextFfi. */
-  SessionContext(SessionContextFfi ffi) {
-    this.ffi = ffi;
+  /** Package-private constructor that wraps an existing bridge. */
+  SessionContext(SessionContextBridge bridge) {
+    this.bridge = bridge;
   }
 
   /**
@@ -85,7 +85,7 @@ public class SessionContext implements AutoCloseable {
    * @throws DataFusionException if context creation fails
    */
   public static SessionContext newWithConfigRt(SessionConfig config, RuntimeEnv runtimeEnv) {
-    return new SessionContext(new SessionContextFfi(config, runtimeEnv.ffi));
+    return new SessionContext(new SessionContextBridge(config, runtimeEnv.bridge.dfRuntimeEnv()));
   }
 
   /**
@@ -112,7 +112,7 @@ public class SessionContext implements AutoCloseable {
   public void registerTable(
       String name, VectorSchemaRoot root, DictionaryProvider provider, BufferAllocator allocator) {
     checkNotClosed();
-    ffi.registerTable(name, root, provider, allocator);
+    bridge.registerTable(name, root, provider, allocator);
   }
 
   /**
@@ -124,7 +124,7 @@ public class SessionContext implements AutoCloseable {
    */
   public DataFrame sql(String query) {
     checkNotClosed();
-    return new DataFrame(ffi.sql(query));
+    return new DataFrame(bridge.sql(query));
   }
 
   /**
@@ -145,7 +145,7 @@ public class SessionContext implements AutoCloseable {
    */
   public void registerCatalog(String name, CatalogProvider catalog, BufferAllocator allocator) {
     checkNotClosed();
-    ffi.registerCatalog(name, catalog, allocator);
+    bridge.registerCatalog(name, catalog, allocator);
   }
 
   /**
@@ -169,7 +169,7 @@ public class SessionContext implements AutoCloseable {
    */
   public void registerUdf(ScalarUdf udf, BufferAllocator allocator) {
     checkNotClosed();
-    ffi.registerUdf(udf, allocator);
+    bridge.registerUdf(udf, allocator);
   }
 
   /**
@@ -195,7 +195,7 @@ public class SessionContext implements AutoCloseable {
    */
   public void registerListingTable(String name, ListingTable table, BufferAllocator allocator) {
     checkNotClosed();
-    ffi.registerListingTable(name, table, allocator);
+    bridge.registerListingTable(name, table, allocator);
   }
 
   /**
@@ -209,7 +209,7 @@ public class SessionContext implements AutoCloseable {
    */
   public DataFrame table(String name) {
     checkNotClosed();
-    return new DataFrame(ffi.table(name));
+    return new DataFrame(bridge.table(name));
   }
 
   /**
@@ -221,7 +221,7 @@ public class SessionContext implements AutoCloseable {
    */
   public DataFrame readParquet(String path) {
     checkNotClosed();
-    return new DataFrame(ffi.readParquet(path));
+    return new DataFrame(bridge.readParquet(path));
   }
 
   /**
@@ -233,7 +233,7 @@ public class SessionContext implements AutoCloseable {
    */
   public DataFrame readCsv(String path) {
     checkNotClosed();
-    return new DataFrame(ffi.readCsv(path));
+    return new DataFrame(bridge.readCsv(path));
   }
 
   /**
@@ -245,7 +245,7 @@ public class SessionContext implements AutoCloseable {
    */
   public DataFrame readJson(String path) {
     checkNotClosed();
-    return new DataFrame(ffi.readJson(path));
+    return new DataFrame(bridge.readJson(path));
   }
 
   /**
@@ -258,7 +258,7 @@ public class SessionContext implements AutoCloseable {
    */
   public SessionState state() {
     checkNotClosed();
-    return new SessionState(ffi.state());
+    return new SessionState(bridge.state());
   }
 
   /**
@@ -281,7 +281,7 @@ public class SessionContext implements AutoCloseable {
    */
   public Expr parseSqlExpr(String sql, Schema schema) {
     checkNotClosed();
-    return ffi.parseSqlExpr(sql, schema);
+    return bridge.parseSqlExpr(sql, schema);
   }
 
   /**
@@ -292,7 +292,7 @@ public class SessionContext implements AutoCloseable {
    */
   public String sessionId() {
     checkNotClosed();
-    return ffi.sessionId();
+    return bridge.sessionId();
   }
 
   /**
@@ -303,7 +303,7 @@ public class SessionContext implements AutoCloseable {
    */
   public Instant sessionStartTime() {
     checkNotClosed();
-    return Instant.ofEpochMilli(ffi.sessionStartTimeMillis());
+    return Instant.ofEpochMilli(bridge.sessionStartTimeMillis());
   }
 
   private void checkNotClosed() {
@@ -316,7 +316,7 @@ public class SessionContext implements AutoCloseable {
   public void close() {
     if (!closed) {
       closed = true;
-      ffi.close();
+      bridge.close();
     }
   }
 }

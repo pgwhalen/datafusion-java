@@ -34,10 +34,10 @@ import org.apache.arrow.vector.types.pojo.Schema;
  * }</pre>
  */
 public class DataFrame implements AutoCloseable {
-  private final DataFrameFfi ffi;
+  private final DataFrameBridge bridge;
 
-  DataFrame(DataFrameFfi ffi) {
-    this.ffi = ffi;
+  DataFrame(DataFrameBridge bridge) {
+    this.bridge = bridge;
   }
 
   // ── Projection ──
@@ -57,8 +57,8 @@ public class DataFrame implements AutoCloseable {
    * <p>Consumes this DataFrame. The source must not be used after this call.
    */
   public DataFrame select(List<Expr> exprs) {
-    DataFrameFfi result = ffi.select(exprs);
-    ffi.close();
+    DataFrameBridge result = bridge.select(exprs);
+    bridge.close();
     return new DataFrame(result);
   }
 
@@ -80,8 +80,8 @@ public class DataFrame implements AutoCloseable {
    * <p>Consumes this DataFrame. The source must not be used after this call.
    */
   public DataFrame filter(Expr predicate) {
-    DataFrameFfi result = ffi.filter(predicate);
-    ffi.close();
+    DataFrameBridge result = bridge.filter(predicate);
+    bridge.close();
     return new DataFrame(result);
   }
 
@@ -102,8 +102,8 @@ public class DataFrame implements AutoCloseable {
    * <p>Consumes this DataFrame. The source must not be used after this call.
    */
   public DataFrame sort(List<SortExpr> sortExprs) {
-    DataFrameFfi result = ffi.sort(sortExprs);
-    ffi.close();
+    DataFrameBridge result = bridge.sort(sortExprs);
+    bridge.close();
     return new DataFrame(result);
   }
 
@@ -119,8 +119,8 @@ public class DataFrame implements AutoCloseable {
    */
   public DataFrame limit(int skip, Integer fetch) {
     long fetchValue = (fetch == null) ? -1L : fetch.longValue();
-    DataFrameFfi result = ffi.limit(skip, fetchValue);
-    ffi.close();
+    DataFrameBridge result = bridge.limit(skip, fetchValue);
+    bridge.close();
     return new DataFrame(result);
   }
 
@@ -135,8 +135,8 @@ public class DataFrame implements AutoCloseable {
    * @param aggrExprs aggregate expressions (e.g., {@code avg(col("salary"))})
    */
   public DataFrame aggregate(List<Expr> groupExprs, List<Expr> aggrExprs) {
-    DataFrameFfi result = ffi.aggregate(groupExprs, aggrExprs);
-    ffi.close();
+    DataFrameBridge result = bridge.aggregate(groupExprs, aggrExprs);
+    bridge.close();
     return new DataFrame(result);
   }
 
@@ -155,8 +155,8 @@ public class DataFrame implements AutoCloseable {
    */
   public DataFrame join(
       DataFrame right, JoinType joinType, List<String> leftCols, List<String> rightCols) {
-    DataFrameFfi result = ffi.join(right.ffi, joinType, leftCols, rightCols, null);
-    ffi.close();
+    DataFrameBridge result = bridge.join(right.bridge, joinType, leftCols, rightCols, null);
+    bridge.close();
     return new DataFrame(result);
   }
 
@@ -178,8 +178,8 @@ public class DataFrame implements AutoCloseable {
       List<String> leftCols,
       List<String> rightCols,
       Expr filter) {
-    DataFrameFfi result = ffi.join(right.ffi, joinType, leftCols, rightCols, filter);
-    ffi.close();
+    DataFrameBridge result = bridge.join(right.bridge, joinType, leftCols, rightCols, filter);
+    bridge.close();
     return new DataFrame(result);
   }
 
@@ -194,8 +194,8 @@ public class DataFrame implements AutoCloseable {
    * @param onExprs join condition expressions
    */
   public DataFrame joinOn(DataFrame right, JoinType joinType, List<Expr> onExprs) {
-    DataFrameFfi result = ffi.joinOn(right.ffi, joinType, onExprs);
-    ffi.close();
+    DataFrameBridge result = bridge.joinOn(right.bridge, joinType, onExprs);
+    bridge.close();
     return new DataFrame(result);
   }
 
@@ -207,8 +207,8 @@ public class DataFrame implements AutoCloseable {
    * <p>Consumes this DataFrame. The source must not be used after this call.
    */
   public DataFrame union(DataFrame other) {
-    DataFrameFfi result = ffi.union(other.ffi);
-    ffi.close();
+    DataFrameBridge result = bridge.union(other.bridge);
+    bridge.close();
     return new DataFrame(result);
   }
 
@@ -218,8 +218,8 @@ public class DataFrame implements AutoCloseable {
    * <p>Consumes this DataFrame. The source must not be used after this call.
    */
   public DataFrame unionDistinct(DataFrame other) {
-    DataFrameFfi result = ffi.unionDistinct(other.ffi);
-    ffi.close();
+    DataFrameBridge result = bridge.unionDistinct(other.bridge);
+    bridge.close();
     return new DataFrame(result);
   }
 
@@ -229,8 +229,8 @@ public class DataFrame implements AutoCloseable {
    * <p>Consumes this DataFrame. The source must not be used after this call.
    */
   public DataFrame intersect(DataFrame other) {
-    DataFrameFfi result = ffi.intersect(other.ffi);
-    ffi.close();
+    DataFrameBridge result = bridge.intersect(other.bridge);
+    bridge.close();
     return new DataFrame(result);
   }
 
@@ -240,8 +240,8 @@ public class DataFrame implements AutoCloseable {
    * <p>Consumes this DataFrame. The source must not be used after this call.
    */
   public DataFrame except(DataFrame other) {
-    DataFrameFfi result = ffi.except(other.ffi);
-    ffi.close();
+    DataFrameBridge result = bridge.except(other.bridge);
+    bridge.close();
     return new DataFrame(result);
   }
 
@@ -253,8 +253,8 @@ public class DataFrame implements AutoCloseable {
    * <p>Consumes this DataFrame. The source must not be used after this call.
    */
   public DataFrame distinct() {
-    DataFrameFfi result = ffi.distinct();
-    ffi.close();
+    DataFrameBridge result = bridge.distinct();
+    bridge.close();
     return new DataFrame(result);
   }
 
@@ -269,8 +269,8 @@ public class DataFrame implements AutoCloseable {
    * @param expr expression to compute the column value
    */
   public DataFrame withColumn(String name, Expr expr) {
-    DataFrameFfi result = ffi.withColumn(name, expr);
-    ffi.close();
+    DataFrameBridge result = bridge.withColumn(name, expr);
+    bridge.close();
     return new DataFrame(result);
   }
 
@@ -283,8 +283,8 @@ public class DataFrame implements AutoCloseable {
    * @param newName new column name
    */
   public DataFrame withColumnRenamed(String oldName, String newName) {
-    DataFrameFfi result = ffi.withColumnRenamed(oldName, newName);
-    ffi.close();
+    DataFrameBridge result = bridge.withColumnRenamed(oldName, newName);
+    bridge.close();
     return new DataFrame(result);
   }
 
@@ -296,8 +296,8 @@ public class DataFrame implements AutoCloseable {
    * @param columns column names to drop
    */
   public DataFrame dropColumns(String... columns) {
-    DataFrameFfi result = ffi.dropColumns(List.of(columns));
-    ffi.close();
+    DataFrameBridge result = bridge.dropColumns(List.of(columns));
+    bridge.close();
     return new DataFrame(result);
   }
 
@@ -310,7 +310,7 @@ public class DataFrame implements AutoCloseable {
    * @throws DataFusionException if writing fails
    */
   public void writeParquet(String path) {
-    ffi.writeParquet(path);
+    bridge.writeParquet(path);
   }
 
   /**
@@ -320,7 +320,7 @@ public class DataFrame implements AutoCloseable {
    * @throws DataFusionException if writing fails
    */
   public void writeCsv(String path) {
-    ffi.writeCsv(path);
+    bridge.writeCsv(path);
   }
 
   /**
@@ -330,7 +330,7 @@ public class DataFrame implements AutoCloseable {
    * @throws DataFusionException if writing fails
    */
   public void writeJson(String path) {
-    ffi.writeJson(path);
+    bridge.writeJson(path);
   }
 
   // ── Terminal operations ──
@@ -343,7 +343,7 @@ public class DataFrame implements AutoCloseable {
    * @throws DataFusionException if execution fails
    */
   public RecordBatchStream executeStream(BufferAllocator allocator) {
-    return ffi.executeStream(allocator);
+    return bridge.executeStream(allocator);
   }
 
   /**
@@ -358,7 +358,7 @@ public class DataFrame implements AutoCloseable {
    * @throws DataFusionException if execution fails
    */
   public RecordBatchStream collect(BufferAllocator allocator) {
-    return ffi.collect(allocator);
+    return bridge.collect(allocator);
   }
 
   /**
@@ -367,7 +367,7 @@ public class DataFrame implements AutoCloseable {
    * @throws DataFusionException if execution fails
    */
   public void show() {
-    ffi.show();
+    bridge.show();
   }
 
   /**
@@ -377,7 +377,7 @@ public class DataFrame implements AutoCloseable {
    * @throws DataFusionException if execution fails
    */
   public long count() {
-    return ffi.count();
+    return bridge.count();
   }
 
   /**
@@ -387,11 +387,11 @@ public class DataFrame implements AutoCloseable {
    * @throws DataFusionException if the schema cannot be retrieved
    */
   public Schema schema() {
-    return ffi.schema();
+    return bridge.schema();
   }
 
   @Override
   public void close() {
-    ffi.close();
+    bridge.close();
   }
 }

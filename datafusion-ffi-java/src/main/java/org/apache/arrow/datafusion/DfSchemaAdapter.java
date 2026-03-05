@@ -1,7 +1,5 @@
 package org.apache.arrow.datafusion;
 
-import java.lang.foreign.MemorySegment;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
 import org.apache.arrow.memory.BufferAllocator;
@@ -13,10 +11,12 @@ import org.apache.arrow.memory.BufferAllocator;
 final class DfSchemaAdapter implements DfSchemaTrait {
   private final SchemaProvider schema;
   private final BufferAllocator allocator;
+  private final boolean fullStackTrace;
 
-  DfSchemaAdapter(SchemaProvider schema, BufferAllocator allocator) {
+  DfSchemaAdapter(SchemaProvider schema, BufferAllocator allocator, boolean fullStackTrace) {
     this.schema = schema;
     this.allocator = allocator;
+    this.fullStackTrace = fullStackTrace;
   }
 
   @Override
@@ -26,10 +26,7 @@ final class DfSchemaAdapter implements DfSchemaTrait {
       if (names.isEmpty()) {
         return 0;
       }
-      byte[] bytes = String.join("\0", names).getBytes(StandardCharsets.UTF_8);
-      int len = (int) Math.min(bytes.length, bufCap);
-      MemorySegment.ofAddress(bufAddr).reinterpret(bufCap).copyFrom(MemorySegment.ofArray(bytes));
-      return len;
+      return NativeUtil.writeStrings(bufAddr, bufCap, names);
     } catch (Exception e) {
       return -1;
     }
@@ -38,27 +35,26 @@ final class DfSchemaAdapter implements DfSchemaTrait {
   @Override
   public boolean tableExists(long nameAddr, long nameLen) {
     try {
-      String name = DfCatalogAdapter.readString(nameAddr, nameLen);
-      return schema.tableExists(name);
+      return schema.tableExists(NativeUtil.readString(nameAddr, nameLen));
     } catch (Exception e) {
       return false;
     }
   }
 
   @Override
-  public long table(long nameAddr, long nameLen) {
+  public long table(long nameAddr, long nameLen, long errorAddr, long errorCap) {
     try {
-      String name = DfCatalogAdapter.readString(nameAddr, nameLen);
-      Optional<TableProvider> tp = schema.table(name);
+      Optional<TableProvider> tp = schema.table(NativeUtil.readString(nameAddr, nameLen));
       if (tp.isEmpty()) {
         return 0;
       }
-      DfTableAdapter adapter = new DfTableAdapter(tp.get(), allocator);
+      DfTableAdapter adapter = new DfTableAdapter(tp.get(), allocator, fullStackTrace);
       long ptr = DfTableProvider.createRaw(adapter);
       // Rust has imported the schema during createRaw, safe to release Java-side FFI resources
       adapter.closeFfiSchema();
       return ptr;
     } catch (Exception e) {
+      Errors.writeException(errorAddr, errorCap, e, fullStackTrace);
       return 0;
     }
   }

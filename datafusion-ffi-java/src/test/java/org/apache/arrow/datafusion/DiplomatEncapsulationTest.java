@@ -18,73 +18,81 @@ import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
-/** Enforces the FFI encapsulation rules from .claude/rules/ffi.md. */
+/**
+ * Enforces encapsulation rules for the Diplomat-based FFI architecture.
+ *
+ * <p>Diplomat-generated classes (Df* prefix, DiplomatLib), bridge classes (*Bridge), adapter
+ * classes (Df*Adapter), remaining FFI classes (*Ffi), and utility classes (NativeUtil,
+ * NativeLoader, Errors) must all be package-private. Public API classes must not expose
+ * java.lang.foreign types.
+ */
 @AnalyzeClasses(
     packages = "org.apache.arrow.datafusion",
     importOptions = ImportOption.DoNotIncludeTests.class)
-public class FfiEncapsulationTest {
-
-  private static final Set<String> FFI_CLASS_SIMPLE_NAMES =
-      Stream.of(
-              NativeUtil.class,
-              NativeLoader.class,
-              Errors.class,
-              UpcallStub.class,
-              TraitHandle.class,
-              NativeString.class)
-          .map(Class::getSimpleName)
-          .collect(Collectors.toUnmodifiableSet());
+public class DiplomatEncapsulationTest {
 
   private static final String FFI_PACKAGE = "org.apache.arrow.datafusion";
 
-  private static final DescribedPredicate<JavaClass> IS_FFI_CLASS =
-      new DescribedPredicate<>("an FFI implementation class") {
+  private static final Set<String> UTILITY_CLASS_NAMES =
+      Set.of("NativeUtil", "NativeLoader", "Errors");
+
+  private static final DescribedPredicate<JavaClass> IS_INTERNAL_FFI_CLASS =
+      new DescribedPredicate<>("an internal FFI/bridge/adapter class") {
         @Override
         public boolean test(JavaClass javaClass) {
-          String name = javaClass.getSimpleName();
-          return name.endsWith("Ffi")
-              || name.endsWith("Handle")
-              || isDiplomatGenerated(javaClass)
-              || FFI_CLASS_SIMPLE_NAMES.contains(name);
-        }
-
-        private boolean isDiplomatGenerated(JavaClass javaClass) {
           if (!javaClass.getPackageName().equals(FFI_PACKAGE)) {
             return false;
           }
           String name = javaClass.getSimpleName();
+          return name.endsWith("Ffi")
+              || name.endsWith("Bridge")
+              || isDiplomatGenerated(name)
+              || isDiplomatAdapter(name)
+              || UTILITY_CLASS_NAMES.contains(name);
+        }
+
+        private boolean isDiplomatGenerated(String name) {
           return name.startsWith("Df") || name.equals("DiplomatLib");
+        }
+
+        private boolean isDiplomatAdapter(String name) {
+          return name.startsWith("Df") && name.endsWith("Adapter");
         }
       };
 
-  /** Rule 1: FFI classes should be package-private. */
-  @ArchTest
-  static final ArchRule ffiClassesShouldBePackagePrivate =
-      classes()
-          .that(IS_FFI_CLASS)
-          .should()
-          .notBePublic()
-          .because(
-              "FFI implementation classes must be package-private"
-                  + " to hide FFI details from consumers (ffi.md rule 1)");
-
   /**
-   * Matches inner classes of FFI implementation classes (e.g., DfCatalogTrait.Statics). These are
+   * Matches inner classes of internal FFI classes (e.g., DfCatalogTrait.Statics). These are
    * implicitly public in Java (interface members) but are inaccessible outside the package because
    * the enclosing interface is package-private.
    */
   private static final DescribedPredicate<JavaClass> IS_INNER_OF_FFI_CLASS =
-      new DescribedPredicate<>("an inner class of an FFI implementation class") {
+      new DescribedPredicate<>("an inner class of an internal FFI class") {
         @Override
         public boolean test(JavaClass javaClass) {
-          return javaClass.getEnclosingClass().map(IS_FFI_CLASS::test).orElse(false);
+          return javaClass.getEnclosingClass().map(IS_INTERNAL_FFI_CLASS::test).orElse(false);
         }
       };
 
-  /** Rule 2: Public classes should not depend on java.lang.foreign types. */
+  /**
+   * Rule 1: Diplomat-generated, bridge, adapter, and utility classes must be package-private.
+   *
+   * <p>This ensures FFI implementation details are invisible to library consumers.
+   */
+  @ArchTest
+  static final ArchRule internalClassesShouldBePackagePrivate =
+      classes()
+          .that(IS_INTERNAL_FFI_CLASS)
+          .should()
+          .notBePublic()
+          .because("FFI/bridge/adapter classes must be package-private to hide internals");
+
+  /**
+   * Rule 2: Public classes should not depend on java.lang.foreign types.
+   *
+   * <p>The FFM API (MemorySegment, Arena, ValueLayout, etc.) must only appear in package-private
+   * implementation classes.
+   */
   @ArchTest
   static final ArchRule publicClassesShouldNotDependOnForeignApi =
       noClasses()
@@ -94,60 +102,50 @@ public class FfiEncapsulationTest {
           .should()
           .dependOnClassesThat()
           .resideInAPackage("java.lang.foreign..")
-          .because("public API classes must not expose java.lang.foreign types (ffi.md rule 2)");
+          .because("public API classes must not expose java.lang.foreign types");
 
-  /** Rule 3: Public methods and constructors should not use MemorySegment. */
+  /**
+   * Rule 3: Public methods and constructors should not use MemorySegment in their signatures.
+   *
+   * <p>This prevents FFM types from leaking into the public API.
+   */
   @ArchTest
   static final ArchRule publicMethodsShouldNotUseMemorySegment =
       classes()
           .that()
           .arePublic()
           .should(notHavePublicMembersUsingMemorySegment())
-          .because("MemorySegment must not appear in any public API signature (ffi.md rule 3)");
+          .because("MemorySegment must not appear in any public API signature");
 
-  /** Rule 4: Only FFI classes may depend on NativeUtil. */
+  /**
+   * Rule 4: Only internal FFI classes may depend on NativeLoader.
+   *
+   * <p>NativeLoader is the native library loading mechanism and should be confined to FFI/bridge
+   * classes.
+   */
   @ArchTest
-  static final ArchRule nativeUtilConfinedToFfiClasses =
+  static final ArchRule nativeLoaderConfinedToInternalClasses =
       noClasses()
-          .that(DescribedPredicate.not(IS_FFI_CLASS))
+          .that(DescribedPredicate.not(IS_INTERNAL_FFI_CLASS))
+          .and(DescribedPredicate.not(IS_INNER_OF_FFI_CLASS))
           .should()
           .dependOnClassesThat()
-          .haveSimpleName("NativeUtil")
-          .because(
-              "NativeUtil should only be used" + " by FFI implementation classes (ffi.md rule 4)");
+          .haveSimpleName("NativeLoader")
+          .because("NativeLoader should only be used by internal FFI/bridge classes");
 
-  /** Rule 6: Constructors taking *Ffi parameters must be package-private. */
+  /**
+   * Rule 5: Constructors taking *Ffi or *Bridge parameters must be package-private.
+   *
+   * <p>Public classes may have package-private constructors that accept internal types, but these
+   * must not be public.
+   */
   @ArchTest
-  static final ArchRule publicConstructorsShouldNotAcceptFfiTypes =
+  static final ArchRule publicConstructorsShouldNotAcceptInternalTypes =
       classes()
           .that()
           .arePublic()
-          .should(notHavePublicConstructorsAcceptingFfiTypes())
-          .because("constructors taking *Ffi types must be package-private (ffi.md rule 6)");
-
-  /** Handle class rule: Handle classes must implement TraitHandle. */
-  @ArchTest
-  static final ArchRule handleClassesShouldImplementTraitHandle =
-      classes()
-          .that()
-          .haveSimpleNameEndingWith("Handle")
-          .and()
-          .areNotInterfaces()
-          .should()
-          .implement(TraitHandle.class)
-          .because("every Handle class must implement TraitHandle (ffi.md Handle class rules)");
-
-  /** Handle class rule: Handle classes must be final. */
-  @ArchTest
-  static final ArchRule handleClassesShouldBeFinal =
-      classes()
-          .that()
-          .haveSimpleNameEndingWith("Handle")
-          .and()
-          .areNotInterfaces()
-          .should()
-          .haveModifier(JavaModifier.FINAL)
-          .because("Handle classes must be final (ffi.md Handle class rules)");
+          .should(notHavePublicConstructorsAcceptingInternalTypes())
+          .because("constructors taking *Ffi or *Bridge types must be package-private");
 
   private static ArchCondition<JavaClass> notHavePublicMembersUsingMemorySegment() {
     return new ArchCondition<>("not have public members using MemorySegment") {
@@ -189,8 +187,8 @@ public class FfiEncapsulationTest {
     };
   }
 
-  private static ArchCondition<JavaClass> notHavePublicConstructorsAcceptingFfiTypes() {
-    return new ArchCondition<>("not have public constructors accepting *Ffi types") {
+  private static ArchCondition<JavaClass> notHavePublicConstructorsAcceptingInternalTypes() {
+    return new ArchCondition<>("not have public constructors accepting internal FFI types") {
       @Override
       public void check(JavaClass javaClass, ConditionEvents events) {
         for (JavaConstructor constructor : javaClass.getConstructors()) {
@@ -198,12 +196,13 @@ public class FfiEncapsulationTest {
             continue;
           }
           for (JavaClass paramType : constructor.getRawParameterTypes()) {
-            if (paramType.getSimpleName().endsWith("Ffi")) {
+            String name = paramType.getSimpleName();
+            if (name.endsWith("Ffi") || name.endsWith("Bridge")) {
               events.add(
                   SimpleConditionEvent.violated(
                       constructor,
                       String.format(
-                          "%s in %s has public constructor accepting FFI type %s",
+                          "%s in %s has public constructor accepting internal type %s",
                           constructor.getDescription(),
                           javaClass.getName(),
                           paramType.getSimpleName())));

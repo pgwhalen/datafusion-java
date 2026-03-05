@@ -1,8 +1,5 @@
 package org.apache.arrow.datafusion;
 
-import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
 import org.apache.arrow.memory.BufferAllocator;
@@ -14,10 +11,12 @@ import org.apache.arrow.memory.BufferAllocator;
 final class DfCatalogAdapter implements DfCatalogTrait {
   private final CatalogProvider catalog;
   private final BufferAllocator allocator;
+  private final boolean fullStackTrace;
 
-  DfCatalogAdapter(CatalogProvider catalog, BufferAllocator allocator) {
+  DfCatalogAdapter(CatalogProvider catalog, BufferAllocator allocator, boolean fullStackTrace) {
     this.catalog = catalog;
     this.allocator = allocator;
+    this.fullStackTrace = fullStackTrace;
   }
 
   @Override
@@ -27,10 +26,7 @@ final class DfCatalogAdapter implements DfCatalogTrait {
       if (names.isEmpty()) {
         return 0;
       }
-      byte[] bytes = String.join("\0", names).getBytes(StandardCharsets.UTF_8);
-      int len = (int) Math.min(bytes.length, bufCap);
-      MemorySegment.ofAddress(bufAddr).reinterpret(bufCap).copyFrom(MemorySegment.ofArray(bytes));
-      return len;
+      return NativeUtil.writeStrings(bufAddr, bufCap, names);
     } catch (Exception e) {
       return -1;
     }
@@ -39,27 +35,14 @@ final class DfCatalogAdapter implements DfCatalogTrait {
   @Override
   public long schema(long nameAddr, long nameLen) {
     try {
-      String name = readString(nameAddr, nameLen);
-      Optional<SchemaProvider> sp = catalog.schema(name);
+      Optional<SchemaProvider> sp = catalog.schema(NativeUtil.readString(nameAddr, nameLen));
       if (sp.isEmpty()) {
         return 0;
       }
-      return DfSchemaProvider.createRaw(new DfSchemaAdapter(sp.get(), allocator));
+      return DfSchemaProvider.createRaw(new DfSchemaAdapter(sp.get(), allocator, fullStackTrace));
     } catch (Exception e) {
       return 0;
     }
   }
 
-  static String readString(long addr, long len) {
-    byte[] bytes = MemorySegment.ofAddress(addr).reinterpret(len).toArray(ValueLayout.JAVA_BYTE);
-    return new String(bytes, StandardCharsets.UTF_8);
-  }
-
-  static void writeError(long errorAddr, long errorCap, String message) {
-    byte[] bytes = message.getBytes(StandardCharsets.UTF_8);
-    int len = (int) Math.min(bytes.length, errorCap);
-    MemorySegment.ofAddress(errorAddr)
-        .reinterpret(errorCap)
-        .copyFrom(MemorySegment.ofArray(bytes).asSlice(0, len));
-  }
 }

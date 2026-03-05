@@ -9,10 +9,10 @@ package org.apache.arrow.datafusion;
  */
 public class SessionState implements AutoCloseable {
 
-  private final SessionStateFfi ffi;
+  private final SessionStateBridge bridge;
 
-  SessionState(SessionStateFfi ffi) {
-    this.ffi = ffi;
+  SessionState(SessionStateBridge bridge) {
+    this.bridge = bridge;
   }
 
   /**
@@ -23,11 +23,11 @@ public class SessionState implements AutoCloseable {
    * @throws DataFusionException if the SQL is invalid or planning fails
    */
   public LogicalPlan createLogicalPlan(String sql) {
-    return new LogicalPlan(ffi.createLogicalPlan(sql));
+    return new LogicalPlan(bridge.createLogicalPlan(sql));
   }
 
   @Override
   public void close() {
-    ffi.close();
+    bridge.close();
   }
 }

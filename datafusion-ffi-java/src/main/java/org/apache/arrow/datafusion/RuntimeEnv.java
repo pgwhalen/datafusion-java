@@ -20,15 +20,15 @@ package org.apache.arrow.datafusion;
  * }</pre>
  */
 public class RuntimeEnv implements AutoCloseable {
-  final RuntimeEnvFfi ffi;
+  final RuntimeEnvBridge bridge;
 
   /** Package-private constructor — use {@link RuntimeEnvBuilder} to create instances. */
-  RuntimeEnv(RuntimeEnvFfi ffi) {
-    this.ffi = ffi;
+  RuntimeEnv(RuntimeEnvBridge bridge) {
+    this.bridge = bridge;
   }
 
   @Override
   public void close() {
-    ffi.close();
+    bridge.close();
   }
 }

@@ -61,6 +61,6 @@ public final class RuntimeEnvBuilder {
    * @throws DataFusionException if the native RuntimeEnv cannot be created
    */
   public RuntimeEnv build() {
-    return new RuntimeEnv(new RuntimeEnvFfi(maxMemory, memoryFraction));
+    return new RuntimeEnv(new RuntimeEnvBridge(maxMemory, memoryFraction));
   }
 }

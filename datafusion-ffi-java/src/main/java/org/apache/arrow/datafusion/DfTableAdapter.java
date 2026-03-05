@@ -16,17 +16,24 @@ import org.apache.arrow.memory.BufferAllocator;
 final class DfTableAdapter implements DfTableTrait {
   private final TableProvider provider;
   private final BufferAllocator allocator;
+  private final boolean fullStackTrace;
 
   // Cached FFI schema - kept alive for the lifetime of this adapter
   private final ArrowSchema ffiSchema;
   private final long schemaAddr;
 
-  DfTableAdapter(TableProvider provider, BufferAllocator allocator) {
+  DfTableAdapter(TableProvider provider, BufferAllocator allocator, boolean fullStackTrace) {
     this.provider = provider;
     this.allocator = allocator;
+    this.fullStackTrace = fullStackTrace;
     // Export schema once and cache the FFI address
     this.ffiSchema = ArrowSchema.allocateNew(allocator);
-    Data.exportSchema(allocator, provider.schema(), null, ffiSchema);
+    try {
+      Data.exportSchema(allocator, provider.schema(), null, ffiSchema);
+    } catch (Exception e) {
+      ffiSchema.close();
+      throw e;
+    }
     this.schemaAddr = ffiSchema.memoryAddress();
   }
 
@@ -53,36 +60,30 @@ final class DfTableAdapter implements DfTableTrait {
   @Override
   public long scan(
       long sessionAddr,
-      long filterAddr,
-      long filterLen,
+      long filtersAddr,
+      long filtersLen,
       long projectionAddr,
       long projectionLen,
       long limit,
       long errorAddr,
       long errorCap) {
     try {
-      // Deserialize filters from protobuf bytes
-      List<Expr> filters;
-      if (filterAddr == 0 || filterLen == 0) {
-        filters = Collections.emptyList();
-      } else {
-        byte[] filterBytes =
-            MemorySegment.ofAddress(filterAddr)
-                .reinterpret(filterLen)
-                .toArray(ValueLayout.JAVA_BYTE);
-        filters = ExprProtoConverter.fromProtoBytes(filterBytes);
-      }
+      // Deserialize filters from raw byte buffer
+      byte[] filterBytes = NativeUtil.readBytes(filtersAddr, filtersLen);
+      List<Expr> filterExprs =
+          filterBytes.length == 0
+              ? Collections.emptyList()
+              : ExprProtoConverter.fromProtoBytes(filterBytes);
 
-      // Read projection indices
-      List<Integer> projection;
-      if (projectionAddr == 0 || projectionLen == 0) {
-        projection = Collections.emptyList();
+      // Convert projection from raw u32 buffer
+      int[] projectionArr = NativeUtil.readU32s(projectionAddr, projectionLen);
+      List<Integer> projectionList;
+      if (projectionArr.length == 0) {
+        projectionList = Collections.emptyList();
       } else {
-        projection = new ArrayList<>((int) projectionLen);
-        MemorySegment projMem =
-            MemorySegment.ofAddress(projectionAddr).reinterpret(projectionLen * 8);
-        for (int i = 0; i < projectionLen; i++) {
-          projection.add((int) projMem.getAtIndex(ValueLayout.JAVA_LONG, i));
+        projectionList = new ArrayList<>(projectionArr.length);
+        for (int idx : projectionArr) {
+          projectionList.add(idx);
         }
       }
 
@@ -94,42 +95,37 @@ final class DfTableAdapter implements DfTableTrait {
           new Session(new SessionFfi(MemorySegment.ofAddress(sessionAddr)), allocator);
 
       // Call the provider
-      ExecutionPlan plan = provider.scan(session, filters, projection, limitValue);
+      ExecutionPlan plan = provider.scan(session, filterExprs, projectionList, limitValue);
 
       // Wrap and return as raw pointer
-      DfExecutionPlanAdapter adapter = new DfExecutionPlanAdapter(plan, allocator);
+      DfExecutionPlanAdapter adapter = new DfExecutionPlanAdapter(plan, allocator, fullStackTrace);
       long ptr = DfExecutionPlan.createRaw(adapter);
       adapter.closeFfiSchema();
       return ptr;
     } catch (Exception e) {
-      DfCatalogAdapter.writeError(errorAddr, errorCap, e.getMessage());
+      Errors.writeException(errorAddr, errorCap, e, fullStackTrace);
       return 0;
     }
   }
 
   @Override
   public int supportsFiltersPushdown(
-      long filterAddr,
-      long filterLen,
+      long filtersAddr,
+      long filtersLen,
       long resultAddr,
       long resultCap,
       long errorAddr,
       long errorCap) {
     try {
-      // Deserialize filters
-      List<Expr> filters;
-      if (filterAddr == 0 || filterLen == 0) {
-        filters = Collections.emptyList();
-      } else {
-        byte[] filterBytes =
-            MemorySegment.ofAddress(filterAddr)
-                .reinterpret(filterLen)
-                .toArray(ValueLayout.JAVA_BYTE);
-        filters = ExprProtoConverter.fromProtoBytes(filterBytes);
-      }
+      // Deserialize filters from raw byte buffer
+      byte[] filterBytes = NativeUtil.readBytes(filtersAddr, filtersLen);
+      List<Expr> filterExprs =
+          filterBytes.length == 0
+              ? Collections.emptyList()
+              : ExprProtoConverter.fromProtoBytes(filterBytes);
 
       // Call provider
-      List<FilterPushDown> results = provider.supportsFiltersPushdown(filters);
+      List<FilterPushDown> results = provider.supportsFiltersPushdown(filterExprs);
 
       // Write i32 discriminants to result buffer
       int count = (int) Math.min(results.size(), resultCap);
@@ -145,7 +141,7 @@ final class DfTableAdapter implements DfTableTrait {
       }
       return count;
     } catch (Exception e) {
-      DfCatalogAdapter.writeError(errorAddr, errorCap, e.getMessage());
+      Errors.writeException(errorAddr, errorCap, e, fullStackTrace);
       return -1;
     }
   }

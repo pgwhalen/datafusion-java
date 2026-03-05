@@ -3,6 +3,7 @@ package org.apache.arrow.datafusion;
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 /**
  * Utility class for handling errors from native DataFusion functions.
@@ -18,10 +19,6 @@ import java.nio.charset.StandardCharsets;
  * // For pointer-returning operations:
  * MemorySegment df = NativeUtil.callForPointer(arena, "Execute SQL", errorOut ->
  *     (MemorySegment) SQL.invokeExact(ctx, query, errorOut));
- *
- * // For stream operations (returns result: positive=data, 0=end, negative=error):
- * int result = NativeUtil.callForStreamResult(arena, "Stream next", errorOut ->
- *     (int) STREAM_NEXT.invokeExact(stream, errorOut));
  * }</pre>
  */
 final class NativeUtil {
@@ -36,26 +33,6 @@ final class NativeUtil {
   static final MethodHandle FREE_STRING =
       downcall("datafusion_free_string", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
 
-  static final MethodHandle FREE_BYTES =
-      downcall(
-          "datafusion_free_bytes",
-          FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.JAVA_LONG));
-
-  private static final MethodHandle RSTRING_SIZE =
-      downcall("datafusion_rstring_size", FunctionDescriptor.of(ValueLayout.JAVA_LONG));
-
-  private static final MethodHandle CREATE_RSTRING =
-      downcall(
-          "datafusion_create_rstring",
-          FunctionDescriptor.ofVoid(
-              ValueLayout.ADDRESS.withName("ptr"), // UTF-8 bytes
-              ValueLayout.JAVA_LONG.withName("len"),
-              ValueLayout.ADDRESS.withName("out") // RString buffer
-              ));
-
-  // Cached RString size (queried from Rust once)
-  private static volatile long rstringSizeBytes = -1;
-
   private NativeUtil() {}
 
   // ========================================================================
@@ -65,7 +42,7 @@ final class NativeUtil {
   /**
    * A native function call that returns an int result code.
    *
-   * <p>Used with {@link #call} and {@link #callForStreamResult}.
+   * <p>Used with {@link #call}.
    */
   @FunctionalInterface
   interface NativeIntCall {
@@ -150,203 +127,16 @@ final class NativeUtil {
     }
   }
 
-  /**
-   * Calls a native streaming function and returns the result after error checking.
-   *
-   * <p>This method allocates an error output segment, invokes the native function, and checks for
-   * errors. Stream functions return: positive = data available, 0 = end of stream, negative =
-   * error. If negative, it extracts the error message and throws an exception.
-   *
-   * @param arena the arena to allocate the error output from
-   * @param operation a description of the operation for error messages
-   * @param call the native function to invoke
-   * @return the result code (guaranteed to be >= 0)
-   * @throws NativeErrorException if the native function returns a negative result
-   * @throws DataFusionException if the invocation fails unexpectedly
-   */
-  static int callForStreamResult(Arena arena, String operation, NativeIntCall call) {
-    MemorySegment errorOut = allocateErrorOut(arena);
-    try {
-      int result = call.invoke(errorOut);
-      checkStreamResult(result, errorOut, operation);
-      return result;
-    } catch (NativeErrorException e) {
-      throw e;
-    } catch (Throwable e) {
-      throw new DataFusionException("Failed to " + operation, e);
-    }
-  }
-
   // ========================================================================
-  // FFI struct size validation and RString helpers
-  // ========================================================================
-
-  /**
-   * Get the size in bytes of an abi_stable {@code RString}. The value is cached after the first
-   * call.
-   */
-  static long getRStringSize() {
-    long size = rstringSizeBytes;
-    if (size < 0) {
-      try {
-        size = (long) RSTRING_SIZE.invokeExact();
-        rstringSizeBytes = size;
-      } catch (Throwable e) {
-        throw new DataFusionException("Failed to query RString size", e);
-      }
-    }
-    return size;
-  }
-
-  /**
-   * Write a UTF-8 string as an abi_stable {@code RString} into a buffer at the given offset. Uses
-   * the Rust {@code datafusion_create_rstring} helper.
-   *
-   * @param message the string to write
-   * @param buffer the destination buffer
-   * @param offset byte offset within the buffer where the RString should be written
-   * @param arena arena used for temporary allocation of the UTF-8 bytes
-   */
-  static void writeRString(String message, MemorySegment buffer, long offset, Arena arena) {
-    byte[] msgBytes = message.getBytes(StandardCharsets.UTF_8);
-    MemorySegment msgSegment = arena.allocateFrom(ValueLayout.JAVA_BYTE, msgBytes);
-    try {
-      CREATE_RSTRING.invokeExact(
-          msgSegment, (long) msgBytes.length, buffer.asSlice(offset, getRStringSize()));
-    } catch (Throwable ignored) {
-      // Best effort — if we can't write the RString, the zero-initialized buffer
-      // will produce a default/empty error on the Rust side.
-    }
-  }
-
-  /**
-   * Validate that a Java-side size constant matches the Rust-reported size for an FFI type.
-   *
-   * @param javaSize the size constant defined in Java
-   * @param sizeHandle a MethodHandle that calls a Rust size helper (returns long)
-   * @param typeName the type name for error messages
-   * @throws DataFusionException if the sizes don't match
-   */
-  static void validateSize(long javaSize, MethodHandle sizeHandle, String typeName) {
-    try {
-      long rustSize = (long) sizeHandle.invokeExact();
-      if (rustSize != javaSize) {
-        throw new DataFusionException(
-            typeName + " size mismatch: Java=" + javaSize + " Rust=" + rustSize);
-      }
-    } catch (DataFusionException e) {
-      throw e;
-    } catch (Throwable e) {
-      throw new DataFusionException("Failed to validate " + typeName + " size", e);
-    }
-  }
-
-  // ========================================================================
-  // Shared FFI symbol lookups (used by multiple Handle classes)
-  // ========================================================================
-
-  /** Version function pointer — stored in the {@code version} field of FFI provider structs. */
-  static final MemorySegment VERSION_FN =
-      NativeLoader.get().find("datafusion_ffi_version").orElseThrow();
-
-  /**
-   * Library marker function pointer — stored in the {@code library_marker_id} field of FFI provider
-   * structs to ensure the "foreign library" conversion path is taken.
-   */
-  static final MemorySegment JAVA_MARKER_ID_FN =
-      NativeLoader.get().find("datafusion_java_marker_id").orElseThrow();
-
-  // ========================================================================
-  // Shared FFI_LogicalExtensionCodec helpers (used by all provider Handle classes)
-  // ========================================================================
-
-  private static final MethodHandle LOGICAL_CODEC_SIZE_MH =
-      downcall("datafusion_ffi_logical_codec_size", FunctionDescriptor.of(ValueLayout.JAVA_LONG));
-
-  static final MethodHandle CREATE_NOOP_LOGICAL_CODEC =
-      downcall(
-          "datafusion_create_noop_logical_codec", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
-
-  private static volatile long logicalCodecSizeBytes = -1;
-
-  /** Get the size of FFI_LogicalExtensionCodec (cached). */
-  static long getLogicalCodecSize() {
-    long size = logicalCodecSizeBytes;
-    if (size < 0) {
-      try {
-        size = (long) LOGICAL_CODEC_SIZE_MH.invokeExact();
-        logicalCodecSizeBytes = size;
-      } catch (Throwable e) {
-        throw new DataFusionException("Failed to query FFI_LogicalExtensionCodec size", e);
-      }
-    }
-    return size;
-  }
-
-  // ========================================================================
-  // Shared RVec<RString> / ROption<RString> helpers (used by catalog/schema Handle classes)
-  // ========================================================================
-
-  private static final MethodHandle RVEC_RSTRING_SIZE_MH =
-      downcall("datafusion_rvec_rstring_size", FunctionDescriptor.of(ValueLayout.JAVA_LONG));
-
-  static final MethodHandle CREATE_RVEC_RSTRING =
-      downcall(
-          "datafusion_create_rvec_rstring",
-          FunctionDescriptor.ofVoid(
-              ValueLayout.ADDRESS.withName("ptrs"),
-              ValueLayout.ADDRESS.withName("lens"),
-              ValueLayout.JAVA_LONG.withName("count"),
-              ValueLayout.ADDRESS.withName("out")));
-
-  private static final MethodHandle ROPTION_RSTRING_SIZE_MH =
-      downcall("datafusion_roption_rstring_size", FunctionDescriptor.of(ValueLayout.JAVA_LONG));
-
-  static final MethodHandle CREATE_ROPTION_RSTRING_NONE =
-      downcall(
-          "datafusion_create_roption_rstring_none", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
-
-  private static volatile long rvecRstringSizeBytes = -1;
-  private static volatile long roptionRstringSizeBytes = -1;
-
-  /** Get the size of RVec&lt;RString&gt; (cached). */
-  static long getRvecRstringSize() {
-    long size = rvecRstringSizeBytes;
-    if (size < 0) {
-      try {
-        size = (long) RVEC_RSTRING_SIZE_MH.invokeExact();
-        rvecRstringSizeBytes = size;
-      } catch (Throwable e) {
-        throw new DataFusionException("Failed to query RVec<RString> size", e);
-      }
-    }
-    return size;
-  }
-
-  /** Get the size of ROption&lt;RString&gt; (cached). */
-  static long getRoptionRstringSize() {
-    long size = roptionRstringSizeBytes;
-    if (size < 0) {
-      try {
-        size = (long) ROPTION_RSTRING_SIZE_MH.invokeExact();
-        roptionRstringSizeBytes = size;
-      } catch (Throwable e) {
-        throw new DataFusionException("Failed to query ROption<RString> size", e);
-      }
-    }
-    return size;
-  }
-
-  // ========================================================================
-  // Lower-level utilities (for cases where the high-level API doesn't fit)
+  // Lower-level utilities
   // ========================================================================
 
   /**
    * Allocates and initializes an error output pointer.
    *
    * <p>The returned segment should be passed to native functions that accept an error_out
-   * parameter. After the native call returns, use {@link #checkResult}, {@link #checkPointer}, or
-   * {@link #checkStreamResult} to check for errors.
+   * parameter. After the native call returns, use {@link #checkResult} or {@link #checkPointer} to
+   * check for errors.
    *
    * @param arena The arena to allocate from
    * @return A memory segment initialized to NULL, suitable for error output
@@ -355,34 +145,6 @@ final class NativeUtil {
     MemorySegment errorOut = arena.allocate(ValueLayout.ADDRESS);
     errorOut.set(ValueLayout.ADDRESS, 0, MemorySegment.NULL);
     return errorOut;
-  }
-
-  /**
-   * Extracts and frees an error message from a native error pointer.
-   *
-   * <p>This method reads the error string from the native memory, frees the native memory, and
-   * returns the Java string. It handles error messages of any length by first querying the string
-   * length from the native code.
-   *
-   * @param errorOut The error output pointer from a native function call
-   * @return The error message, or null if no error was set
-   */
-  static String extractAndFreeError(MemorySegment errorOut) {
-    MemorySegment errorPtr = errorOut.get(ValueLayout.ADDRESS, 0);
-    if (errorPtr.equals(MemorySegment.NULL)) {
-      return null;
-    }
-
-    try {
-      return readNullTerminatedString(errorPtr);
-    } finally {
-      // Always free the error string
-      try {
-        FREE_STRING.invokeExact(errorPtr);
-      } catch (Throwable ignored) {
-        // Nothing we can do if free fails
-      }
-    }
   }
 
   /**
@@ -420,20 +182,29 @@ final class NativeUtil {
   }
 
   /**
-   * Checks a stream result code and throws an exception if it indicates an error.
+   * Extracts and frees an error message from a native error pointer.
    *
-   * <p>Use this for streaming functions that return: positive value = data available, 0 = end of
-   * stream, negative value = error.
+   * <p>This method reads the error string from the native memory, frees the native memory, and
+   * returns the Java string. It handles error messages of any length by first querying the string
+   * length from the native code.
    *
-   * @param result The result code from the native function
-   * @param errorOut The error output pointer from the native function call
-   * @param operation A description of the operation for error messages
-   * @throws NativeErrorException if result is negative
+   * @param errorOut The error output pointer from a native function call
+   * @return The error message, or null if no error was set
    */
-  static void checkStreamResult(int result, MemorySegment errorOut, String operation) {
-    if (result < 0) {
-      String message = extractAndFreeError(errorOut);
-      throw new NativeErrorException(operation, message);
+  private static String extractAndFreeError(MemorySegment errorOut) {
+    MemorySegment errorPtr = errorOut.get(ValueLayout.ADDRESS, 0);
+    if (errorPtr.equals(MemorySegment.NULL)) {
+      return null;
+    }
+
+    try {
+      return readNullTerminatedString(errorPtr);
+    } finally {
+      try {
+        FREE_STRING.invokeExact(errorPtr);
+      } catch (Throwable ignored) {
+        // Nothing we can do if free fails
+      }
     }
   }
 
@@ -446,7 +217,7 @@ final class NativeUtil {
    * @param ptr the pointer to the null-terminated C string
    * @return the Java string, or empty string if ptr is NULL
    */
-  static String readNullTerminatedString(MemorySegment ptr) {
+  private static String readNullTerminatedString(MemorySegment ptr) {
     if (ptr.equals(MemorySegment.NULL)) {
       return "";
     }
@@ -462,9 +233,65 @@ final class NativeUtil {
     }
   }
 
-  /** Get the native linker for creating upcall stubs. */
-  static Linker getLinker() {
-    return LINKER;
+  static long writeStrings(long bufAddr, long bufCap, List<String> names) {
+    byte[] bytes = String.join("\0", names).getBytes(StandardCharsets.UTF_8);
+    int len = (int) Math.min(bytes.length, bufCap);
+    MemorySegment.ofAddress(bufAddr).reinterpret(bufCap).copyFrom(MemorySegment.ofArray(bytes));
+    return len;
+  }
+
+  static String readString(long addr, long len) {
+    byte[] bytes = MemorySegment.ofAddress(addr).reinterpret(len).toArray(ValueLayout.JAVA_BYTE);
+    return new String(bytes, StandardCharsets.UTF_8);
+  }
+
+  /** Read len u32 values from the given raw address into an int[]. */
+  static int[] readU32s(long addr, long len) {
+    if (len == 0) return new int[0];
+    return MemorySegment.ofAddress(addr).reinterpret(len * 4L).toArray(ValueLayout.JAVA_INT);
+  }
+
+  /** Read len bytes from the given raw address into a byte[]. */
+  static byte[] readBytes(long addr, long len) {
+    if (len == 0) return new byte[0];
+    return MemorySegment.ofAddress(addr).reinterpret(len).toArray(ValueLayout.JAVA_BYTE);
+  }
+
+  /**
+   * Convert a Diplomat slice parameter (Object = MemorySegment pointing to {data: ADDRESS, len:
+   * long}) to a Java String.
+   */
+  static String readDiplomatStr(Object obj) {
+    MemorySegment view = ((MemorySegment) obj).reinterpret(16);
+    MemorySegment dataPtr = view.get(ValueLayout.ADDRESS, 0);
+    long len = view.get(ValueLayout.JAVA_LONG, 8);
+    if (len == 0) return "";
+    byte[] bytes = dataPtr.reinterpret(len).toArray(ValueLayout.JAVA_BYTE);
+    return new String(bytes, StandardCharsets.UTF_8);
+  }
+
+  /**
+   * Convert a Diplomat slice parameter (Object = MemorySegment pointing to {data: ADDRESS, len:
+   * long}) to a byte[].
+   */
+  static byte[] readDiplomatBytes(Object obj) {
+    MemorySegment view = ((MemorySegment) obj).reinterpret(16);
+    MemorySegment dataPtr = view.get(ValueLayout.ADDRESS, 0);
+    long len = view.get(ValueLayout.JAVA_LONG, 8);
+    if (len == 0) return new byte[0];
+    return dataPtr.reinterpret(len).toArray(ValueLayout.JAVA_BYTE);
+  }
+
+  /**
+   * Convert a Diplomat slice parameter (Object = MemorySegment pointing to {data: ADDRESS, len:
+   * long}) to an int[] (treating each element as a 32-bit unsigned integer).
+   */
+  static int[] readDiplomatInts(Object obj) {
+    MemorySegment view = ((MemorySegment) obj).reinterpret(16);
+    MemorySegment dataPtr = view.get(ValueLayout.ADDRESS, 0);
+    long len = view.get(ValueLayout.JAVA_LONG, 8);
+    if (len == 0) return new int[0];
+    return dataPtr.reinterpret(len * 4).toArray(ValueLayout.JAVA_INT);
   }
 
   static MethodHandle downcall(String name, FunctionDescriptor descriptor) {

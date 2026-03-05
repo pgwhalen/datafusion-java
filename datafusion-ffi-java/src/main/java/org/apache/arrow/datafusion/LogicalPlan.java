@@ -10,14 +10,14 @@ package org.apache.arrow.datafusion;
  */
 public class LogicalPlan implements AutoCloseable {
 
-  private final LogicalPlanFfi ffi;
+  private final LogicalPlanBridge bridge;
 
-  LogicalPlan(LogicalPlanFfi ffi) {
-    this.ffi = ffi;
+  LogicalPlan(LogicalPlanBridge bridge) {
+    this.bridge = bridge;
   }
 
   @Override
   public void close() {
-    ffi.close();
+    bridge.close();
   }
 }

@@ -12,39 +12,39 @@ import org.apache.arrow.vector.dictionary.DictionaryProvider;
  * C Data Interface. Implements DictionaryProvider to allow decoding of dictionary-encoded columns.
  */
 public class RecordBatchStream implements RecordBatchReader, DictionaryProvider {
-  private final RecordBatchStreamFfi ffi;
+  private final RecordBatchStreamBridge bridge;
 
   /**
-   * Creates a RecordBatchStream from an FFI wrapper.
+   * Creates a RecordBatchStream from a bridge wrapper.
    *
-   * @param ffi the FFI wrapper holding native pointers and allocator
+   * @param bridge the bridge wrapper holding native stream and allocator
    */
-  RecordBatchStream(RecordBatchStreamFfi ffi) {
-    this.ffi = ffi;
+  RecordBatchStream(RecordBatchStreamBridge bridge) {
+    this.bridge = bridge;
   }
 
   @Override
   public VectorSchemaRoot getVectorSchemaRoot() {
-    return ffi.getVectorSchemaRoot();
+    return bridge.getVectorSchemaRoot();
   }
 
   @Override
   public boolean loadNextBatch() {
-    return ffi.loadNextBatch();
+    return bridge.loadNextBatch();
   }
 
   @Override
   public Dictionary lookup(long id) {
-    return ffi.lookup(id);
+    return bridge.lookup(id);
   }
 
   @Override
   public Set<Long> getDictionaryIds() {
-    return ffi.getDictionaryIds();
+    return bridge.getDictionaryIds();
   }
 
   @Override
   public void close() {
-    ffi.close();
+    bridge.close();
   }
 }

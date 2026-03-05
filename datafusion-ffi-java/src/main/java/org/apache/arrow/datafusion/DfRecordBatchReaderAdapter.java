@@ -13,6 +13,7 @@ import org.apache.arrow.vector.VectorSchemaRoot;
 final class DfRecordBatchReaderAdapter implements DfRecordBatchReaderTrait, AutoCloseable {
   private final RecordBatchReader reader;
   private final BufferAllocator allocator;
+  private final boolean fullStackTrace;
 
   // Cached FFI schema
   private final ArrowSchema ffiSchema;
@@ -20,9 +21,11 @@ final class DfRecordBatchReaderAdapter implements DfRecordBatchReaderTrait, Auto
 
   private boolean closed = false;
 
-  DfRecordBatchReaderAdapter(RecordBatchReader reader, BufferAllocator allocator) {
+  DfRecordBatchReaderAdapter(
+      RecordBatchReader reader, BufferAllocator allocator, boolean fullStackTrace) {
     this.reader = reader;
     this.allocator = allocator;
+    this.fullStackTrace = fullStackTrace;
     this.ffiSchema = ArrowSchema.allocateNew(allocator);
     Data.exportSchema(allocator, reader.getVectorSchemaRoot().getSchema(), null, ffiSchema);
     this.schemaAddr = ffiSchema.memoryAddress();
@@ -78,7 +81,7 @@ final class DfRecordBatchReaderAdapter implements DfRecordBatchReaderTrait, Auto
 
       return 1; // Data available
     } catch (Exception e) {
-      DfCatalogAdapter.writeError(errorAddr, errorCap, e.getMessage());
+      Errors.writeException(errorAddr, errorCap, e, fullStackTrace);
       return -1;
     }
   }

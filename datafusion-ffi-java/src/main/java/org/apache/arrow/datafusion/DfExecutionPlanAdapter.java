@@ -11,16 +11,23 @@ import org.apache.arrow.memory.BufferAllocator;
 final class DfExecutionPlanAdapter implements DfExecutionPlanTrait {
   private final ExecutionPlan plan;
   private final BufferAllocator allocator;
+  private final boolean fullStackTrace;
 
   // Cached FFI schema
   private final ArrowSchema ffiSchema;
   private final long schemaAddr;
 
-  DfExecutionPlanAdapter(ExecutionPlan plan, BufferAllocator allocator) {
+  DfExecutionPlanAdapter(ExecutionPlan plan, BufferAllocator allocator, boolean fullStackTrace) {
     this.plan = plan;
     this.allocator = allocator;
+    this.fullStackTrace = fullStackTrace;
     this.ffiSchema = ArrowSchema.allocateNew(allocator);
-    Data.exportSchema(allocator, plan.schema(), null, ffiSchema);
+    try {
+      Data.exportSchema(allocator, plan.schema(), null, ffiSchema);
+    } catch (Exception e) {
+      ffiSchema.close();
+      throw e;
+    }
     this.schemaAddr = ffiSchema.memoryAddress();
   }
 
@@ -61,12 +68,13 @@ final class DfExecutionPlanAdapter implements DfExecutionPlanTrait {
   public long execute(int partition, long errorAddr, long errorCap) {
     try {
       RecordBatchReader reader = plan.execute(partition, allocator);
-      DfRecordBatchReaderAdapter adapter = new DfRecordBatchReaderAdapter(reader, allocator);
+      DfRecordBatchReaderAdapter adapter =
+          new DfRecordBatchReaderAdapter(reader, allocator, fullStackTrace);
       long ptr = DfRecordBatchReader.createRaw(adapter);
       adapter.closeFfiSchema();
       return ptr;
     } catch (Exception e) {
-      DfCatalogAdapter.writeError(errorAddr, errorCap, e.getMessage());
+      Errors.writeException(errorAddr, errorCap, e, fullStackTrace);
       return 0;
     }
   }
