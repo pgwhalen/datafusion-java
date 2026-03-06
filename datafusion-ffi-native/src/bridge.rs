@@ -789,14 +789,17 @@ pub mod ffi {
             }))
         }
 
-        pub fn sql(&self, query: &DiplomatStr) -> Result<Box<DfDataFrame>, Box<DfError>> {
-            let sql_str = diplomat_str(query)?;
-            let df = self.rt.block_on(self.ctx.sql(sql_str))?;
-            Ok(Box::new(DfDataFrame {
+        fn wrap_df(&self, df: datafusion::dataframe::DataFrame) -> Box<DfDataFrame> {
+            Box::new(DfDataFrame {
                 df,
                 ctx: self.ctx.clone(),
                 rt: Arc::clone(&self.rt),
-            }))
+            })
+        }
+
+        pub fn sql(&self, query: &DiplomatStr) -> Result<Box<DfDataFrame>, Box<DfError>> {
+            let sql_str = diplomat_str(query)?;
+            Ok(self.wrap_df(self.rt.block_on(self.ctx.sql(sql_str))?))
         }
 
         pub fn session_id(&self, write: &mut DiplomatWrite) {
@@ -928,12 +931,7 @@ pub mod ffi {
         /// Get a DataFrame for a registered table by name.
         pub fn table(&self, name: &DiplomatStr) -> Result<Box<DfDataFrame>, Box<DfError>> {
             let name_str = diplomat_str(name)?;
-            let df = self.rt.block_on(self.ctx.table(name_str))?;
-            Ok(Box::new(DfDataFrame {
-                df,
-                ctx: self.ctx.clone(),
-                rt: Arc::clone(&self.rt),
-            }))
+            Ok(self.wrap_df(self.rt.block_on(self.ctx.table(name_str))?))
         }
 
         /// Read a Parquet file/directory into a DataFrame.
@@ -945,11 +943,7 @@ pub mod ffi {
             let df = self
                 .rt
                 .block_on(self.ctx.read_parquet(path_str, Default::default()))?;
-            Ok(Box::new(DfDataFrame {
-                df,
-                ctx: self.ctx.clone(),
-                rt: Arc::clone(&self.rt),
-            }))
+            Ok(self.wrap_df(df))
         }
 
         /// Read a CSV file/directory into a DataFrame.
@@ -961,11 +955,7 @@ pub mod ffi {
             let df = self
                 .rt
                 .block_on(self.ctx.read_csv(path_str, Default::default()))?;
-            Ok(Box::new(DfDataFrame {
-                df,
-                ctx: self.ctx.clone(),
-                rt: Arc::clone(&self.rt),
-            }))
+            Ok(self.wrap_df(df))
         }
 
         /// Read a JSON file/directory into a DataFrame.
@@ -977,11 +967,7 @@ pub mod ffi {
             let df = self
                 .rt
                 .block_on(self.ctx.read_json(path_str, Default::default()))?;
-            Ok(Box::new(DfDataFrame {
-                df,
-                ctx: self.ctx.clone(),
-                rt: Arc::clone(&self.rt),
-            }))
+            Ok(self.wrap_df(df))
         }
 
         /// Get a snapshot of the session state.
@@ -1004,6 +990,14 @@ pub mod ffi {
     }
 
     impl DfDataFrame {
+        fn wrap(&self, df: datafusion::dataframe::DataFrame) -> Box<DfDataFrame> {
+            Box::new(DfDataFrame {
+                df,
+                ctx: self.ctx.clone(),
+                rt: Arc::clone(&self.rt),
+            })
+        }
+
         /// Collect all batches and format as a pretty-printed string.
         pub fn collect_to_string(&self, write: &mut DiplomatWrite) -> Result<(), Box<DfError>> {
             let df = self.df.clone();
@@ -1095,12 +1089,7 @@ pub mod ffi {
             if exprs.is_empty() {
                 return Err("Filter requires exactly one predicate expression".into());
             }
-            let new_df = self.df.clone().filter(exprs[0].clone())?;
-            Ok(Box::new(DfDataFrame {
-                df: new_df,
-                ctx: self.ctx.clone(),
-                rt: Arc::clone(&self.rt),
-            }))
+            Ok(self.wrap(self.df.clone().filter(exprs[0].clone())?))
         }
 
         /// Project columns by protobuf-encoded expression list.
@@ -1109,12 +1098,7 @@ pub mod ffi {
             select: &[u8],
         ) -> Result<Box<DfDataFrame>, Box<DfError>> {
             let exprs = deserialize_exprs(&self.ctx, select)?;
-            let new_df = self.df.clone().select(exprs)?;
-            Ok(Box::new(DfDataFrame {
-                df: new_df,
-                ctx: self.ctx.clone(),
-                rt: Arc::clone(&self.rt),
-            }))
+            Ok(self.wrap(self.df.clone().select(exprs)?))
         }
 
         /// Aggregate with protobuf-encoded group-by and aggregate expression lists.
@@ -1125,12 +1109,7 @@ pub mod ffi {
         ) -> Result<Box<DfDataFrame>, Box<DfError>> {
             let group_exprs = deserialize_exprs(&self.ctx, group)?;
             let aggr_exprs = deserialize_exprs(&self.ctx, aggr)?;
-            let new_df = self.df.clone().aggregate(group_exprs, aggr_exprs)?;
-            Ok(Box::new(DfDataFrame {
-                df: new_df,
-                ctx: self.ctx.clone(),
-                rt: Arc::clone(&self.rt),
-            }))
+            Ok(self.wrap(self.df.clone().aggregate(group_exprs, aggr_exprs)?))
         }
 
         /// Sort by protobuf-encoded sort expressions.
@@ -1139,12 +1118,7 @@ pub mod ffi {
             sort: &[u8],
         ) -> Result<Box<DfDataFrame>, Box<DfError>> {
             let sort_exprs = deserialize_sort_exprs(&self.ctx, sort)?;
-            let new_df = self.df.clone().sort(sort_exprs)?;
-            Ok(Box::new(DfDataFrame {
-                df: new_df,
-                ctx: self.ctx.clone(),
-                rt: Arc::clone(&self.rt),
-            }))
+            Ok(self.wrap(self.df.clone().sort(sort_exprs)?))
         }
 
         /// Limit rows. fetch=-1 means no limit.
@@ -1158,12 +1132,7 @@ pub mod ffi {
             } else {
                 Some(fetch as usize)
             };
-            let new_df = self.df.clone().limit(skip, fetch_option)?;
-            Ok(Box::new(DfDataFrame {
-                df: new_df,
-                ctx: self.ctx.clone(),
-                rt: Arc::clone(&self.rt),
-            }))
+            Ok(self.wrap(self.df.clone().limit(skip, fetch_option)?))
         }
 
         // ── Join and set operations ──
@@ -1201,15 +1170,9 @@ pub mod ffi {
                 exprs.into_iter().next()
             };
 
-            let new_df = self
-                .df
-                .clone()
-                .join(right.df.clone(), jt, &left_col_strs, &right_col_strs, filter)?;
-            Ok(Box::new(DfDataFrame {
-                df: new_df,
-                ctx: self.ctx.clone(),
-                rt: Arc::clone(&self.rt),
-            }))
+            Ok(self.wrap(self.df.clone().join(
+                right.df.clone(), jt, &left_col_strs, &right_col_strs, filter,
+            )?))
         }
 
         /// Join on arbitrary protobuf-encoded expressions.
@@ -1231,26 +1194,12 @@ pub mod ffi {
             };
 
             let on_exprs = deserialize_exprs(&self.ctx, on)?;
-
-            let new_df = self
-                .df
-                .clone()
-                .join_on(right.df.clone(), jt, on_exprs)?;
-            Ok(Box::new(DfDataFrame {
-                df: new_df,
-                ctx: self.ctx.clone(),
-                rt: Arc::clone(&self.rt),
-            }))
+            Ok(self.wrap(self.df.clone().join_on(right.df.clone(), jt, on_exprs)?))
         }
 
         /// Union of two DataFrames.
         pub fn union(&self, other: &DfDataFrame) -> Result<Box<DfDataFrame>, Box<DfError>> {
-            let new_df = self.df.clone().union(other.df.clone())?;
-            Ok(Box::new(DfDataFrame {
-                df: new_df,
-                ctx: self.ctx.clone(),
-                rt: Arc::clone(&self.rt),
-            }))
+            Ok(self.wrap(self.df.clone().union(other.df.clone())?))
         }
 
         /// Union distinct of two DataFrames.
@@ -1258,12 +1207,7 @@ pub mod ffi {
             &self,
             other: &DfDataFrame,
         ) -> Result<Box<DfDataFrame>, Box<DfError>> {
-            let new_df = self.df.clone().union_distinct(other.df.clone())?;
-            Ok(Box::new(DfDataFrame {
-                df: new_df,
-                ctx: self.ctx.clone(),
-                rt: Arc::clone(&self.rt),
-            }))
+            Ok(self.wrap(self.df.clone().union_distinct(other.df.clone())?))
         }
 
         /// Intersect of two DataFrames.
@@ -1271,12 +1215,7 @@ pub mod ffi {
             &self,
             other: &DfDataFrame,
         ) -> Result<Box<DfDataFrame>, Box<DfError>> {
-            let new_df = self.df.clone().intersect(other.df.clone())?;
-            Ok(Box::new(DfDataFrame {
-                df: new_df,
-                ctx: self.ctx.clone(),
-                rt: Arc::clone(&self.rt),
-            }))
+            Ok(self.wrap(self.df.clone().intersect(other.df.clone())?))
         }
 
         /// Except (set difference) of two DataFrames.
@@ -1284,22 +1223,12 @@ pub mod ffi {
             &self,
             other: &DfDataFrame,
         ) -> Result<Box<DfDataFrame>, Box<DfError>> {
-            let new_df = self.df.clone().except(other.df.clone())?;
-            Ok(Box::new(DfDataFrame {
-                df: new_df,
-                ctx: self.ctx.clone(),
-                rt: Arc::clone(&self.rt),
-            }))
+            Ok(self.wrap(self.df.clone().except(other.df.clone())?))
         }
 
         /// Distinct rows.
         pub fn distinct(&self) -> Result<Box<DfDataFrame>, Box<DfError>> {
-            let new_df = self.df.clone().distinct()?;
-            Ok(Box::new(DfDataFrame {
-                df: new_df,
-                ctx: self.ctx.clone(),
-                rt: Arc::clone(&self.rt),
-            }))
+            Ok(self.wrap(self.df.clone().distinct()?))
         }
 
         // ── Column manipulation ──
@@ -1315,12 +1244,7 @@ pub mod ffi {
             if exprs.is_empty() {
                 return Err("with_column requires exactly one expression".into());
             }
-            let new_df = self.df.clone().with_column(name_str, exprs[0].clone())?;
-            Ok(Box::new(DfDataFrame {
-                df: new_df,
-                ctx: self.ctx.clone(),
-                rt: Arc::clone(&self.rt),
-            }))
+            Ok(self.wrap(self.df.clone().with_column(name_str, exprs[0].clone())?))
         }
 
         /// Rename a column.
@@ -1331,12 +1255,7 @@ pub mod ffi {
         ) -> Result<Box<DfDataFrame>, Box<DfError>> {
             let old_str = diplomat_str(old_name)?;
             let new_str = diplomat_str(new_name)?;
-            let new_df = self.df.clone().with_column_renamed(old_str, new_str)?;
-            Ok(Box::new(DfDataFrame {
-                df: new_df,
-                ctx: self.ctx.clone(),
-                rt: Arc::clone(&self.rt),
-            }))
+            Ok(self.wrap(self.df.clone().with_column_renamed(old_str, new_str)?))
         }
 
         /// Drop columns by name. names contains null-separated UTF-8 column names.
@@ -1346,12 +1265,7 @@ pub mod ffi {
         ) -> Result<Box<DfDataFrame>, Box<DfError>> {
             let col_strs = super::parse_null_separated(names);
             let col_strs_ref: Vec<&str> = col_strs.iter().map(|s| s.as_str()).collect();
-            let new_df = self.df.clone().drop_columns(&col_strs_ref)?;
-            Ok(Box::new(DfDataFrame {
-                df: new_df,
-                ctx: self.ctx.clone(),
-                rt: Arc::clone(&self.rt),
-            }))
+            Ok(self.wrap(self.df.clone().drop_columns(&col_strs_ref)?))
         }
 
         // ── Write operations ──
