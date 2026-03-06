@@ -5,7 +5,7 @@ pub mod ffi {
     use arrow::datatypes::Schema as ArrowSchema;
     use arrow::ffi::{from_ffi, to_ffi, FFI_ArrowArray, FFI_ArrowSchema};
     use arrow::record_batch::RecordBatch;
-    use datafusion::common::{DFSchema, JoinType};
+    use datafusion::common::{DFSchema, DataFusionError, JoinType};
     use datafusion::datasource::MemTable;
     use datafusion::execution::config::SessionConfig;
     use datafusion::execution::context::SessionContext;
@@ -28,35 +28,30 @@ pub mod ffi {
     // Deserialize helpers (safe, no raw pointers)
     // ============================================================================
 
-    fn deserialize_exprs(ctx: &SessionContext, bytes: &[u8]) -> Result<Vec<Expr>, String> {
+    fn deserialize_exprs(ctx: &SessionContext, bytes: &[u8]) -> Result<Vec<Expr>, Box<DfError>> {
         if bytes.is_empty() {
             return Ok(vec![]);
         }
-        let proto_list =
-            LogicalExprList::decode(bytes).map_err(|e| format!("Failed to decode proto: {}", e))?;
+        let proto_list = LogicalExprList::decode(bytes)?;
         let codec = DefaultLogicalExtensionCodec {};
-        parse_exprs(proto_list.expr.iter(), ctx, &codec)
-            .map_err(|e| format!("Failed to parse expressions: {}", e))
+        Ok(parse_exprs(proto_list.expr.iter(), ctx, &codec)?)
     }
 
-    fn deserialize_sort_exprs(ctx: &SessionContext, bytes: &[u8]) -> Result<Vec<SortExpr>, String> {
+    fn deserialize_sort_exprs(ctx: &SessionContext, bytes: &[u8]) -> Result<Vec<SortExpr>, Box<DfError>> {
         if bytes.is_empty() {
             return Ok(vec![]);
         }
-        let collection = SortExprNodeCollection::decode(bytes)
-            .map_err(|e| format!("Failed to decode sort expressions: {}", e))?;
+        let collection = SortExprNodeCollection::decode(bytes)?;
         let codec = DefaultLogicalExtensionCodec {};
-        parse_sorts(collection.sort_expr_nodes.iter(), ctx, &codec)
-            .map_err(|e| format!("Failed to parse sort expressions: {}", e))
+        Ok(parse_sorts(collection.sort_expr_nodes.iter(), ctx, &codec)?)
     }
 
     fn diplomat_str(s: &DiplomatStr) -> Result<&str, Box<DfError>> {
-        std::str::from_utf8(s)
-            .map_err(|e| Box::new(DfError(format!("Invalid UTF-8: {}", e).into())))
+        Ok(std::str::from_utf8(s)?)
     }
 
     /// Parse session config from null-separated bytes: key\0value\0key\0value...
-    fn build_session_config(options: &[u8]) -> Result<SessionConfig, String> {
+    fn build_session_config(options: &[u8]) -> Result<SessionConfig, Box<DfError>> {
         let parts = super::parse_null_separated(options);
         if parts.is_empty() {
             return Ok(SessionConfig::new());
@@ -67,8 +62,7 @@ pub mod ffi {
                 settings.insert(chunk[0].clone(), chunk[1].clone());
             }
         }
-        SessionConfig::from_string_hash_map(&settings)
-            .map_err(|e| format!("Failed to create SessionConfig: {}", e))
+        Ok(SessionConfig::from_string_hash_map(&settings)?)
     }
 
     // ============================================================================
@@ -374,6 +368,61 @@ pub mod ffi {
         }
     }
 
+    // From impls so that `?` works directly with common error types
+    impl From<DataFusionError> for Box<DfError> {
+        fn from(e: DataFusionError) -> Self {
+            Box::new(DfError(e.to_string().into()))
+        }
+    }
+
+    impl From<arrow::error::ArrowError> for Box<DfError> {
+        fn from(e: arrow::error::ArrowError) -> Self {
+            Box::new(DfError(e.to_string().into()))
+        }
+    }
+
+    impl From<prost::DecodeError> for Box<DfError> {
+        fn from(e: prost::DecodeError) -> Self {
+            Box::new(DfError(e.to_string().into()))
+        }
+    }
+
+    impl From<String> for Box<DfError> {
+        fn from(e: String) -> Self {
+            Box::new(DfError(e.into()))
+        }
+    }
+
+    impl From<&str> for Box<DfError> {
+        fn from(e: &str) -> Self {
+            Box::new(DfError(e.into()))
+        }
+    }
+
+    impl From<std::io::Error> for Box<DfError> {
+        fn from(e: std::io::Error) -> Self {
+            Box::new(DfError(e.to_string().into()))
+        }
+    }
+
+    impl From<std::str::Utf8Error> for Box<DfError> {
+        fn from(e: std::str::Utf8Error) -> Self {
+            Box::new(DfError(e.to_string().into()))
+        }
+    }
+
+    impl From<datafusion_proto::protobuf::FromProtoError> for Box<DfError> {
+        fn from(e: datafusion_proto::protobuf::FromProtoError) -> Self {
+            Box::new(DfError(e.to_string().into()))
+        }
+    }
+
+    impl From<datafusion_proto::protobuf::ToProtoError> for Box<DfError> {
+        fn from(e: datafusion_proto::protobuf::ToProtoError) -> Self {
+            Box::new(DfError(e.to_string().into()))
+        }
+    }
+
     #[diplomat::opaque]
     pub struct DfArrowBatch {
         pub(super) schema: Arc<ArrowSchema>,
@@ -388,18 +437,12 @@ pub mod ffi {
             array_addr: usize,
         ) -> Result<Box<DfArrowBatch>, Box<DfError>> {
             if schema_addr == 0 || array_addr == 0 {
-                return Err(Box::new(DfError(
-                    "Null address for Arrow FFI struct".into(),
-                )));
+                return Err("Null address for Arrow FFI struct".into());
             }
             unsafe {
                 let ffi_schema = std::ptr::read(schema_addr as *mut FFI_ArrowSchema);
                 let ffi_array = std::ptr::read(array_addr as *mut FFI_ArrowArray);
-                let array_data = from_ffi(ffi_array, &ffi_schema).map_err(|e| {
-                    Box::new(DfError(
-                        format!("Failed to import Arrow array: {}", e).into(),
-                    ))
-                })?;
+                let array_data = from_ffi(ffi_array, &ffi_schema)?;
                 let struct_array = StructArray::from(array_data);
                 let schema = Arc::new(ArrowSchema::new(struct_array.fields().clone()));
                 let batch = RecordBatch::from(struct_array);
@@ -418,17 +461,11 @@ pub mod ffi {
         /// Java calls this after Data.exportSchema().
         pub fn from_address(addr: usize) -> Result<Box<DfArrowSchema>, Box<DfError>> {
             if addr == 0 {
-                return Err(Box::new(DfError(
-                    "Null address for Arrow FFI schema".into(),
-                )));
+                return Err("Null address for Arrow FFI schema".into());
             }
             unsafe {
                 let ffi_schema = std::ptr::read(addr as *mut FFI_ArrowSchema);
-                let schema = ArrowSchema::try_from(&ffi_schema).map_err(|e| {
-                    Box::new(DfError(
-                        format!("Failed to import Arrow schema: {}", e).into(),
-                    ))
-                })?;
+                let schema = ArrowSchema::try_from(&ffi_schema)?;
                 Ok(Box::new(DfArrowSchema {
                     schema: Arc::new(schema),
                 }))
@@ -438,13 +475,9 @@ pub mod ffi {
         /// Export this schema as FFI_ArrowSchema to a Java-provided address.
         pub fn export_to(&self, out_addr: usize) -> Result<(), Box<DfError>> {
             if out_addr == 0 {
-                return Err(Box::new(DfError("Null output address".into())));
+                return Err("Null output address".into());
             }
-            let ffi_schema = FFI_ArrowSchema::try_from(self.schema.as_ref()).map_err(|e| {
-                Box::new(DfError(
-                    format!("Schema export failed: {}", e).into(),
-                ))
-            })?;
+            let ffi_schema = FFI_ArrowSchema::try_from(self.schema.as_ref())?;
             unsafe {
                 std::ptr::write(out_addr as *mut FFI_ArrowSchema, ffi_schema);
             }
@@ -499,11 +532,7 @@ pub mod ffi {
             } else {
                 RuntimeEnvBuilder::new()
             };
-            let rt_env = builder.build_arc().map_err(|e| {
-                Box::new(DfError(
-                    format!("Failed to create RuntimeEnv: {}", e).into(),
-                ))
-            })?;
+            let rt_env = builder.build_arc()?;
             Ok(Box::new(DfRuntimeEnv { rt_env }))
         }
     }
@@ -527,14 +556,9 @@ pub mod ffi {
         /// Export the stream's schema as FFI_ArrowSchema to a Java-provided address.
         pub fn schema_to(&self, out_addr: usize) -> Result<(), Box<DfError>> {
             if out_addr == 0 {
-                return Err(Box::new(DfError("Null output address".into())));
+                return Err("Null output address".into());
             }
-            let ffi_schema =
-                FFI_ArrowSchema::try_from(self.schema.as_ref()).map_err(|e| {
-                    Box::new(DfError(
-                        format!("Schema export failed: {}", e).into(),
-                    ))
-                })?;
+            let ffi_schema = FFI_ArrowSchema::try_from(self.schema.as_ref())?;
             unsafe {
                 std::ptr::write(out_addr as *mut FFI_ArrowSchema, ffi_schema);
             }
@@ -554,11 +578,7 @@ pub mod ffi {
             }
             let batch = &self.batches[idx];
             let struct_array: StructArray = batch.clone().into();
-            let (ffi_array, ffi_schema) = to_ffi(&struct_array.to_data()).map_err(|e| {
-                Box::new(DfError(
-                    format!("Failed to export batch: {}", e).into(),
-                ))
-            })?;
+            let (ffi_array, ffi_schema) = to_ffi(&struct_array.to_data())?;
             unsafe {
                 std::ptr::write(array_out_addr as *mut FFI_ArrowArray, ffi_array);
                 std::ptr::write(schema_out_addr as *mut FFI_ArrowSchema, ffi_schema);
@@ -584,14 +604,9 @@ pub mod ffi {
         /// Export the stream's schema as FFI_ArrowSchema to a Java-provided address.
         pub fn schema_to(&self, out_addr: usize) -> Result<(), Box<DfError>> {
             if out_addr == 0 {
-                return Err(Box::new(DfError("Null output address".into())));
+                return Err("Null output address".into());
             }
-            let ffi_schema =
-                FFI_ArrowSchema::try_from(self.schema.as_ref()).map_err(|e| {
-                    Box::new(DfError(
-                        format!("Schema export failed: {}", e).into(),
-                    ))
-                })?;
+            let ffi_schema = FFI_ArrowSchema::try_from(self.schema.as_ref())?;
             unsafe {
                 std::ptr::write(out_addr as *mut FFI_ArrowSchema, ffi_schema);
             }
@@ -616,17 +631,10 @@ pub mod ffi {
             };
             match self.inner.rt.block_on(stream.next()) {
                 None => Ok(0),
-                Some(Err(e)) => Err(Box::new(DfError(
-                    format!("Stream error: {}", e).into(),
-                ))),
+                Some(Err(e)) => Err(e.into()),
                 Some(Ok(batch)) => {
                     let struct_array: StructArray = batch.into();
-                    let (ffi_array, ffi_schema) =
-                        to_ffi(&struct_array.to_data()).map_err(|e| {
-                            Box::new(DfError(
-                                format!("Failed to export batch: {}", e).into(),
-                            ))
-                        })?;
+                    let (ffi_array, ffi_schema) = to_ffi(&struct_array.to_data())?;
                     unsafe {
                         std::ptr::write(array_out_addr as *mut FFI_ArrowArray, ffi_array);
                         std::ptr::write(
@@ -656,12 +664,7 @@ pub mod ffi {
             let sql_str = diplomat_str(sql)?;
             let plan = self
                 .rt
-                .block_on(async { self.state.create_logical_plan(sql_str).await })
-                .map_err(|e| {
-                    Box::new(DfError(
-                        format!("Failed to create logical plan: {}", e).into(),
-                    ))
-                })?;
+                .block_on(async { self.state.create_logical_plan(sql_str).await })?;
             Ok(Box::new(DfLogicalPlan { plan }))
         }
 
@@ -675,57 +678,37 @@ pub mod ffi {
             schema_addr: usize,
         ) -> Result<usize, Box<DfError>> {
             if filter_bytes.is_empty() {
-                return Err(Box::new(DfError("No filter bytes provided".into())));
+                return Err("No filter bytes provided".into());
             }
             if schema_addr == 0 {
-                return Err(Box::new(DfError("Null schema address".into())));
+                return Err("Null schema address".into());
             }
 
-            let proto_list = LogicalExprList::decode(filter_bytes).map_err(|e| {
-                Box::new(DfError(
-                    format!("Failed to decode filter protobuf: {}", e).into(),
-                ))
-            })?;
+            let proto_list = LogicalExprList::decode(filter_bytes)?;
 
             // Use a temporary SessionContext for UDF resolution during parsing
             let temp_ctx = SessionContext::new_with_state(self.state.clone());
             let codec = DefaultLogicalExtensionCodec {};
             let exprs: Vec<Expr> =
-                parse_exprs(proto_list.expr.iter(), &temp_ctx, &codec).map_err(|e| {
-                    Box::new(DfError(
-                        format!("Failed to parse filter expressions: {}", e).into(),
-                    ))
-                })?;
+                parse_exprs(proto_list.expr.iter(), &temp_ctx, &codec)?;
 
             if exprs.is_empty() {
-                return Err(Box::new(DfError("No filters after parsing".into())));
+                return Err("No filters after parsing".into());
             }
 
             // Import schema from FFI (by reference)
             let schema = unsafe {
                 let ffi_schema = &*(schema_addr as *const FFI_ArrowSchema);
-                Arc::new(ArrowSchema::try_from(ffi_schema).map_err(|e| {
-                    Box::new(DfError(format!("Invalid schema: {}", e).into()))
-                })?)
+                Arc::new(ArrowSchema::try_from(ffi_schema)?)
             };
-            let df_schema = DFSchema::try_from(schema.as_ref().clone()).map_err(|e| {
-                Box::new(DfError(
-                    format!("Failed to create DFSchema: {}", e).into(),
-                ))
-            })?;
+            let df_schema = DFSchema::try_from(schema.as_ref().clone())?;
 
             // Conjoin all filters with AND
             let combined = exprs.into_iter().reduce(|a, b| a.and(b)).unwrap();
 
             // Create physical expression
             let physical_expr =
-                self.state
-                    .create_physical_expr(combined, &df_schema)
-                    .map_err(|e| {
-                        Box::new(DfError(
-                            format!("Failed to create physical expression: {}", e).into(),
-                        ))
-                    })?;
+                self.state.create_physical_expr(combined, &df_schema)?;
 
             Ok(Box::into_raw(Box::new(physical_expr)) as usize)
         }
@@ -781,12 +764,8 @@ pub mod ffi {
         pub fn new_with_config(
             options: &[u8],
         ) -> Result<Box<DfSessionContext>, Box<DfError>> {
-            let config = build_session_config(options).map_err(|e| Box::new(DfError(e.into())))?;
-            let rt = Runtime::new().map_err(|e| {
-                Box::new(DfError(
-                    format!("Failed to create runtime: {}", e).into(),
-                ))
-            })?;
+            let config = build_session_config(options)?;
+            let rt = Runtime::new()?;
             let ctx = SessionContext::new_with_config(config);
             Ok(Box::new(DfSessionContext {
                 ctx,
@@ -800,12 +779,8 @@ pub mod ffi {
             options: &[u8],
             rt_env: &DfRuntimeEnv,
         ) -> Result<Box<DfSessionContext>, Box<DfError>> {
-            let config = build_session_config(options).map_err(|e| Box::new(DfError(e.into())))?;
-            let rt = Runtime::new().map_err(|e| {
-                Box::new(DfError(
-                    format!("Failed to create runtime: {}", e).into(),
-                ))
-            })?;
+            let config = build_session_config(options)?;
+            let rt = Runtime::new()?;
             let ctx =
                 SessionContext::new_with_config_rt(config, Arc::clone(&rt_env.rt_env));
             Ok(Box::new(DfSessionContext {
@@ -816,10 +791,7 @@ pub mod ffi {
 
         pub fn sql(&self, query: &DiplomatStr) -> Result<Box<DfDataFrame>, Box<DfError>> {
             let sql_str = diplomat_str(query)?;
-            let df = self
-                .rt
-                .block_on(self.ctx.sql(sql_str))
-                .map_err(|e| Box::new(DfError(format!("{}", e).into())))?;
+            let df = self.rt.block_on(self.ctx.sql(sql_str))?;
             Ok(Box::new(DfDataFrame {
                 df,
                 ctx: self.ctx.clone(),
@@ -845,19 +817,8 @@ pub mod ffi {
             let table = MemTable::try_new(
                 Arc::clone(&batch.schema),
                 vec![vec![batch.batch.clone()]],
-            )
-            .map_err(|e| {
-                Box::new(DfError(
-                    format!("Failed to create memory table: {}", e).into(),
-                ))
-            })?;
-            self.ctx
-                .register_table(name_str, Arc::new(table))
-                .map_err(|e| {
-                    Box::new(DfError(
-                        format!("Failed to register table: {}", e).into(),
-                    ))
-                })?;
+            )?;
+            self.ctx.register_table(name_str, Arc::new(table))?;
             Ok(())
         }
 
@@ -880,26 +841,11 @@ pub mod ffi {
             schema: &DfArrowSchema,
         ) -> Result<Box<DfExprBytes>, Box<DfError>> {
             let sql_str = diplomat_str(sql)?;
-            let df_schema =
-                DFSchema::try_from(schema.schema.as_ref().clone()).map_err(|e| {
-                    Box::new(DfError(
-                        format!("Failed to create DFSchema: {}", e).into(),
-                    ))
-                })?;
+            let df_schema = DFSchema::try_from(schema.schema.as_ref().clone())?;
             let state = self.ctx.state();
-            let expr = state
-                .create_logical_expr(sql_str, &df_schema)
-                .map_err(|e| {
-                    Box::new(DfError(
-                        format!("Failed to parse SQL expression: {}", e).into(),
-                    ))
-                })?;
+            let expr = state.create_logical_expr(sql_str, &df_schema)?;
             let codec = DefaultLogicalExtensionCodec {};
-            let serialized = serialize_exprs(&[expr], &codec).map_err(|e| {
-                Box::new(DfError(
-                    format!("Failed to serialize expression: {}", e).into(),
-                ))
-            })?;
+            let serialized = serialize_exprs(&[expr], &codec)?;
             let proto_list = LogicalExprList { expr: serialized };
             let bytes = proto_list.encode_to_vec();
             Ok(Box::new(DfExprBytes { bytes }))
@@ -939,17 +885,12 @@ pub mod ffi {
 
             // Import schema by reference. The caller (Java) must call the release callback
             // on the FFI_ArrowSchema after this function returns to free exported buffers.
-            let arrow_schema = if schema_addr != 0 {
-                unsafe {
-                    let ffi_schema = &*(schema_addr as *const FFI_ArrowSchema);
-                    Arc::new(ArrowSchema::try_from(ffi_schema).map_err(|e| {
-                        Box::new(DfError(
-                            format!("Failed to import schema: {}", e).into(),
-                        ))
-                    })?)
-                }
-            } else {
-                return Err(Box::new(DfError("Null schema address".into())));
+            if schema_addr == 0 {
+                return Err("Null schema address".into());
+            }
+            let arrow_schema = unsafe {
+                let ffi_schema = &*(schema_addr as *const FFI_ArrowSchema);
+                Arc::new(ArrowSchema::try_from(ffi_schema)?)
             };
 
             // Create the foreign file format
@@ -970,9 +911,7 @@ pub mod ffi {
             let url_strs = super::parse_null_separated(urls);
             let mut table_urls = Vec::with_capacity(url_strs.len());
             for url_str in &url_strs {
-                let table_url = ListingTableUrl::parse(url_str).map_err(|e| {
-                    Box::new(DfError(format!("Failed to parse URL '{}': {}", url_str, e).into()))
-                })?;
+                let table_url = ListingTableUrl::parse(url_str)?;
                 table_urls.push(table_url);
             }
 
@@ -980,19 +919,8 @@ pub mod ffi {
                 .with_listing_options(options)
                 .with_schema(arrow_schema);
 
-            let table = ListingTable::try_new(config).map_err(|e| {
-                Box::new(DfError(
-                    format!("Failed to create listing table: {}", e).into(),
-                ))
-            })?;
-
-            self.ctx
-                .register_table(name_str, Arc::new(table))
-                .map_err(|e| {
-                    Box::new(DfError(
-                        format!("Failed to register table: {}", e).into(),
-                    ))
-                })?;
+            let table = ListingTable::try_new(config)?;
+            self.ctx.register_table(name_str, Arc::new(table))?;
 
             Ok(())
         }
@@ -1000,10 +928,7 @@ pub mod ffi {
         /// Get a DataFrame for a registered table by name.
         pub fn table(&self, name: &DiplomatStr) -> Result<Box<DfDataFrame>, Box<DfError>> {
             let name_str = diplomat_str(name)?;
-            let df = self
-                .rt
-                .block_on(self.ctx.table(name_str))
-                .map_err(|e| Box::new(DfError(format!("{}", e).into())))?;
+            let df = self.rt.block_on(self.ctx.table(name_str))?;
             Ok(Box::new(DfDataFrame {
                 df,
                 ctx: self.ctx.clone(),
@@ -1019,12 +944,7 @@ pub mod ffi {
             let path_str = diplomat_str(path)?;
             let df = self
                 .rt
-                .block_on(self.ctx.read_parquet(path_str, Default::default()))
-                .map_err(|e| {
-                    Box::new(DfError(
-                        format!("Failed to read Parquet: {}", e).into(),
-                    ))
-                })?;
+                .block_on(self.ctx.read_parquet(path_str, Default::default()))?;
             Ok(Box::new(DfDataFrame {
                 df,
                 ctx: self.ctx.clone(),
@@ -1040,12 +960,7 @@ pub mod ffi {
             let path_str = diplomat_str(path)?;
             let df = self
                 .rt
-                .block_on(self.ctx.read_csv(path_str, Default::default()))
-                .map_err(|e| {
-                    Box::new(DfError(
-                        format!("Failed to read CSV: {}", e).into(),
-                    ))
-                })?;
+                .block_on(self.ctx.read_csv(path_str, Default::default()))?;
             Ok(Box::new(DfDataFrame {
                 df,
                 ctx: self.ctx.clone(),
@@ -1061,12 +976,7 @@ pub mod ffi {
             let path_str = diplomat_str(path)?;
             let df = self
                 .rt
-                .block_on(self.ctx.read_json(path_str, Default::default()))
-                .map_err(|e| {
-                    Box::new(DfError(
-                        format!("Failed to read JSON: {}", e).into(),
-                    ))
-                })?;
+                .block_on(self.ctx.read_json(path_str, Default::default()))?;
             Ok(Box::new(DfDataFrame {
                 df,
                 ctx: self.ctx.clone(),
@@ -1077,11 +987,7 @@ pub mod ffi {
         /// Get a snapshot of the session state.
         pub fn state(&self) -> Result<Box<DfSessionState>, Box<DfError>> {
             let state = self.ctx.state();
-            let rt = Runtime::new().map_err(|e| {
-                Box::new(DfError(
-                    format!("Failed to create runtime: {}", e).into(),
-                ))
-            })?;
+            let rt = Runtime::new()?;
             Ok(Box::new(DfSessionState { state, rt }))
         }
     }
@@ -1101,12 +1007,8 @@ pub mod ffi {
         /// Collect all batches and format as a pretty-printed string.
         pub fn collect_to_string(&self, write: &mut DiplomatWrite) -> Result<(), Box<DfError>> {
             let df = self.df.clone();
-            let batches = self
-                .rt
-                .block_on(df.collect())
-                .map_err(|e| Box::new(DfError(format!("{}", e).into())))?;
-            let formatted = arrow::util::pretty::pretty_format_batches(&batches)
-                .map_err(|e| Box::new(DfError(format!("{}", e).into())))?;
+            let batches = self.rt.block_on(df.collect())?;
+            let formatted = arrow::util::pretty::pretty_format_batches(&batches)?;
             let _ = write!(write, "{}", formatted);
             Ok(())
         }
@@ -1116,10 +1018,7 @@ pub mod ffi {
         /// Execute the DataFrame, collect all results, and return as a DfRecordBatchStream.
         pub fn collect_stream(&self) -> Result<Box<DfRecordBatchStream>, Box<DfError>> {
             let df = self.df.clone();
-            let batches = self
-                .rt
-                .block_on(df.collect())
-                .map_err(|e| Box::new(DfError(format!("Collect failed: {}", e).into())))?;
+            let batches = self.rt.block_on(df.collect())?;
             let schema = if batches.is_empty() {
                 Arc::new(self.df.schema().as_arrow().as_ref().clone())
             } else {
@@ -1140,14 +1039,7 @@ pub mod ffi {
         pub fn execute_stream(&self) -> Result<Box<DfLazyRecordBatchStream>, Box<DfError>> {
             let df = self.df.clone();
             let schema = Arc::new(self.df.schema().as_arrow().as_ref().clone());
-            let stream = self
-                .rt
-                .block_on(df.execute_stream())
-                .map_err(|e| {
-                    Box::new(DfError(
-                        format!("Execute stream failed: {}", e).into(),
-                    ))
-                })?;
+            let stream = self.rt.block_on(df.execute_stream())?;
             Ok(Box::new(DfLazyRecordBatchStream {
                 inner: super::LazyStreamState {
                     stream: std::sync::Mutex::new(Some(stream)),
@@ -1160,19 +1052,14 @@ pub mod ffi {
         /// Print DataFrame results to stdout.
         pub fn show(&self) -> Result<(), Box<DfError>> {
             let df = self.df.clone();
-            self.rt
-                .block_on(df.show())
-                .map_err(|e| Box::new(DfError(format!("Show failed: {}", e).into())))?;
+            self.rt.block_on(df.show())?;
             Ok(())
         }
 
         /// Get the row count.
         pub fn count(&self) -> Result<i64, Box<DfError>> {
             let df = self.df.clone();
-            let count = self
-                .rt
-                .block_on(df.count())
-                .map_err(|e| Box::new(DfError(format!("Count failed: {}", e).into())))?;
+            let count = self.rt.block_on(df.count())?;
             Ok(count as i64)
         }
 
@@ -1187,14 +1074,10 @@ pub mod ffi {
         /// Export the schema as FFI_ArrowSchema to a Java-provided address.
         pub fn schema_to(&self, out_addr: usize) -> Result<(), Box<DfError>> {
             if out_addr == 0 {
-                return Err(Box::new(DfError("Null output address".into())));
+                return Err("Null output address".into());
             }
             let arrow_schema = self.df.schema().as_arrow().as_ref().clone();
-            let ffi_schema = FFI_ArrowSchema::try_from(&arrow_schema).map_err(|e| {
-                Box::new(DfError(
-                    format!("Schema export failed: {}", e).into(),
-                ))
-            })?;
+            let ffi_schema = FFI_ArrowSchema::try_from(&arrow_schema)?;
             unsafe {
                 std::ptr::write(out_addr as *mut FFI_ArrowSchema, ffi_schema);
             }
@@ -1208,16 +1091,11 @@ pub mod ffi {
             &self,
             filter: &[u8],
         ) -> Result<Box<DfDataFrame>, Box<DfError>> {
-            let exprs = deserialize_exprs(&self.ctx, filter)
-                .map_err(|e| Box::new(DfError(e.into())))?;
+            let exprs = deserialize_exprs(&self.ctx, filter)?;
             if exprs.is_empty() {
-                return Err(Box::new(DfError(
-                    "Filter requires exactly one predicate expression".into(),
-                )));
+                return Err("Filter requires exactly one predicate expression".into());
             }
-            let new_df = self.df.clone().filter(exprs[0].clone()).map_err(|e| {
-                Box::new(DfError(format!("Filter failed: {}", e).into()))
-            })?;
+            let new_df = self.df.clone().filter(exprs[0].clone())?;
             Ok(Box::new(DfDataFrame {
                 df: new_df,
                 ctx: self.ctx.clone(),
@@ -1230,11 +1108,8 @@ pub mod ffi {
             &self,
             select: &[u8],
         ) -> Result<Box<DfDataFrame>, Box<DfError>> {
-            let exprs = deserialize_exprs(&self.ctx, select)
-                .map_err(|e| Box::new(DfError(e.into())))?;
-            let new_df = self.df.clone().select(exprs).map_err(|e| {
-                Box::new(DfError(format!("Select failed: {}", e).into()))
-            })?;
+            let exprs = deserialize_exprs(&self.ctx, select)?;
+            let new_df = self.df.clone().select(exprs)?;
             Ok(Box::new(DfDataFrame {
                 df: new_df,
                 ctx: self.ctx.clone(),
@@ -1248,17 +1123,9 @@ pub mod ffi {
             group: &[u8],
             aggr: &[u8],
         ) -> Result<Box<DfDataFrame>, Box<DfError>> {
-            let group_exprs = deserialize_exprs(&self.ctx, group)
-                .map_err(|e| Box::new(DfError(e.into())))?;
-            let aggr_exprs = deserialize_exprs(&self.ctx, aggr)
-                .map_err(|e| Box::new(DfError(e.into())))?;
-            let new_df = self
-                .df
-                .clone()
-                .aggregate(group_exprs, aggr_exprs)
-                .map_err(|e| {
-                    Box::new(DfError(format!("Aggregate failed: {}", e).into()))
-                })?;
+            let group_exprs = deserialize_exprs(&self.ctx, group)?;
+            let aggr_exprs = deserialize_exprs(&self.ctx, aggr)?;
+            let new_df = self.df.clone().aggregate(group_exprs, aggr_exprs)?;
             Ok(Box::new(DfDataFrame {
                 df: new_df,
                 ctx: self.ctx.clone(),
@@ -1271,11 +1138,8 @@ pub mod ffi {
             &self,
             sort: &[u8],
         ) -> Result<Box<DfDataFrame>, Box<DfError>> {
-            let sort_exprs = deserialize_sort_exprs(&self.ctx, sort)
-                .map_err(|e| Box::new(DfError(e.into())))?;
-            let new_df = self.df.clone().sort(sort_exprs).map_err(|e| {
-                Box::new(DfError(format!("Sort failed: {}", e).into()))
-            })?;
+            let sort_exprs = deserialize_sort_exprs(&self.ctx, sort)?;
+            let new_df = self.df.clone().sort(sort_exprs)?;
             Ok(Box::new(DfDataFrame {
                 df: new_df,
                 ctx: self.ctx.clone(),
@@ -1294,9 +1158,7 @@ pub mod ffi {
             } else {
                 Some(fetch as usize)
             };
-            let new_df = self.df.clone().limit(skip, fetch_option).map_err(|e| {
-                Box::new(DfError(format!("Limit failed: {}", e).into()))
-            })?;
+            let new_df = self.df.clone().limit(skip, fetch_option)?;
             Ok(Box::new(DfDataFrame {
                 df: new_df,
                 ctx: self.ctx.clone(),
@@ -1335,18 +1197,14 @@ pub mod ffi {
             let filter = if filter.is_empty() {
                 None
             } else {
-                let exprs = deserialize_exprs(&self.ctx, filter)
-                    .map_err(|e| Box::new(DfError(e.into())))?;
+                let exprs = deserialize_exprs(&self.ctx, filter)?;
                 exprs.into_iter().next()
             };
 
             let new_df = self
                 .df
                 .clone()
-                .join(right.df.clone(), jt, &left_col_strs, &right_col_strs, filter)
-                .map_err(|e| {
-                    Box::new(DfError(format!("Join failed: {}", e).into()))
-                })?;
+                .join(right.df.clone(), jt, &left_col_strs, &right_col_strs, filter)?;
             Ok(Box::new(DfDataFrame {
                 df: new_df,
                 ctx: self.ctx.clone(),
@@ -1372,18 +1230,12 @@ pub mod ffi {
                 DfJoinType::RightAnti => JoinType::RightAnti,
             };
 
-            let on_exprs = deserialize_exprs(&self.ctx, on)
-                .map_err(|e| Box::new(DfError(e.into())))?;
+            let on_exprs = deserialize_exprs(&self.ctx, on)?;
 
             let new_df = self
                 .df
                 .clone()
-                .join_on(right.df.clone(), jt, on_exprs)
-                .map_err(|e| {
-                    Box::new(DfError(
-                        format!("Join on failed: {}", e).into(),
-                    ))
-                })?;
+                .join_on(right.df.clone(), jt, on_exprs)?;
             Ok(Box::new(DfDataFrame {
                 df: new_df,
                 ctx: self.ctx.clone(),
@@ -1393,9 +1245,7 @@ pub mod ffi {
 
         /// Union of two DataFrames.
         pub fn union(&self, other: &DfDataFrame) -> Result<Box<DfDataFrame>, Box<DfError>> {
-            let new_df = self.df.clone().union(other.df.clone()).map_err(|e| {
-                Box::new(DfError(format!("Union failed: {}", e).into()))
-            })?;
+            let new_df = self.df.clone().union(other.df.clone())?;
             Ok(Box::new(DfDataFrame {
                 df: new_df,
                 ctx: self.ctx.clone(),
@@ -1408,12 +1258,7 @@ pub mod ffi {
             &self,
             other: &DfDataFrame,
         ) -> Result<Box<DfDataFrame>, Box<DfError>> {
-            let new_df =
-                self.df.clone().union_distinct(other.df.clone()).map_err(|e| {
-                    Box::new(DfError(
-                        format!("Union distinct failed: {}", e).into(),
-                    ))
-                })?;
+            let new_df = self.df.clone().union_distinct(other.df.clone())?;
             Ok(Box::new(DfDataFrame {
                 df: new_df,
                 ctx: self.ctx.clone(),
@@ -1426,11 +1271,7 @@ pub mod ffi {
             &self,
             other: &DfDataFrame,
         ) -> Result<Box<DfDataFrame>, Box<DfError>> {
-            let new_df = self.df.clone().intersect(other.df.clone()).map_err(|e| {
-                Box::new(DfError(
-                    format!("Intersect failed: {}", e).into(),
-                ))
-            })?;
+            let new_df = self.df.clone().intersect(other.df.clone())?;
             Ok(Box::new(DfDataFrame {
                 df: new_df,
                 ctx: self.ctx.clone(),
@@ -1443,9 +1284,7 @@ pub mod ffi {
             &self,
             other: &DfDataFrame,
         ) -> Result<Box<DfDataFrame>, Box<DfError>> {
-            let new_df = self.df.clone().except(other.df.clone()).map_err(|e| {
-                Box::new(DfError(format!("Except failed: {}", e).into()))
-            })?;
+            let new_df = self.df.clone().except(other.df.clone())?;
             Ok(Box::new(DfDataFrame {
                 df: new_df,
                 ctx: self.ctx.clone(),
@@ -1455,11 +1294,7 @@ pub mod ffi {
 
         /// Distinct rows.
         pub fn distinct(&self) -> Result<Box<DfDataFrame>, Box<DfError>> {
-            let new_df = self.df.clone().distinct().map_err(|e| {
-                Box::new(DfError(
-                    format!("Distinct failed: {}", e).into(),
-                ))
-            })?;
+            let new_df = self.df.clone().distinct()?;
             Ok(Box::new(DfDataFrame {
                 df: new_df,
                 ctx: self.ctx.clone(),
@@ -1476,22 +1311,11 @@ pub mod ffi {
             expr: &[u8],
         ) -> Result<Box<DfDataFrame>, Box<DfError>> {
             let name_str = diplomat_str(name)?;
-            let exprs = deserialize_exprs(&self.ctx, expr)
-                .map_err(|e| Box::new(DfError(e.into())))?;
+            let exprs = deserialize_exprs(&self.ctx, expr)?;
             if exprs.is_empty() {
-                return Err(Box::new(DfError(
-                    "with_column requires exactly one expression".into(),
-                )));
+                return Err("with_column requires exactly one expression".into());
             }
-            let new_df = self
-                .df
-                .clone()
-                .with_column(name_str, exprs[0].clone())
-                .map_err(|e| {
-                    Box::new(DfError(
-                        format!("with_column failed: {}", e).into(),
-                    ))
-                })?;
+            let new_df = self.df.clone().with_column(name_str, exprs[0].clone())?;
             Ok(Box::new(DfDataFrame {
                 df: new_df,
                 ctx: self.ctx.clone(),
@@ -1507,15 +1331,7 @@ pub mod ffi {
         ) -> Result<Box<DfDataFrame>, Box<DfError>> {
             let old_str = diplomat_str(old_name)?;
             let new_str = diplomat_str(new_name)?;
-            let new_df = self
-                .df
-                .clone()
-                .with_column_renamed(old_str, new_str)
-                .map_err(|e| {
-                    Box::new(DfError(
-                        format!("with_column_renamed failed: {}", e).into(),
-                    ))
-                })?;
+            let new_df = self.df.clone().with_column_renamed(old_str, new_str)?;
             Ok(Box::new(DfDataFrame {
                 df: new_df,
                 ctx: self.ctx.clone(),
@@ -1530,11 +1346,7 @@ pub mod ffi {
         ) -> Result<Box<DfDataFrame>, Box<DfError>> {
             let col_strs = super::parse_null_separated(names);
             let col_strs_ref: Vec<&str> = col_strs.iter().map(|s| s.as_str()).collect();
-            let new_df = self.df.clone().drop_columns(&col_strs_ref).map_err(|e| {
-                Box::new(DfError(
-                    format!("drop_columns failed: {}", e).into(),
-                ))
-            })?;
+            let new_df = self.df.clone().drop_columns(&col_strs_ref)?;
             Ok(Box::new(DfDataFrame {
                 df: new_df,
                 ctx: self.ctx.clone(),
@@ -1548,13 +1360,7 @@ pub mod ffi {
         pub fn write_parquet(&self, path: &DiplomatStr) -> Result<(), Box<DfError>> {
             let path_str = diplomat_str(path)?;
             let df = self.df.clone();
-            self.rt
-                .block_on(df.write_parquet(path_str, Default::default(), None))
-                .map_err(|e| {
-                    Box::new(DfError(
-                        format!("Write parquet failed: {}", e).into(),
-                    ))
-                })?;
+            self.rt.block_on(df.write_parquet(path_str, Default::default(), None))?;
             Ok(())
         }
 
@@ -1562,13 +1368,7 @@ pub mod ffi {
         pub fn write_csv(&self, path: &DiplomatStr) -> Result<(), Box<DfError>> {
             let path_str = diplomat_str(path)?;
             let df = self.df.clone();
-            self.rt
-                .block_on(df.write_csv(path_str, Default::default(), None))
-                .map_err(|e| {
-                    Box::new(DfError(
-                        format!("Write CSV failed: {}", e).into(),
-                    ))
-                })?;
+            self.rt.block_on(df.write_csv(path_str, Default::default(), None))?;
             Ok(())
         }
 
@@ -1576,13 +1376,7 @@ pub mod ffi {
         pub fn write_json(&self, path: &DiplomatStr) -> Result<(), Box<DfError>> {
             let path_str = diplomat_str(path)?;
             let df = self.df.clone();
-            self.rt
-                .block_on(df.write_json(path_str, Default::default(), None))
-                .map_err(|e| {
-                    Box::new(DfError(
-                        format!("Write JSON failed: {}", e).into(),
-                    ))
-                })?;
+            self.rt.block_on(df.write_json(path_str, Default::default(), None))?;
             Ok(())
         }
     }
