@@ -3,7 +3,6 @@ package org.apache.arrow.datafusion;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
 
 /** Utility methods for error handling in FFI callbacks. */

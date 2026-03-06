@@ -44,5 +44,4 @@ final class DfCatalogAdapter implements DfCatalogTrait {
       return 0;
     }
   }
-
 }

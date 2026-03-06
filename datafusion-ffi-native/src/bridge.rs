@@ -56,8 +56,8 @@ pub mod ffi {
     }
 
     /// Parse session config from null-separated bytes: key\0value\0key\0value...
-    fn build_session_config(options_addr: usize, options_len: usize) -> Result<SessionConfig, String> {
-        let parts = super::parse_null_separated(options_addr, options_len);
+    fn build_session_config(options: &[u8]) -> Result<SessionConfig, String> {
+        let parts = super::parse_null_separated(options);
         if parts.is_empty() {
             return Ok(SessionConfig::new());
         }
@@ -777,12 +777,11 @@ pub mod ffi {
         }
 
         /// Create a SessionContext with configuration options.
-        /// options_addr points to null-separated bytes: key\0value\0key\0value...
+        /// options contains null-separated bytes: key\0value\0key\0value...
         pub fn new_with_config(
-            options_addr: usize,
-            options_len: usize,
+            options: &[u8],
         ) -> Result<Box<DfSessionContext>, Box<DfError>> {
-            let config = build_session_config(options_addr, options_len).map_err(|e| Box::new(DfError(e.into())))?;
+            let config = build_session_config(options).map_err(|e| Box::new(DfError(e.into())))?;
             let rt = Runtime::new().map_err(|e| {
                 Box::new(DfError(
                     format!("Failed to create runtime: {}", e).into(),
@@ -796,13 +795,12 @@ pub mod ffi {
         }
 
         /// Create a SessionContext with configuration options and a custom RuntimeEnv.
-        /// options_addr points to null-separated bytes: key\0value\0key\0value...
+        /// options contains null-separated bytes: key\0value\0key\0value...
         pub fn new_with_config_rt(
-            options_addr: usize,
-            options_len: usize,
+            options: &[u8],
             rt_env: &DfRuntimeEnv,
         ) -> Result<Box<DfSessionContext>, Box<DfError>> {
-            let config = build_session_config(options_addr, options_len).map_err(|e| Box::new(DfError(e.into())))?;
+            let config = build_session_config(options).map_err(|e| Box::new(DfError(e.into())))?;
             let rt = Runtime::new().map_err(|e| {
                 Box::new(DfError(
                     format!("Failed to create runtime: {}", e).into(),
@@ -924,8 +922,7 @@ pub mod ffi {
             &self,
             name: &DiplomatStr,
             format: impl DfFileFormatTrait + 'static,
-            urls_addr: usize,
-            urls_len: usize,
+            urls: &[u8],
             extension: &DiplomatStr,
             schema_addr: usize,
             collect_stat: i32,
@@ -970,7 +967,7 @@ pub mod ffi {
                 .with_target_partitions(target_partitions);
 
             // Parse URLs from null-separated bytes
-            let url_strs = super::parse_null_separated(urls_addr, urls_len);
+            let url_strs = super::parse_null_separated(urls);
             let mut table_urls = Vec::with_capacity(url_strs.len());
             for url_str in &url_strs {
                 let table_url = ListingTableUrl::parse(url_str).map_err(|e| {
@@ -1209,15 +1206,9 @@ pub mod ffi {
         /// Filter rows by a protobuf-encoded predicate expression.
         pub fn filter_bytes(
             &self,
-            bytes_addr: usize,
-            bytes_len: usize,
+            filter: &[u8],
         ) -> Result<Box<DfDataFrame>, Box<DfError>> {
-            let bytes = if bytes_addr != 0 && bytes_len > 0 {
-                unsafe { std::slice::from_raw_parts(bytes_addr as *const u8, bytes_len) }
-            } else {
-                &[]
-            };
-            let exprs = deserialize_exprs(&self.ctx, bytes)
+            let exprs = deserialize_exprs(&self.ctx, filter)
                 .map_err(|e| Box::new(DfError(e.into())))?;
             if exprs.is_empty() {
                 return Err(Box::new(DfError(
@@ -1237,15 +1228,9 @@ pub mod ffi {
         /// Project columns by protobuf-encoded expression list.
         pub fn select_bytes(
             &self,
-            bytes_addr: usize,
-            bytes_len: usize,
+            select: &[u8],
         ) -> Result<Box<DfDataFrame>, Box<DfError>> {
-            let bytes = if bytes_addr != 0 && bytes_len > 0 {
-                unsafe { std::slice::from_raw_parts(bytes_addr as *const u8, bytes_len) }
-            } else {
-                &[]
-            };
-            let exprs = deserialize_exprs(&self.ctx, bytes)
+            let exprs = deserialize_exprs(&self.ctx, select)
                 .map_err(|e| Box::new(DfError(e.into())))?;
             let new_df = self.df.clone().select(exprs).map_err(|e| {
                 Box::new(DfError(format!("Select failed: {}", e).into()))
@@ -1260,24 +1245,12 @@ pub mod ffi {
         /// Aggregate with protobuf-encoded group-by and aggregate expression lists.
         pub fn aggregate_bytes(
             &self,
-            group_addr: usize,
-            group_len: usize,
-            aggr_addr: usize,
-            aggr_len: usize,
+            group: &[u8],
+            aggr: &[u8],
         ) -> Result<Box<DfDataFrame>, Box<DfError>> {
-            let group_bytes = if group_addr != 0 && group_len > 0 {
-                unsafe { std::slice::from_raw_parts(group_addr as *const u8, group_len) }
-            } else {
-                &[]
-            };
-            let aggr_bytes = if aggr_addr != 0 && aggr_len > 0 {
-                unsafe { std::slice::from_raw_parts(aggr_addr as *const u8, aggr_len) }
-            } else {
-                &[]
-            };
-            let group_exprs = deserialize_exprs(&self.ctx, group_bytes)
+            let group_exprs = deserialize_exprs(&self.ctx, group)
                 .map_err(|e| Box::new(DfError(e.into())))?;
-            let aggr_exprs = deserialize_exprs(&self.ctx, aggr_bytes)
+            let aggr_exprs = deserialize_exprs(&self.ctx, aggr)
                 .map_err(|e| Box::new(DfError(e.into())))?;
             let new_df = self
                 .df
@@ -1296,15 +1269,9 @@ pub mod ffi {
         /// Sort by protobuf-encoded sort expressions.
         pub fn sort_bytes(
             &self,
-            bytes_addr: usize,
-            bytes_len: usize,
+            sort: &[u8],
         ) -> Result<Box<DfDataFrame>, Box<DfError>> {
-            let bytes = if bytes_addr != 0 && bytes_len > 0 {
-                unsafe { std::slice::from_raw_parts(bytes_addr as *const u8, bytes_len) }
-            } else {
-                &[]
-            };
-            let sort_exprs = deserialize_sort_exprs(&self.ctx, bytes)
+            let sort_exprs = deserialize_sort_exprs(&self.ctx, sort)
                 .map_err(|e| Box::new(DfError(e.into())))?;
             let new_df = self.df.clone().sort(sort_exprs).map_err(|e| {
                 Box::new(DfError(format!("Sort failed: {}", e).into()))
@@ -1345,12 +1312,9 @@ pub mod ffi {
             &self,
             right: &DfDataFrame,
             join_type: DfJoinType,
-            left_addr: usize,
-            left_len: usize,
-            right_addr: usize,
-            right_len: usize,
-            filter_addr: usize,
-            filter_len: usize,
+            left_cols: &[u8],
+            right_cols: &[u8],
+            filter: &[u8],
         ) -> Result<Box<DfDataFrame>, Box<DfError>> {
             let jt: JoinType = match join_type {
                 DfJoinType::Inner => JoinType::Inner,
@@ -1363,16 +1327,15 @@ pub mod ffi {
                 DfJoinType::RightAnti => JoinType::RightAnti,
             };
 
-            let left_strs = super::parse_null_separated(left_addr, left_len);
-            let right_strs = super::parse_null_separated(right_addr, right_len);
+            let left_strs = super::parse_null_separated(left_cols);
+            let right_strs = super::parse_null_separated(right_cols);
             let left_col_strs: Vec<&str> = left_strs.iter().map(|s| s.as_str()).collect();
             let right_col_strs: Vec<&str> = right_strs.iter().map(|s| s.as_str()).collect();
 
-            let filter = if filter_addr == 0 || filter_len == 0 {
+            let filter = if filter.is_empty() {
                 None
             } else {
-                let filter_bytes = unsafe { std::slice::from_raw_parts(filter_addr as *const u8, filter_len) };
-                let exprs = deserialize_exprs(&self.ctx, filter_bytes)
+                let exprs = deserialize_exprs(&self.ctx, filter)
                     .map_err(|e| Box::new(DfError(e.into())))?;
                 exprs.into_iter().next()
             };
@@ -1396,8 +1359,7 @@ pub mod ffi {
             &self,
             right: &DfDataFrame,
             join_type: DfJoinType,
-            on_addr: usize,
-            on_len: usize,
+            on: &[u8],
         ) -> Result<Box<DfDataFrame>, Box<DfError>> {
             let jt: JoinType = match join_type {
                 DfJoinType::Inner => JoinType::Inner,
@@ -1410,12 +1372,7 @@ pub mod ffi {
                 DfJoinType::RightAnti => JoinType::RightAnti,
             };
 
-            let on_bytes = if on_addr != 0 && on_len > 0 {
-                unsafe { std::slice::from_raw_parts(on_addr as *const u8, on_len) }
-            } else {
-                &[]
-            };
-            let on_exprs = deserialize_exprs(&self.ctx, on_bytes)
+            let on_exprs = deserialize_exprs(&self.ctx, on)
                 .map_err(|e| Box::new(DfError(e.into())))?;
 
             let new_df = self
@@ -1516,16 +1473,10 @@ pub mod ffi {
         pub fn with_column(
             &self,
             name: &DiplomatStr,
-            bytes_addr: usize,
-            bytes_len: usize,
+            expr: &[u8],
         ) -> Result<Box<DfDataFrame>, Box<DfError>> {
             let name_str = diplomat_str(name)?;
-            let bytes = if bytes_addr != 0 && bytes_len > 0 {
-                unsafe { std::slice::from_raw_parts(bytes_addr as *const u8, bytes_len) }
-            } else {
-                &[]
-            };
-            let exprs = deserialize_exprs(&self.ctx, bytes)
+            let exprs = deserialize_exprs(&self.ctx, expr)
                 .map_err(|e| Box::new(DfError(e.into())))?;
             if exprs.is_empty() {
                 return Err(Box::new(DfError(
@@ -1572,13 +1523,12 @@ pub mod ffi {
             }))
         }
 
-        /// Drop columns by name. names_addr points to null-separated UTF-8 column names.
+        /// Drop columns by name. names contains null-separated UTF-8 column names.
         pub fn drop_columns(
             &self,
-            names_addr: usize,
-            names_len: usize,
+            names: &[u8],
         ) -> Result<Box<DfDataFrame>, Box<DfError>> {
-            let col_strs = super::parse_null_separated(names_addr, names_len);
+            let col_strs = super::parse_null_separated(names);
             let col_strs_ref: Vec<&str> = col_strs.iter().map(|s| s.as_str()).collect();
             let new_df = self.df.clone().drop_columns(&col_strs_ref).map_err(|e| {
                 Box::new(DfError(
@@ -1638,13 +1588,11 @@ pub mod ffi {
     }
 }
 
-/// Parse null-separated UTF-8 strings from a raw buffer (addr=0 or len=0 → empty vec).
-fn parse_null_separated(addr: usize, len: usize) -> Vec<String> {
-    if addr == 0 || len == 0 {
+/// Parse null-separated UTF-8 strings from a byte slice.
+fn parse_null_separated(bytes: &[u8]) -> Vec<String> {
+    if bytes.is_empty() {
         return Vec::new();
     }
-    // Safety: caller ensures addr points to valid memory of `len` bytes for this call
-    let bytes = unsafe { std::slice::from_raw_parts(addr as *const u8, len) };
     bytes
         .split(|&b| b == 0)
         .filter(|s| !s.is_empty())

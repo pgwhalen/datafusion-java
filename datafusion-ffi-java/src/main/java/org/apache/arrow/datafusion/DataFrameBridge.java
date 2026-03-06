@@ -1,8 +1,5 @@
 package org.apache.arrow.datafusion;
 
-import java.lang.foreign.Arena;
-import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import org.apache.arrow.c.ArrowSchema;
@@ -84,9 +81,8 @@ final class DataFrameBridge implements AutoCloseable {
   DataFrameBridge filter(Expr predicate) {
     checkNotClosed();
     byte[] bytes = ExprProtoConverter.toProtoBytes(List.of(predicate));
-    try (Arena arena = Arena.ofConfined()) {
-      MemorySegment seg = allocBytes(arena, bytes);
-      DfDataFrame result = dfDf.filterBytes(seg.address(), bytes.length);
+    try {
+      DfDataFrame result = dfDf.filterBytes(bytes);
       return new DataFrameBridge(result);
     } catch (DfError e) {
       throw new DataFusionException(dfErrorMessage(e));
@@ -98,9 +94,8 @@ final class DataFrameBridge implements AutoCloseable {
   DataFrameBridge select(List<Expr> exprs) {
     checkNotClosed();
     byte[] bytes = ExprProtoConverter.toProtoBytes(exprs);
-    try (Arena arena = Arena.ofConfined()) {
-      MemorySegment seg = allocBytes(arena, bytes);
-      DfDataFrame result = dfDf.selectBytes(seg.address(), bytes.length);
+    try {
+      DfDataFrame result = dfDf.selectBytes(bytes);
       return new DataFrameBridge(result);
     } catch (DfError e) {
       throw new DataFusionException(dfErrorMessage(e));
@@ -113,11 +108,8 @@ final class DataFrameBridge implements AutoCloseable {
     checkNotClosed();
     byte[] groupBytes = ExprProtoConverter.toProtoBytes(groupExprs);
     byte[] aggrBytes = ExprProtoConverter.toProtoBytes(aggrExprs);
-    try (Arena arena = Arena.ofConfined()) {
-      MemorySegment groupSeg = allocBytes(arena, groupBytes);
-      MemorySegment aggrSeg = allocBytes(arena, aggrBytes);
-      DfDataFrame result =
-          dfDf.aggregateBytes(groupSeg.address(), groupBytes.length, aggrSeg.address(), aggrBytes.length);
+    try {
+      DfDataFrame result = dfDf.aggregateBytes(groupBytes, aggrBytes);
       return new DataFrameBridge(result);
     } catch (DfError e) {
       throw new DataFusionException(dfErrorMessage(e));
@@ -129,9 +121,8 @@ final class DataFrameBridge implements AutoCloseable {
   DataFrameBridge sort(List<SortExpr> sortExprs) {
     checkNotClosed();
     byte[] bytes = sortExprToProtoBytes(sortExprs);
-    try (Arena arena = Arena.ofConfined()) {
-      MemorySegment seg = allocBytes(arena, bytes);
-      DfDataFrame result = dfDf.sortBytes(seg.address(), bytes.length);
+    try {
+      DfDataFrame result = dfDf.sortBytes(bytes);
       return new DataFrameBridge(result);
     } catch (DfError e) {
       throw new DataFusionException(dfErrorMessage(e));
@@ -161,18 +152,11 @@ final class DataFrameBridge implements AutoCloseable {
     checkNotClosed();
     byte[] leftBytes = encodeNullSeparated(leftCols.toArray(new String[0]));
     byte[] rightBytes = encodeNullSeparated(rightCols.toArray(new String[0]));
-    byte[] filterBytes = filter != null ? ExprProtoConverter.toProtoBytes(List.of(filter)) : new byte[0];
-    try (Arena arena = Arena.ofConfined()) {
-      MemorySegment leftSeg = allocBytes(arena, leftBytes);
-      MemorySegment rightSeg = allocBytes(arena, rightBytes);
-      MemorySegment filterSeg = allocBytes(arena, filterBytes);
+    byte[] filterBytes =
+        filter != null ? ExprProtoConverter.toProtoBytes(List.of(filter)) : new byte[0];
+    try {
       DfDataFrame result =
-          dfDf.join(
-              right.dfDf,
-              joinTypeToDfJoinType(joinType),
-              leftSeg.address(), leftBytes.length,
-              rightSeg.address(), rightBytes.length,
-              filterSeg.address(), filterBytes.length);
+          dfDf.join(right.dfDf, joinTypeToDfJoinType(joinType), leftBytes, rightBytes, filterBytes);
       return new DataFrameBridge(result);
     } catch (DfError e) {
       throw new DataFusionException(dfErrorMessage(e));
@@ -184,9 +168,8 @@ final class DataFrameBridge implements AutoCloseable {
   DataFrameBridge joinOn(DataFrameBridge right, JoinType joinType, List<Expr> onExprs) {
     checkNotClosed();
     byte[] bytes = ExprProtoConverter.toProtoBytes(onExprs);
-    try (Arena arena = Arena.ofConfined()) {
-      MemorySegment seg = allocBytes(arena, bytes);
-      DfDataFrame result = dfDf.joinOnBytes(right.dfDf, joinTypeToDfJoinType(joinType), seg.address(), bytes.length);
+    try {
+      DfDataFrame result = dfDf.joinOnBytes(right.dfDf, joinTypeToDfJoinType(joinType), bytes);
       return new DataFrameBridge(result);
     } catch (DfError e) {
       throw new DataFusionException(dfErrorMessage(e));
@@ -253,9 +236,8 @@ final class DataFrameBridge implements AutoCloseable {
   DataFrameBridge withColumn(String name, Expr expr) {
     checkNotClosed();
     byte[] bytes = ExprProtoConverter.toProtoBytes(List.of(expr));
-    try (Arena arena = Arena.ofConfined()) {
-      MemorySegment seg = allocBytes(arena, bytes);
-      DfDataFrame result = dfDf.withColumn(name, seg.address(), bytes.length);
+    try {
+      DfDataFrame result = dfDf.withColumn(name, bytes);
       return new DataFrameBridge(result);
     } catch (DfError e) {
       throw new DataFusionException(dfErrorMessage(e));
@@ -278,9 +260,8 @@ final class DataFrameBridge implements AutoCloseable {
   DataFrameBridge dropColumns(List<String> columns) {
     checkNotClosed();
     byte[] bytes = encodeNullSeparated(columns.toArray(new String[0]));
-    try (Arena arena = Arena.ofConfined()) {
-      MemorySegment seg = allocBytes(arena, bytes);
-      DfDataFrame result = dfDf.dropColumns(seg.address(), bytes.length);
+    try {
+      DfDataFrame result = dfDf.dropColumns(bytes);
       return new DataFrameBridge(result);
     } catch (DfError e) {
       throw new DataFusionException(dfErrorMessage(e));
@@ -370,13 +351,6 @@ final class DataFrameBridge implements AutoCloseable {
       case RIGHT_SEMI -> DfJoinType.RIGHT_SEMI;
       case RIGHT_ANTI -> DfJoinType.RIGHT_ANTI;
     };
-  }
-
-  private static MemorySegment allocBytes(Arena arena, byte[] bytes) {
-    if (bytes.length == 0) return MemorySegment.NULL;
-    MemorySegment seg = arena.allocate(bytes.length);
-    seg.copyFrom(MemorySegment.ofArray(bytes));
-    return seg;
   }
 
   private static byte[] encodeNullSeparated(String[] strs) {

@@ -76,18 +76,14 @@ final class SessionContextBridge implements AutoCloseable {
     return createFromOptions(options, rtEnv);
   }
 
-  private static DfSessionContext createFromOptions(Map<String, String> options, DfRuntimeEnv rtEnv) {
+  private static DfSessionContext createFromOptions(
+      Map<String, String> options, DfRuntimeEnv rtEnv) {
     // Encode as interleaved null-separated: key\0value\0key\0value...
     byte[] optBytes = encodeConfigOptions(options);
-    try (Arena arena = Arena.ofConfined()) {
-      MemorySegment seg = optBytes.length > 0 ? arena.allocate(optBytes.length) : MemorySegment.NULL;
-      if (optBytes.length > 0) seg.copyFrom(MemorySegment.ofArray(optBytes));
-      long addr = seg.address();
-      if (rtEnv != null) {
-        return DfSessionContext.newWithConfigRt(addr, optBytes.length, rtEnv);
-      } else {
-        return DfSessionContext.newWithConfig(addr, optBytes.length);
-      }
+    if (rtEnv != null) {
+      return DfSessionContext.newWithConfigRt(optBytes, rtEnv);
+    } else {
+      return DfSessionContext.newWithConfig(optBytes);
     }
   }
 
@@ -230,18 +226,13 @@ final class SessionContextBridge implements AutoCloseable {
       String extension = table.options().fileExtension();
 
       // Export schema to FFI_ArrowSchema
-      try (ArrowSchema ffiSchema = ArrowSchema.allocateNew(allocator);
-          Arena arena = Arena.ofConfined()) {
+      try (ArrowSchema ffiSchema = ArrowSchema.allocateNew(allocator)) {
         Data.exportSchema(allocator, table.schema(), null, ffiSchema);
-
-        MemorySegment urlSeg = urlBytes.length > 0 ? arena.allocate(urlBytes.length) : MemorySegment.NULL;
-        if (urlBytes.length > 0) urlSeg.copyFrom(MemorySegment.ofArray(urlBytes));
 
         dfCtx.registerListingTable(
             name,
             adapter,
-            urlSeg.address(),
-            urlBytes.length,
+            urlBytes,
             extension,
             ffiSchema.memoryAddress(),
             table.options().collectStat() ? 1 : 0,
