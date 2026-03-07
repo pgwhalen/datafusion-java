@@ -86,14 +86,6 @@ tasks.register('postProcessDiplomatBindings') {
                 text = text.replace('public class ', 'class ')
                 text = text.replace('public interface ', 'interface ')
                 text = text.replace('public enum ', 'enum ')
-                // Close AutoCloseable callbacks when Rust drops them
-                if (!text.contains('instanceof AutoCloseable')) {
-                    text = text.replace(
-                        'PREVENT_GC.remove(id);',
-                        'Object cb = PREVENT_GC.remove(id);\n' +
-                        '        if (cb instanceof AutoCloseable ac) { try { ac.close(); } catch (Exception e) { /* ignore */ } }'
-                    )
-                }
                 f.text = text
             }
         }
