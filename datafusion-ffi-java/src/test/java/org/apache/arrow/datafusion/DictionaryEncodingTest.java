@@ -83,7 +83,7 @@ public class DictionaryEncodingTest {
       provider.put(dictionary);
 
       // Register table with dictionary provider
-      ctx.registerTable("fruits", root, provider, allocator);
+      ctx.registerBatch("fruits", root, provider, allocator);
 
       // Query the table - DataFusion should handle the dictionary-encoded data
       try (DataFrame df = ctx.sql("SELECT id, fruit FROM fruits ORDER BY id");

@@ -54,7 +54,7 @@ public class SqlTest {
 
       // Create test data: x=[1,2,3], y=[10,20,30]
       VectorSchemaRoot testData = createTestData(allocator);
-      ctx.registerTable("test", testData, allocator);
+      ctx.registerBatch("test", testData, allocator);
 
       // Query the registered table
       try (DataFrame df = ctx.sql("SELECT x, y FROM test WHERE x > 1");
@@ -88,7 +88,7 @@ public class SqlTest {
 
       // Create test data
       VectorSchemaRoot testData = createTestData(allocator);
-      ctx.registerTable("test", testData, allocator);
+      ctx.registerBatch("test", testData, allocator);
 
       // Execute aggregate query
       try (DataFrame df = ctx.sql("SELECT SUM(y) as total FROM test");
@@ -115,7 +115,7 @@ public class SqlTest {
         SessionContext ctx = new SessionContext()) {
 
       VectorSchemaRoot testData = createTestData(allocator);
-      ctx.registerTable("test", testData, allocator);
+      ctx.registerBatch("test", testData, allocator);
 
       // Execute multiple queries on the same context
       for (int i = 0; i < 3; i++) {
@@ -140,7 +140,7 @@ public class SqlTest {
 
       // Create test data with string column containing repeated values
       VectorSchemaRoot testData = createStringTestData(allocator);
-      ctx.registerTable("categories", testData, allocator);
+      ctx.registerBatch("categories", testData, allocator);
 
       // GROUP BY on string column
       try (DataFrame df =
@@ -185,7 +185,7 @@ public class SqlTest {
         SessionContext ctx = new SessionContext()) {
 
       VectorSchemaRoot testData = createStringTestData(allocator);
-      ctx.registerTable("categories", testData, allocator);
+      ctx.registerBatch("categories", testData, allocator);
 
       try (DataFrame df = ctx.sql("SELECT DISTINCT category FROM categories ORDER BY category");
           RecordBatchStream stream = df.executeStream(allocator)) {

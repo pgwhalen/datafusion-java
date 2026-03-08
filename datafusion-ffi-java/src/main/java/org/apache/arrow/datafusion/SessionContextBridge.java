@@ -110,7 +110,7 @@ final class SessionContextBridge implements AutoCloseable {
     return sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
   }
 
-  void registerTable(
+  void registerBatch(
       String name, VectorSchemaRoot root, DictionaryProvider provider, BufferAllocator allocator) {
     try (ArrowSchema ffiSchema = ArrowSchema.allocateNew(allocator);
         ArrowArray ffiArray = ArrowArray.allocateNew(allocator)) {
@@ -121,13 +121,38 @@ final class SessionContextBridge implements AutoCloseable {
           DfArrowBatch.fromAddresses(ffiSchema.memoryAddress(), ffiArray.memoryAddress())) {
         dfCtx.registerTable(name, batch);
       }
-      logger.debug("Registered table '{}' with {} rows", name, root.getRowCount());
+      logger.debug("Registered batch as table '{}' with {} rows", name, root.getRowCount());
     } catch (DfError e) {
       throw new DataFusionException(dfErrorMessage(e));
     } catch (DataFusionException e) {
       throw e;
     } catch (Exception e) {
-      throw new DataFusionException("Failed to register table", e);
+      throw new DataFusionException("Failed to register batch", e);
+    }
+  }
+
+  void registerTableProvider(String name, TableProvider provider, BufferAllocator allocator) {
+    try {
+      DfTableAdapter adapter = new DfTableAdapter(provider, allocator, config.fullStackTrace());
+      traitImpls.add(adapter);
+      dfCtx.registerTableProvider(name, adapter);
+      // Rust has imported the schema from the FFI address; release the exported data
+      adapter.closeFfiSchema();
+      logger.debug("Registered table provider '{}'", name);
+    } catch (DfError e) {
+      throw new DataFusionException(dfErrorMessage(e));
+    } catch (Exception e) {
+      throw new DataFusionException("Failed to register table provider", e);
+    }
+  }
+
+  boolean deregisterTable(String name) {
+    try {
+      return dfCtx.deregisterTable(name);
+    } catch (DfError e) {
+      throw new DataFusionException(dfErrorMessage(e));
+    } catch (Exception e) {
+      throw new DataFusionException("Failed to deregister table", e);
     }
   }
 
@@ -308,6 +333,201 @@ final class SessionContextBridge implements AutoCloseable {
       throw new DataFusionException(dfErrorMessage(e));
     } catch (Exception e) {
       throw new DataFusionException("Failed to read JSON file", e);
+    }
+  }
+
+  void registerCsv(String name, String path, CsvReadOptions options, BufferAllocator allocator) {
+    try {
+      withOptionalSchema(
+          options.schema(),
+          allocator,
+          schemaAddr -> {
+            dfCtx.registerCsv(name, path, options.encodeOptions(), schemaAddr);
+            return null;
+          });
+      logger.debug("Registered CSV table '{}'", name);
+    } catch (DfError e) {
+      throw new DataFusionException(dfErrorMessage(e));
+    } catch (DataFusionException e) {
+      throw e;
+    } catch (Exception e) {
+      throw new DataFusionException("Failed to register CSV", e);
+    }
+  }
+
+  void registerParquet(
+      String name, String path, ParquetReadOptions options, BufferAllocator allocator) {
+    try {
+      withOptionalSchema(
+          options.schema(),
+          allocator,
+          schemaAddr -> {
+            dfCtx.registerParquet(name, path, options.encodeOptions(), schemaAddr);
+            return null;
+          });
+      logger.debug("Registered Parquet table '{}'", name);
+    } catch (DfError e) {
+      throw new DataFusionException(dfErrorMessage(e));
+    } catch (DataFusionException e) {
+      throw e;
+    } catch (Exception e) {
+      throw new DataFusionException("Failed to register Parquet", e);
+    }
+  }
+
+  void registerJson(
+      String name, String path, NdJsonReadOptions options, BufferAllocator allocator) {
+    try {
+      withOptionalSchema(
+          options.schema(),
+          allocator,
+          schemaAddr -> {
+            dfCtx.registerJson(name, path, options.encodeOptions(), schemaAddr);
+            return null;
+          });
+      logger.debug("Registered JSON table '{}'", name);
+    } catch (DfError e) {
+      throw new DataFusionException(dfErrorMessage(e));
+    } catch (DataFusionException e) {
+      throw e;
+    } catch (Exception e) {
+      throw new DataFusionException("Failed to register JSON", e);
+    }
+  }
+
+  DataFrameBridge readCsv(String path, CsvReadOptions options, BufferAllocator allocator) {
+    try {
+      return withOptionalSchema(
+          options.schema(),
+          allocator,
+          schemaAddr -> {
+            DfDataFrame df = dfCtx.readCsvWithOptions(path, options.encodeOptions(), schemaAddr);
+            return new DataFrameBridge(df);
+          });
+    } catch (DfError e) {
+      throw new DataFusionException(dfErrorMessage(e));
+    } catch (DataFusionException e) {
+      throw e;
+    } catch (Exception e) {
+      throw new DataFusionException("Failed to read CSV with options", e);
+    }
+  }
+
+  DataFrameBridge readParquet(String path, ParquetReadOptions options, BufferAllocator allocator) {
+    try {
+      return withOptionalSchema(
+          options.schema(),
+          allocator,
+          schemaAddr -> {
+            DfDataFrame df =
+                dfCtx.readParquetWithOptions(path, options.encodeOptions(), schemaAddr);
+            return new DataFrameBridge(df);
+          });
+    } catch (DfError e) {
+      throw new DataFusionException(dfErrorMessage(e));
+    } catch (DataFusionException e) {
+      throw e;
+    } catch (Exception e) {
+      throw new DataFusionException("Failed to read Parquet with options", e);
+    }
+  }
+
+  DataFrameBridge readJson(String path, NdJsonReadOptions options, BufferAllocator allocator) {
+    try {
+      return withOptionalSchema(
+          options.schema(),
+          allocator,
+          schemaAddr -> {
+            DfDataFrame df = dfCtx.readJsonWithOptions(path, options.encodeOptions(), schemaAddr);
+            return new DataFrameBridge(df);
+          });
+    } catch (DfError e) {
+      throw new DataFusionException(dfErrorMessage(e));
+    } catch (DataFusionException e) {
+      throw e;
+    } catch (Exception e) {
+      throw new DataFusionException("Failed to read JSON with options", e);
+    }
+  }
+
+  List<String> catalogNames() {
+    try (DfExprBytes bytes = dfCtx.catalogNames()) {
+      return decodeNullSeparatedBytes(bytes);
+    }
+  }
+
+  List<String> catalogSchemaNames(String catalogName) {
+    try {
+      try (DfExprBytes bytes = dfCtx.catalogSchemaNames(catalogName)) {
+        return decodeNullSeparatedBytes(bytes);
+      }
+    } catch (DfError e) {
+      throw new DataFusionException(dfErrorMessage(e));
+    } catch (Exception e) {
+      throw new DataFusionException("Failed to get schema names", e);
+    }
+  }
+
+  List<String> catalogTableNames(String catalogName, String schemaName) {
+    try {
+      try (DfExprBytes bytes = dfCtx.catalogTableNames(catalogName, schemaName)) {
+        return decodeNullSeparatedBytes(bytes);
+      }
+    } catch (DfError e) {
+      throw new DataFusionException(dfErrorMessage(e));
+    } catch (Exception e) {
+      throw new DataFusionException("Failed to get table names", e);
+    }
+  }
+
+  boolean catalogTableExists(String catalogName, String schemaName, String tableName) {
+    try {
+      return dfCtx.catalogTableExists(catalogName, schemaName, tableName);
+    } catch (DfError e) {
+      throw new DataFusionException(dfErrorMessage(e));
+    } catch (Exception e) {
+      throw new DataFusionException("Failed to check table existence in catalog", e);
+    }
+  }
+
+  @FunctionalInterface
+  interface SchemaAction<T> {
+    T apply(long schemaAddr) throws Exception;
+  }
+
+  /**
+   * Export a schema via FFI (if non-null), execute the action with the schema address, then release
+   * the exported schema. If schema is null, the action is called with address 0.
+   */
+  private <T> T withOptionalSchema(
+      org.apache.arrow.vector.types.pojo.Schema schema,
+      BufferAllocator allocator,
+      SchemaAction<T> action)
+      throws Exception {
+    if (schema == null) {
+      return action.apply(0);
+    }
+    try (ArrowSchema ffiSchema = ArrowSchema.allocateNew(allocator)) {
+      Data.exportSchema(allocator, schema, null, ffiSchema);
+      try {
+        return action.apply(ffiSchema.memoryAddress());
+      } finally {
+        ffiSchema.release();
+      }
+    }
+  }
+
+  private static List<String> decodeNullSeparatedBytes(DfExprBytes bytes) {
+    long len = bytes.len();
+    if (len == 0) {
+      return List.of();
+    }
+    try (Arena arena = Arena.ofConfined()) {
+      MemorySegment buf = arena.allocate(len);
+      bytes.copyTo(buf.address(), len);
+      byte[] raw = buf.toArray(ValueLayout.JAVA_BYTE);
+      String joined = new String(raw, java.nio.charset.StandardCharsets.UTF_8);
+      return List.of(joined.split("\0"));
     }
   }
 

@@ -1410,7 +1410,7 @@ public class DataFrameTest {
     dept.setValueCount(rows);
     root.setRowCount(rows);
 
-    ctx.registerTable("employees", root, allocator);
+    ctx.registerBatch("employees", root, allocator);
     root.close();
   }
 
@@ -1447,7 +1447,7 @@ public class DataFrameTest {
     location.setValueCount(rows);
     root.setRowCount(rows);
 
-    ctx.registerTable("departments", root, allocator);
+    ctx.registerBatch("departments", root, allocator);
     root.close();
   }
 

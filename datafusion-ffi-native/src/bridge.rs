@@ -1326,7 +1326,7 @@ pub mod ffi {
                         schema_str, catalog_str
                     ))
                 })?;
-            let names = self.rt.block_on(schema_provider.table_names());
+            let names = schema_provider.table_names();
             let joined = names.join("\0");
             Ok(Box::new(DfExprBytes {
                 bytes: joined.into_bytes(),
@@ -1355,7 +1355,7 @@ pub mod ffi {
                         schema_str, catalog_str
                     ))
                 })?;
-            Ok(self.rt.block_on(schema_provider.table_exist(table_str))?)
+            Ok(schema_provider.table_exist(table_str))
         }
 
         /// Get a snapshot of the session state.
@@ -1835,14 +1835,13 @@ fn parse_csv_options<'a>(
     }
     if let Some(v) = kv.get("file_compression_type") {
         opts.file_compression_type =
-            v.parse().unwrap_or(datafusion::common::FileCompressionType::UNCOMPRESSED);
+            v.parse().unwrap_or(datafusion::datasource::file_format::file_compression_type::FileCompressionType::UNCOMPRESSED);
     }
     if let Some(v) = kv.get("null_regex") {
         opts.null_regex = Some(v.clone());
     }
-    // schema is handled via schema_addr
-    if let Some(schema) = &schema_ref {
-        opts.schema = Some(schema.as_ref());
+    if let Some(v) = kv.get("truncated_rows") {
+        opts.truncated_rows = v == "true";
     }
     // We need to keep the schema alive - leak it since CsvReadOptions borrows it
     // The schema Arc is consumed by DataFusion after the read/register call
@@ -1893,7 +1892,7 @@ fn parse_json_options<'a>(
     }
     if let Some(v) = kv.get("file_compression_type") {
         opts.file_compression_type =
-            v.parse().unwrap_or(datafusion::common::FileCompressionType::UNCOMPRESSED);
+            v.parse().unwrap_or(datafusion::datasource::file_format::file_compression_type::FileCompressionType::UNCOMPRESSED);
     }
     if let Some(v) = kv.get("infinite") {
         opts.infinite = v == "true";

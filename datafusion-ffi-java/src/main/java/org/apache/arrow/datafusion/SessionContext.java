@@ -1,6 +1,7 @@
 package org.apache.arrow.datafusion;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import org.apache.arrow.datafusion.config.SessionConfig;
 import org.apache.arrow.memory.BufferAllocator;
@@ -92,17 +93,23 @@ public class SessionContext implements AutoCloseable {
   /**
    * Registers a VectorSchemaRoot as a table in the session context.
    *
+   * <p>This is equivalent to Rust's {@code register_batch}: it takes Arrow data directly and wraps
+   * it in a MemTable.
+   *
    * @param name The table name
    * @param root The VectorSchemaRoot containing the data
    * @param allocator The buffer allocator
    * @throws DataFusionException if registration fails
    */
-  public void registerTable(String name, VectorSchemaRoot root, BufferAllocator allocator) {
-    registerTable(name, root, null, allocator);
+  public void registerBatch(String name, VectorSchemaRoot root, BufferAllocator allocator) {
+    registerBatch(name, root, null, allocator);
   }
 
   /**
    * Registers a VectorSchemaRoot as a table in the session context with dictionary support.
+   *
+   * <p>This is equivalent to Rust's {@code register_batch}: it takes Arrow data directly and wraps
+   * it in a MemTable.
    *
    * @param name The table name
    * @param root The VectorSchemaRoot containing the data
@@ -110,10 +117,38 @@ public class SessionContext implements AutoCloseable {
    * @param allocator The buffer allocator
    * @throws DataFusionException if registration fails
    */
-  public void registerTable(
+  public void registerBatch(
       String name, VectorSchemaRoot root, DictionaryProvider provider, BufferAllocator allocator) {
     checkNotClosed();
-    bridge.registerTable(name, root, provider, allocator);
+    bridge.registerBatch(name, root, provider, allocator);
+  }
+
+  /**
+   * Registers a table provider with the session context.
+   *
+   * <p>This is equivalent to Rust's {@code register_table}: it registers a {@link TableProvider}
+   * implementation that DataFusion will call when the table is queried.
+   *
+   * @param name The table name
+   * @param provider The table provider implementation
+   * @param allocator The buffer allocator to use for Arrow data transfers
+   * @throws DataFusionException if registration fails
+   */
+  public void registerTable(String name, TableProvider provider, BufferAllocator allocator) {
+    checkNotClosed();
+    bridge.registerTableProvider(name, provider, allocator);
+  }
+
+  /**
+   * Deregisters a table by name.
+   *
+   * @param name The table name
+   * @return true if a table was previously registered with this name
+   * @throws DataFusionException if deregistration fails
+   */
+  public boolean deregisterTable(String name) {
+    checkNotClosed();
+    return bridge.deregisterTable(name);
   }
 
   /**
@@ -200,6 +235,51 @@ public class SessionContext implements AutoCloseable {
   }
 
   /**
+   * Registers a CSV file or directory as a named table.
+   *
+   * @param name The table name
+   * @param path The file or directory path
+   * @param options CSV read options
+   * @param allocator The buffer allocator
+   * @throws DataFusionException if registration fails
+   */
+  public void registerCsv(
+      String name, String path, CsvReadOptions options, BufferAllocator allocator) {
+    checkNotClosed();
+    bridge.registerCsv(name, path, options, allocator);
+  }
+
+  /**
+   * Registers a Parquet file or directory as a named table.
+   *
+   * @param name The table name
+   * @param path The file or directory path
+   * @param options Parquet read options
+   * @param allocator The buffer allocator
+   * @throws DataFusionException if registration fails
+   */
+  public void registerParquet(
+      String name, String path, ParquetReadOptions options, BufferAllocator allocator) {
+    checkNotClosed();
+    bridge.registerParquet(name, path, options, allocator);
+  }
+
+  /**
+   * Registers a JSON file or directory as a named table.
+   *
+   * @param name The table name
+   * @param path The file or directory path
+   * @param options JSON read options
+   * @param allocator The buffer allocator
+   * @throws DataFusionException if registration fails
+   */
+  public void registerJson(
+      String name, String path, NdJsonReadOptions options, BufferAllocator allocator) {
+    checkNotClosed();
+    bridge.registerJson(name, path, options, allocator);
+  }
+
+  /**
    * Returns whether a table with the given name exists.
    *
    * @param name The table name
@@ -238,6 +318,20 @@ public class SessionContext implements AutoCloseable {
   }
 
   /**
+   * Reads a Parquet file/directory into a DataFrame with options.
+   *
+   * @param path The file or directory path
+   * @param options Parquet read options
+   * @param allocator The buffer allocator (needed if schema is specified in options)
+   * @return A DataFrame for the Parquet data
+   * @throws DataFusionException if reading fails
+   */
+  public DataFrame readParquet(String path, ParquetReadOptions options, BufferAllocator allocator) {
+    checkNotClosed();
+    return new DataFrame(bridge.readParquet(path, options, allocator));
+  }
+
+  /**
    * Reads a CSV file/directory into a DataFrame.
    *
    * @param path The file or directory path
@@ -250,6 +344,20 @@ public class SessionContext implements AutoCloseable {
   }
 
   /**
+   * Reads a CSV file/directory into a DataFrame with options.
+   *
+   * @param path The file or directory path
+   * @param options CSV read options
+   * @param allocator The buffer allocator (needed if schema is specified in options)
+   * @return A DataFrame for the CSV data
+   * @throws DataFusionException if reading fails
+   */
+  public DataFrame readCsv(String path, CsvReadOptions options, BufferAllocator allocator) {
+    checkNotClosed();
+    return new DataFrame(bridge.readCsv(path, options, allocator));
+  }
+
+  /**
    * Reads a JSON file/directory into a DataFrame.
    *
    * @param path The file or directory path
@@ -259,6 +367,49 @@ public class SessionContext implements AutoCloseable {
   public DataFrame readJson(String path) {
     checkNotClosed();
     return new DataFrame(bridge.readJson(path));
+  }
+
+  /**
+   * Reads a JSON file/directory into a DataFrame with options.
+   *
+   * @param path The file or directory path
+   * @param options JSON read options
+   * @param allocator The buffer allocator (needed if schema is specified in options)
+   * @return A DataFrame for the JSON data
+   * @throws DataFusionException if reading fails
+   */
+  public DataFrame readJson(String path, NdJsonReadOptions options, BufferAllocator allocator) {
+    checkNotClosed();
+    return new DataFrame(bridge.readJson(path, options, allocator));
+  }
+
+  /**
+   * Returns the names of all registered catalogs.
+   *
+   * @return list of catalog names
+   */
+  public List<String> catalogNames() {
+    checkNotClosed();
+    return bridge.catalogNames();
+  }
+
+  /**
+   * Returns a catalog provider for the named catalog, if it exists.
+   *
+   * <p>The returned provider supports introspection (listing schemas and tables) but does not
+   * support retrieving native {@link TableProvider} instances. Use {@link #table(String)} to query
+   * native tables.
+   *
+   * @param name The catalog name
+   * @return An Optional containing the catalog provider, or empty if not found
+   */
+  public Optional<CatalogProvider> catalog(String name) {
+    checkNotClosed();
+    List<String> names = bridge.catalogNames();
+    if (names.contains(name)) {
+      return Optional.of(new NativeCatalogProvider(bridge, name));
+    }
+    return Optional.empty();
   }
 
   /**

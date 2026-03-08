@@ -1,0 +1,34 @@
+package org.apache.arrow.datafusion;
+
+import java.util.List;
+import java.util.Optional;
+
+/**
+ * A catalog provider backed by a native DataFusion catalog.
+ *
+ * <p>This is used to introspect catalogs registered in the session context. It does not support
+ * registering Java-implemented schemas — use {@link SessionContext#registerCatalog} for that.
+ */
+final class NativeCatalogProvider implements CatalogProvider {
+  private final SessionContextBridge bridge;
+  private final String catalogName;
+
+  NativeCatalogProvider(SessionContextBridge bridge, String catalogName) {
+    this.bridge = bridge;
+    this.catalogName = catalogName;
+  }
+
+  @Override
+  public List<String> schemaNames() {
+    return bridge.catalogSchemaNames(catalogName);
+  }
+
+  @Override
+  public Optional<SchemaProvider> schema(String name) {
+    List<String> schemas = schemaNames();
+    if (schemas.contains(name)) {
+      return Optional.of(new NativeSchemaProvider(bridge, catalogName, name));
+    }
+    return Optional.empty();
+  }
+}

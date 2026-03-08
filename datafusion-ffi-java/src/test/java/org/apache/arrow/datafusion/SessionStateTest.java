@@ -39,7 +39,7 @@ public class SessionStateTest {
         SessionContext ctx = new SessionContext()) {
 
       VectorSchemaRoot testData = createTestData(allocator);
-      ctx.registerTable("test_table", testData, allocator);
+      ctx.registerBatch("test_table", testData, allocator);
 
       try (SessionState state = ctx.state();
           LogicalPlan plan = state.createLogicalPlan("SELECT x, y FROM test_table WHERE x > 1")) {

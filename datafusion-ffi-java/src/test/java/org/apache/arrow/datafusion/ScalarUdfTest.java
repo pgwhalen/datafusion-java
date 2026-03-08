@@ -27,7 +27,7 @@ class ScalarUdfTest {
 
       // Create test data: a=[2.1, 3.1, 4.1, 5.1], b=[1.0, 2.0, 3.0, 4.0]
       VectorSchemaRoot testData = createFloat64TestData(allocator);
-      ctx.registerTable("t", testData, allocator);
+      ctx.registerBatch("t", testData, allocator);
 
       // Create pow UDF using the full ScalarUdf interface
       ScalarUdf pow =
@@ -110,7 +110,7 @@ class ScalarUdfTest {
 
       // Create test data: x=[10, 20, 30]
       VectorSchemaRoot testData = createInt64TestData(allocator);
-      ctx.registerTable("t", testData, allocator);
+      ctx.registerBatch("t", testData, allocator);
 
       // Create a simple "double_it" UDF using the factory
       ScalarUdf doubleIt =
@@ -157,7 +157,7 @@ class ScalarUdfTest {
       try (SessionContext ctx = new SessionContext()) {
         VectorSchemaRoot testData = createInt64TestData(allocator);
         try {
-          ctx.registerTable("t", testData, allocator);
+          ctx.registerBatch("t", testData, allocator);
 
           // Create a UDF that always throws
           ScalarUdf failingUdf =
