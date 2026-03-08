@@ -6,6 +6,7 @@ import java.lang.foreign.ValueLayout;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.apache.arrow.c.ArrowArray;
 import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
@@ -253,10 +254,23 @@ final class SessionContextBridge implements AutoCloseable {
     }
   }
 
-  DataFrameBridge table(String name) {
+  boolean tableExist(String name) {
     try {
+      return dfCtx.tableExist(name);
+    } catch (DfError e) {
+      throw new DataFusionException(dfErrorMessage(e));
+    } catch (Exception e) {
+      throw new DataFusionException("Failed to check table existence", e);
+    }
+  }
+
+  Optional<DataFrameBridge> table(String name) {
+    try {
+      if (!dfCtx.tableExist(name)) {
+        return Optional.empty();
+      }
       DfDataFrame df = dfCtx.table(name);
-      return new DataFrameBridge(df);
+      return Optional.of(new DataFrameBridge(df));
     } catch (DfError e) {
       throw new DataFusionException(dfErrorMessage(e));
     } catch (Exception e) {

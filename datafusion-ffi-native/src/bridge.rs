@@ -1126,6 +1126,12 @@ pub mod ffi {
             Ok(())
         }
 
+        /// Check if a table exists by name.
+        pub fn table_exist(&self, name: &DiplomatStr) -> Result<bool, Box<DfError>> {
+            let name_str = diplomat_str(name)?;
+            Ok(self.ctx.table_exist(name_str)?)
+        }
+
         /// Get a DataFrame for a registered table by name.
         pub fn table(&self, name: &DiplomatStr) -> Result<Box<DfDataFrame>, Box<DfError>> {
             let name_str = diplomat_str(name)?;
@@ -1166,6 +1172,190 @@ pub mod ffi {
                 .rt
                 .block_on(self.ctx.read_json(path_str, Default::default()))?;
             Ok(self.wrap_df(df))
+        }
+
+        /// Register a table provider backed by a Java-implemented DfTableTrait.
+        pub fn register_table_provider(
+            &self,
+            name: &DiplomatStr,
+            table: impl DfTableTrait + 'static,
+        ) -> Result<(), Box<DfError>> {
+            let name_str = diplomat_str(name)?;
+            let foreign = crate::providers::ForeignDfTable::new(table);
+            self.ctx.register_table(name_str, Arc::new(foreign))?;
+            Ok(())
+        }
+
+        /// Deregister a table by name. Returns true if a table was previously registered.
+        pub fn deregister_table(&self, name: &DiplomatStr) -> Result<bool, Box<DfError>> {
+            let name_str = diplomat_str(name)?;
+            let result = self.ctx.deregister_table(name_str)?;
+            Ok(result.is_some())
+        }
+
+        /// Register a CSV file/directory as a named table.
+        /// options contains null-separated key\0value pairs.
+        pub fn register_csv(
+            &self,
+            name: &DiplomatStr,
+            path: &DiplomatStr,
+            options: &[u8],
+            schema_addr: usize,
+        ) -> Result<(), Box<DfError>> {
+            let name_str = diplomat_str(name)?;
+            let path_str = diplomat_str(path)?;
+            let opts = super::parse_csv_options(options, schema_addr)?;
+            self.rt.block_on(self.ctx.register_csv(name_str, path_str, opts))?;
+            Ok(())
+        }
+
+        /// Register a Parquet file/directory as a named table.
+        /// options contains null-separated key\0value pairs.
+        pub fn register_parquet(
+            &self,
+            name: &DiplomatStr,
+            path: &DiplomatStr,
+            options: &[u8],
+            schema_addr: usize,
+        ) -> Result<(), Box<DfError>> {
+            let name_str = diplomat_str(name)?;
+            let path_str = diplomat_str(path)?;
+            let opts = super::parse_parquet_options(options, schema_addr)?;
+            self.rt.block_on(self.ctx.register_parquet(name_str, path_str, opts))?;
+            Ok(())
+        }
+
+        /// Register a JSON file/directory as a named table.
+        /// options contains null-separated key\0value pairs.
+        pub fn register_json(
+            &self,
+            name: &DiplomatStr,
+            path: &DiplomatStr,
+            options: &[u8],
+            schema_addr: usize,
+        ) -> Result<(), Box<DfError>> {
+            let name_str = diplomat_str(name)?;
+            let path_str = diplomat_str(path)?;
+            let opts = super::parse_json_options(options, schema_addr)?;
+            self.rt.block_on(self.ctx.register_json(name_str, path_str, opts))?;
+            Ok(())
+        }
+
+        /// Read a CSV file with options into a DataFrame.
+        pub fn read_csv_with_options(
+            &self,
+            path: &DiplomatStr,
+            options: &[u8],
+            schema_addr: usize,
+        ) -> Result<Box<DfDataFrame>, Box<DfError>> {
+            let path_str = diplomat_str(path)?;
+            let opts = super::parse_csv_options(options, schema_addr)?;
+            let df = self.rt.block_on(self.ctx.read_csv(path_str, opts))?;
+            Ok(self.wrap_df(df))
+        }
+
+        /// Read a Parquet file with options into a DataFrame.
+        pub fn read_parquet_with_options(
+            &self,
+            path: &DiplomatStr,
+            options: &[u8],
+            schema_addr: usize,
+        ) -> Result<Box<DfDataFrame>, Box<DfError>> {
+            let path_str = diplomat_str(path)?;
+            let opts = super::parse_parquet_options(options, schema_addr)?;
+            let df = self.rt.block_on(self.ctx.read_parquet(path_str, opts))?;
+            Ok(self.wrap_df(df))
+        }
+
+        /// Read a JSON file with options into a DataFrame.
+        pub fn read_json_with_options(
+            &self,
+            path: &DiplomatStr,
+            options: &[u8],
+            schema_addr: usize,
+        ) -> Result<Box<DfDataFrame>, Box<DfError>> {
+            let path_str = diplomat_str(path)?;
+            let opts = super::parse_json_options(options, schema_addr)?;
+            let df = self.rt.block_on(self.ctx.read_json(path_str, opts))?;
+            Ok(self.wrap_df(df))
+        }
+
+        /// Return catalog names as null-separated bytes.
+        pub fn catalog_names(&self) -> Box<DfExprBytes> {
+            let names = self.ctx.catalog_names();
+            let joined = names.join("\0");
+            Box::new(DfExprBytes {
+                bytes: joined.into_bytes(),
+            })
+        }
+
+        /// Return schema names for a catalog as null-separated bytes.
+        pub fn catalog_schema_names(
+            &self,
+            catalog: &DiplomatStr,
+        ) -> Result<Box<DfExprBytes>, Box<DfError>> {
+            let catalog_str = diplomat_str(catalog)?;
+            let catalog_provider = self
+                .ctx
+                .catalog(catalog_str)
+                .ok_or_else(|| DataFusionError::Plan(format!("Catalog '{}' not found", catalog_str)))?;
+            let names = catalog_provider.schema_names();
+            let joined = names.join("\0");
+            Ok(Box::new(DfExprBytes {
+                bytes: joined.into_bytes(),
+            }))
+        }
+
+        /// Return table names for a catalog.schema as null-separated bytes.
+        pub fn catalog_table_names(
+            &self,
+            catalog: &DiplomatStr,
+            schema: &DiplomatStr,
+        ) -> Result<Box<DfExprBytes>, Box<DfError>> {
+            let catalog_str = diplomat_str(catalog)?;
+            let schema_str = diplomat_str(schema)?;
+            let catalog_provider = self
+                .ctx
+                .catalog(catalog_str)
+                .ok_or_else(|| DataFusionError::Plan(format!("Catalog '{}' not found", catalog_str)))?;
+            let schema_provider = catalog_provider
+                .schema(schema_str)
+                .ok_or_else(|| {
+                    DataFusionError::Plan(format!(
+                        "Schema '{}' not found in catalog '{}'",
+                        schema_str, catalog_str
+                    ))
+                })?;
+            let names = self.rt.block_on(schema_provider.table_names());
+            let joined = names.join("\0");
+            Ok(Box::new(DfExprBytes {
+                bytes: joined.into_bytes(),
+            }))
+        }
+
+        /// Check if a table exists in a specific catalog.schema.
+        pub fn catalog_table_exists(
+            &self,
+            catalog: &DiplomatStr,
+            schema: &DiplomatStr,
+            table: &DiplomatStr,
+        ) -> Result<bool, Box<DfError>> {
+            let catalog_str = diplomat_str(catalog)?;
+            let schema_str = diplomat_str(schema)?;
+            let table_str = diplomat_str(table)?;
+            let catalog_provider = self
+                .ctx
+                .catalog(catalog_str)
+                .ok_or_else(|| DataFusionError::Plan(format!("Catalog '{}' not found", catalog_str)))?;
+            let schema_provider = catalog_provider
+                .schema(schema_str)
+                .ok_or_else(|| {
+                    DataFusionError::Plan(format!(
+                        "Schema '{}' not found in catalog '{}'",
+                        schema_str, catalog_str
+                    ))
+                })?;
+            Ok(self.rt.block_on(schema_provider.table_exist(table_str))?)
         }
 
         /// Get a snapshot of the session state.
@@ -1574,6 +1764,145 @@ fn parse_null_separated(bytes: &[u8]) -> Vec<String> {
         .filter(|s| !s.is_empty())
         .map(|s| std::str::from_utf8(s).unwrap_or("").to_string())
         .collect()
+}
+
+/// Parse null-separated key-value pairs into a HashMap.
+fn parse_kv_options(bytes: &[u8]) -> std::collections::HashMap<String, String> {
+    let strs = parse_null_separated(bytes);
+    let mut map = std::collections::HashMap::new();
+    let mut i = 0;
+    while i + 1 < strs.len() {
+        map.insert(strs[i].clone(), strs[i + 1].clone());
+        i += 2;
+    }
+    map
+}
+
+/// Import an Arrow schema from an FFI address, or return None if addr is 0.
+fn import_schema_option(
+    schema_addr: usize,
+) -> Result<Option<std::sync::Arc<arrow::datatypes::Schema>>, Box<ffi::DfError>> {
+    if schema_addr == 0 {
+        return Ok(None);
+    }
+    let schema = unsafe {
+        let ffi_schema = &*(schema_addr as *const arrow::ffi::FFI_ArrowSchema);
+        arrow::datatypes::Schema::try_from(ffi_schema)?
+    };
+    Ok(Some(std::sync::Arc::new(schema)))
+}
+
+fn parse_csv_options<'a>(
+    options: &[u8],
+    schema_addr: usize,
+) -> Result<datafusion::prelude::CsvReadOptions<'a>, Box<ffi::DfError>> {
+    let kv = parse_kv_options(options);
+    let schema_ref = import_schema_option(schema_addr)?;
+    let mut opts = datafusion::prelude::CsvReadOptions::new();
+
+    if let Some(v) = kv.get("has_header") {
+        opts.has_header = v == "true";
+    }
+    if let Some(v) = kv.get("delimiter") {
+        if let Some(b) = v.bytes().next() {
+            opts.delimiter = b;
+        }
+    }
+    if let Some(v) = kv.get("quote") {
+        if let Some(b) = v.bytes().next() {
+            opts.quote = b;
+        }
+    }
+    if let Some(v) = kv.get("terminator") {
+        opts.terminator = v.bytes().next();
+    }
+    if let Some(v) = kv.get("escape") {
+        opts.escape = v.bytes().next();
+    }
+    if let Some(v) = kv.get("comment") {
+        opts.comment = v.bytes().next();
+    }
+    if let Some(v) = kv.get("newlines_in_values") {
+        opts.newlines_in_values = v == "true";
+    }
+    if let Some(v) = kv.get("schema_infer_max_records") {
+        if let Ok(n) = v.parse() {
+            opts.schema_infer_max_records = n;
+        }
+    }
+    if let Some(v) = kv.get("file_extension") {
+        opts.file_extension = Box::leak(v.clone().into_boxed_str());
+    }
+    if let Some(v) = kv.get("file_compression_type") {
+        opts.file_compression_type =
+            v.parse().unwrap_or(datafusion::common::FileCompressionType::UNCOMPRESSED);
+    }
+    if let Some(v) = kv.get("null_regex") {
+        opts.null_regex = Some(v.clone());
+    }
+    // schema is handled via schema_addr
+    if let Some(schema) = &schema_ref {
+        opts.schema = Some(schema.as_ref());
+    }
+    // We need to keep the schema alive - leak it since CsvReadOptions borrows it
+    // The schema Arc is consumed by DataFusion after the read/register call
+    if let Some(schema) = schema_ref {
+        let leaked: &'static arrow::datatypes::Schema = Box::leak(Box::new((*schema).clone()));
+        opts.schema = Some(leaked);
+    }
+    Ok(opts)
+}
+
+fn parse_parquet_options<'a>(
+    options: &[u8],
+    schema_addr: usize,
+) -> Result<datafusion::prelude::ParquetReadOptions<'a>, Box<ffi::DfError>> {
+    let kv = parse_kv_options(options);
+    let mut opts = datafusion::prelude::ParquetReadOptions::default();
+
+    if let Some(v) = kv.get("file_extension") {
+        opts.file_extension = Box::leak(v.clone().into_boxed_str());
+    }
+    if let Some(v) = kv.get("parquet_pruning") {
+        opts.parquet_pruning = Some(v == "true");
+    }
+    if let Some(v) = kv.get("skip_metadata") {
+        opts.skip_metadata = Some(v == "true");
+    }
+    if let Some(schema) = import_schema_option(schema_addr)? {
+        let leaked: &'static arrow::datatypes::Schema = Box::leak(Box::new((*schema).clone()));
+        opts.schema = Some(leaked);
+    }
+    Ok(opts)
+}
+
+fn parse_json_options<'a>(
+    options: &[u8],
+    schema_addr: usize,
+) -> Result<datafusion::prelude::NdJsonReadOptions<'a>, Box<ffi::DfError>> {
+    let kv = parse_kv_options(options);
+    let mut opts = datafusion::prelude::NdJsonReadOptions::default();
+
+    if let Some(v) = kv.get("schema_infer_max_records") {
+        if let Ok(n) = v.parse() {
+            opts.schema_infer_max_records = n;
+        }
+    }
+    if let Some(v) = kv.get("file_extension") {
+        opts.file_extension = Box::leak(v.clone().into_boxed_str());
+    }
+    if let Some(v) = kv.get("file_compression_type") {
+        opts.file_compression_type =
+            v.parse().unwrap_or(datafusion::common::FileCompressionType::UNCOMPRESSED);
+    }
+    if let Some(v) = kv.get("infinite") {
+        opts.infinite = v == "true";
+    }
+    if let Some(schema) = import_schema_option(schema_addr)? {
+        let leaked: &'static arrow::datatypes::Schema = Box::leak(Box::new((*schema).clone()));
+        opts.schema = Some(leaked);
+    }
+    Ok(opts)
 }
 
 /// Holds the live async stream for DfLazyRecordBatchStream.

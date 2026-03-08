@@ -793,7 +793,7 @@ public class DataFrameTest {
         SessionContext ctx = new SessionContext()) {
       registerEmployees(ctx, allocator);
 
-      try (DataFrame df = ctx.table("employees").sort(col("name").sortAsc());
+      try (DataFrame df = ctx.table("employees").orElseThrow().sort(col("name").sortAsc());
           RecordBatchStream stream = df.executeStream(allocator)) {
         Schema schema = df.schema();
         assertEquals(4, schema.getFields().size());
@@ -811,6 +811,24 @@ public class DataFrameTest {
         assertEquals("Charlie", name.getObject(2).toString());
         assertEquals(35, age.get(2));
       }
+    }
+  }
+
+  @Test
+  void testTableNotFound() {
+    try (SessionContext ctx = new SessionContext()) {
+      assertTrue(ctx.table("nonexistent_table").isEmpty());
+      assertFalse(ctx.tableExist("nonexistent_table"));
+    }
+  }
+
+  @Test
+  void testTableExist() {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+      assertFalse(ctx.tableExist("employees"));
+      registerEmployees(ctx, allocator);
+      assertTrue(ctx.tableExist("employees"));
     }
   }
 
@@ -1121,6 +1139,7 @@ public class DataFrameTest {
 
       try (DataFrame df =
               ctx.table("employees")
+                  .orElseThrow()
                   .selectColumns("name", "salary")
                   .filter(col("salary").gt(lit(50000)));
           RecordBatchStream stream = df.executeStream(allocator)) {

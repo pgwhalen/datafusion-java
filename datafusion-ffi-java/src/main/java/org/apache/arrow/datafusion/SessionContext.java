@@ -1,6 +1,7 @@
 package org.apache.arrow.datafusion;
 
 import java.time.Instant;
+import java.util.Optional;
 import org.apache.arrow.datafusion.config.SessionConfig;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
@@ -199,17 +200,29 @@ public class SessionContext implements AutoCloseable {
   }
 
   /**
-   * Creates a DataFrame for a registered table.
+   * Returns whether a table with the given name exists.
+   *
+   * @param name The table name
+   * @return true if the table exists, false otherwise
+   * @throws DataFusionException if the existence check fails
+   */
+  public boolean tableExist(String name) {
+    checkNotClosed();
+    return bridge.tableExist(name);
+  }
+
+  /**
+   * Creates a DataFrame for a registered table, if it exists.
    *
    * <p>Equivalent to Rust's {@code ctx.table("name")}.
    *
    * @param name The table name
-   * @return A DataFrame for the specified table
-   * @throws DataFusionException if the table is not found
+   * @return An Optional containing a DataFrame for the specified table, or empty if not found
+   * @throws DataFusionException if there is an error other than the table not being found
    */
-  public DataFrame table(String name) {
+  public Optional<DataFrame> table(String name) {
     checkNotClosed();
-    return new DataFrame(bridge.table(name));
+    return bridge.table(name).map(DataFrame::new);
   }
 
   /**
