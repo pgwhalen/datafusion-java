@@ -1,40 +1,30 @@
 package org.apache.arrow.datafusion;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
 
 /**
- * FFI utilities for reading and converting {@link TableReference} values.
+ * Utilities for converting between Java {@link TableReference} and protobuf representations.
  *
- * <p>This is separated from {@link TableReference} so it can be reused wherever table references
- * appear in FFI structs (e.g., literal guarantees, column references) and in proto conversion
- * (e.g., expression serialization).
+ * <p>This is a pure Java converter with no FFI dependencies. It is used by {@link
+ * ExprProtoConverter} for expression serialization and by {@link LiteralGuaranteeBridge} for
+ * guarantee deserialization.
  */
-final class TableReferenceFfi {
+final class TableReferenceConverter {
 
-  private TableReferenceFfi() {}
+  private TableReferenceConverter() {}
 
   /**
-   * Reads a {@link TableReference} from proto bytes in native memory.
+   * Deserializes a {@link TableReference} from protobuf bytes.
    *
-   * @param bytesPtr pointer to the proto bytes, or {@code MemorySegment.NULL} for no relation
-   * @param len length of the proto bytes
-   * @return the table reference, or null if the pointer is null or length is 0
-   * @throws DataFusionException if proto decoding fails
+   * @param bytes the proto bytes
+   * @return the table reference, or null if the bytes are empty
+   * @throws InvalidProtocolBufferException if proto decoding fails
    */
-  static TableReference readTableReference(MemorySegment bytesPtr, long len) {
-    if (bytesPtr.equals(MemorySegment.NULL) || len == 0) {
+  static TableReference fromProtoBytes(byte[] bytes) throws InvalidProtocolBufferException {
+    if (bytes == null || bytes.length == 0) {
       return null;
     }
-    byte[] bytes = new byte[(int) len];
-    MemorySegment.copy(bytesPtr.reinterpret(len), ValueLayout.JAVA_BYTE, 0, bytes, 0, (int) len);
-    try {
-      return convertTableReference(
-          org.apache.arrow.datafusion.proto.TableReference.parseFrom(bytes));
-    } catch (InvalidProtocolBufferException e) {
-      throw new DataFusionException("Failed to decode TableReference protobuf", e);
-    }
+    return convertTableReference(org.apache.arrow.datafusion.proto.TableReference.parseFrom(bytes));
   }
 
   /**

@@ -638,12 +638,12 @@ final class ExprProtoConverter {
 
   private static TableReference convertTableReference(
       org.apache.arrow.datafusion.proto.TableReference proto) {
-    return TableReferenceFfi.convertTableReference(proto);
+    return TableReferenceConverter.convertTableReference(proto);
   }
 
   private static org.apache.arrow.datafusion.proto.TableReference toProtoTableReference(
       TableReference ref) {
-    return TableReferenceFfi.toProtoTableReference(ref);
+    return TableReferenceConverter.toProtoTableReference(ref);
   }
 
   private static String getRelationString(TableReference ref) {

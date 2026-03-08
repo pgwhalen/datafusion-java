@@ -90,9 +90,9 @@ final class DfTableAdapter implements DfTableTrait {
       // Convert limit
       Long limitValue = limit >= 0 ? limit : null;
 
-      // Create a Session from the session address - borrowed, valid only during this call
-      Session session =
-          new Session(new SessionFfi(MemorySegment.ofAddress(sessionAddr)), allocator);
+      // Create a Session - the session address from Rust is unused since Session creates
+      // its own default SessionState for physical expression compilation
+      Session session = new Session(allocator);
 
       // Call the provider
       ExecutionPlan plan = provider.scan(session, filterExprs, projectionList, limitValue);

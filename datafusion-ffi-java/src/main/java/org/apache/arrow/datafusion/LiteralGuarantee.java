@@ -29,6 +29,6 @@ public record LiteralGuarantee(Column column, Guarantee guarantee, Set<ScalarVal
    * @throws DataFusionException if analysis fails
    */
   public static List<LiteralGuarantee> analyze(PhysicalExpr expr) {
-    return LiteralGuaranteeFfi.analyze(expr);
+    return LiteralGuaranteeBridge.analyze(expr.bridge());
   }
 }

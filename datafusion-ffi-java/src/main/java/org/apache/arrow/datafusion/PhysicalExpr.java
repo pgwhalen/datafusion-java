@@ -9,23 +9,23 @@ package org.apache.arrow.datafusion;
  */
 public class PhysicalExpr implements AutoCloseable {
 
-  private final PhysicalExprFfi ffi;
+  private final PhysicalExprBridge bridge;
 
-  PhysicalExpr(PhysicalExprFfi ffi) {
-    this.ffi = ffi;
+  PhysicalExpr(PhysicalExprBridge bridge) {
+    this.bridge = bridge;
   }
 
   /**
-   * Returns the internal FFI helper for use by other FFI classes.
+   * Returns the internal bridge for use by other bridge classes.
    *
-   * @return the FFI helper
+   * @return the bridge
    */
-  PhysicalExprFfi ffi() {
-    return ffi;
+  PhysicalExprBridge bridge() {
+    return bridge;
   }
 
   @Override
   public void close() {
-    ffi.close();
+    bridge.close();
   }
 }

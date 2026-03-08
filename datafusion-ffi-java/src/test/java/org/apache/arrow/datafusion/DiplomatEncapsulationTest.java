@@ -47,6 +47,7 @@ public class DiplomatEncapsulationTest {
           String name = javaClass.getSimpleName();
           return name.endsWith("Ffi")
               || name.endsWith("Bridge")
+              || name.endsWith("Converter")
               || isDiplomatGenerated(name)
               || isDiplomatAdapter(name)
               || UTILITY_CLASS_NAMES.contains(name);

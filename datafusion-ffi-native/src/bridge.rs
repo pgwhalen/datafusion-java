@@ -668,15 +668,40 @@ pub mod ffi {
             Ok(Box::new(DfLogicalPlan { plan }))
         }
 
-        /// Create a physical expression from protobuf-encoded filter bytes and schema.
+    }
+
+    /// Opaque wrapper for a LogicalPlan.
+    #[diplomat::opaque]
+    pub struct DfLogicalPlan {
+        pub(super) plan: LogicalPlan,
+    }
+
+    impl DfLogicalPlan {
+        /// Get a display string of the logical plan.
+        pub fn to_display(&self, write: &mut DiplomatWrite) {
+            let _ = write!(write, "{}", self.plan.display_indent());
+        }
+    }
+
+    // ============================================================================
+    // DfPhysicalExpr
+    // ============================================================================
+
+    /// Opaque wrapper for a physical expression.
+    #[diplomat::opaque]
+    pub struct DfPhysicalExpr {
+        pub(super) expr: Arc<dyn datafusion::physical_plan::PhysicalExpr>,
+    }
+
+    impl DfPhysicalExpr {
+        /// Create a physical expression from protobuf-encoded filter bytes and an Arrow schema.
+        /// Uses a default SessionState for expression parsing and compilation.
         /// The filter bytes are a LogicalExprList proto. Expressions are conjoined with AND.
         /// schema_addr points to an FFI_ArrowSchema (read by reference, not consumed).
-        /// Returns the physical expression as a raw pointer address (caller must free).
-        pub fn create_physical_expr(
-            &self,
+        pub fn from_proto_filters(
             filter_bytes: &[u8],
             schema_addr: usize,
-        ) -> Result<usize, Box<DfError>> {
+        ) -> Result<Box<DfPhysicalExpr>, Box<DfError>> {
             if filter_bytes.is_empty() {
                 return Err("No filter bytes provided".into());
             }
@@ -686,11 +711,11 @@ pub mod ffi {
 
             let proto_list = LogicalExprList::decode(filter_bytes)?;
 
-            // Use a temporary SessionContext for UDF resolution during parsing
-            let temp_ctx = SessionContext::new_with_state(self.state.clone());
+            // Use a default session state for parsing and physical expr creation
+            let session_state = SessionContext::new().state();
             let codec = DefaultLogicalExtensionCodec {};
             let exprs: Vec<Expr> =
-                parse_exprs(proto_list.expr.iter(), &temp_ctx, &codec)?;
+                parse_exprs(proto_list.expr.iter(), &session_state, &codec)?;
 
             if exprs.is_empty() {
                 return Err("No filters after parsing".into());
@@ -708,33 +733,206 @@ pub mod ffi {
 
             // Create physical expression
             let physical_expr =
-                self.state.create_physical_expr(combined, &df_schema)?;
+                session_state.create_physical_expr(combined, &df_schema)?;
 
-            Ok(Box::into_raw(Box::new(physical_expr)) as usize)
+            Ok(Box::new(DfPhysicalExpr { expr: physical_expr }))
         }
 
-        /// Destroy a physical expression created by create_physical_expr.
-        pub fn destroy_physical_expr(addr: usize) {
-            if addr != 0 {
-                unsafe {
-                    drop(Box::from_raw(
-                        addr as *mut Arc<dyn datafusion::physical_plan::PhysicalExpr>,
-                    ));
-                }
-            }
+        /// Analyze this physical expression for literal guarantees.
+        pub fn analyze_guarantees(&self) -> Box<DfLiteralGuarantees> {
+            use datafusion::physical_expr::utils::LiteralGuarantee;
+
+            let guarantees = LiteralGuarantee::analyze(&self.expr);
+            let data: Vec<super::GuaranteeData> = guarantees
+                .iter()
+                .map(|g| {
+                    let column_name = g.column.name.clone();
+                    let table_ref_proto = super::table_reference_to_proto_bytes(&g.column.relation);
+                    let guarantee_type = match g.guarantee {
+                        datafusion::physical_expr::utils::Guarantee::In => 0,
+                        datafusion::physical_expr::utils::Guarantee::NotIn => 1,
+                    };
+                    let spans: Vec<(i64, i64, i64, i64)> = g
+                        .column
+                        .spans
+                        .0
+                        .iter()
+                        .map(|s| {
+                            (
+                                s.start.line as i64,
+                                s.start.column as i64,
+                                s.end.line as i64,
+                                s.end.column as i64,
+                            )
+                        })
+                        .collect();
+
+                    // Sort literals for deterministic ordering, then serialize
+                    let mut sorted_literals: Vec<datafusion::common::ScalarValue> =
+                        g.literals.iter().cloned().collect();
+                    sorted_literals.sort_by(|a, b| {
+                        a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+                    });
+                    let literal_protos: Vec<Vec<u8>> = sorted_literals
+                        .iter()
+                        .map(|sv| super::scalar_to_proto_bytes(sv).unwrap_or_default())
+                        .collect();
+
+                    super::GuaranteeData {
+                        column_name,
+                        table_ref_proto,
+                        guarantee_type,
+                        spans,
+                        literal_protos,
+                    }
+                })
+                .collect();
+
+            Box::new(DfLiteralGuarantees { guarantees: data })
         }
     }
 
-    /// Opaque wrapper for a LogicalPlan.
+    // ============================================================================
+    // DfLiteralGuarantees
+    // ============================================================================
+
+    /// Opaque wrapper holding the results of LiteralGuarantee::analyze().
     #[diplomat::opaque]
-    pub struct DfLogicalPlan {
-        pub(super) plan: LogicalPlan,
+    pub struct DfLiteralGuarantees {
+        pub(super) guarantees: Vec<super::GuaranteeData>,
     }
 
-    impl DfLogicalPlan {
-        /// Get a display string of the logical plan.
-        pub fn to_display(&self, write: &mut DiplomatWrite) {
-            let _ = write!(write, "{}", self.plan.display_indent());
+    impl DfLiteralGuarantees {
+        /// Number of guarantees.
+        pub fn count(&self) -> usize {
+            self.guarantees.len()
+        }
+
+        /// Get the column name for guarantee at index idx.
+        pub fn column_name(
+            &self,
+            idx: usize,
+            write: &mut DiplomatWrite,
+        ) -> Result<(), Box<DfError>> {
+            let g = self.guarantees.get(idx).ok_or_else(|| {
+                Box::<DfError>::from(format!("Guarantee index {} out of bounds", idx))
+            })?;
+            let _ = write!(write, "{}", g.column_name);
+            Ok(())
+        }
+
+        /// Get the guarantee type (0=In, 1=NotIn) for guarantee at index idx.
+        pub fn guarantee_type(&self, idx: usize) -> Result<i32, Box<DfError>> {
+            let g = self.guarantees.get(idx).ok_or_else(|| {
+                Box::<DfError>::from(format!("Guarantee index {} out of bounds", idx))
+            })?;
+            Ok(g.guarantee_type)
+        }
+
+        /// Get the pre-serialized table reference proto bytes for guarantee at index idx.
+        pub fn table_ref_proto_bytes(
+            &self,
+            idx: usize,
+        ) -> Result<Box<DfExprBytes>, Box<DfError>> {
+            let g = self.guarantees.get(idx).ok_or_else(|| {
+                Box::<DfError>::from(format!("Guarantee index {} out of bounds", idx))
+            })?;
+            Ok(Box::new(DfExprBytes {
+                bytes: g.table_ref_proto.clone(),
+            }))
+        }
+
+        /// Number of spans for guarantee at index idx.
+        pub fn span_count(&self, idx: usize) -> Result<usize, Box<DfError>> {
+            let g = self.guarantees.get(idx).ok_or_else(|| {
+                Box::<DfError>::from(format!("Guarantee index {} out of bounds", idx))
+            })?;
+            Ok(g.spans.len())
+        }
+
+        /// Get span start line.
+        pub fn span_start_line(
+            &self,
+            g_idx: usize,
+            s_idx: usize,
+        ) -> Result<i64, Box<DfError>> {
+            let g = self.guarantees.get(g_idx).ok_or_else(|| {
+                Box::<DfError>::from(format!("Guarantee index {} out of bounds", g_idx))
+            })?;
+            let s = g.spans.get(s_idx).ok_or_else(|| {
+                Box::<DfError>::from(format!("Span index {} out of bounds", s_idx))
+            })?;
+            Ok(s.0)
+        }
+
+        /// Get span start column.
+        pub fn span_start_col(
+            &self,
+            g_idx: usize,
+            s_idx: usize,
+        ) -> Result<i64, Box<DfError>> {
+            let g = self.guarantees.get(g_idx).ok_or_else(|| {
+                Box::<DfError>::from(format!("Guarantee index {} out of bounds", g_idx))
+            })?;
+            let s = g.spans.get(s_idx).ok_or_else(|| {
+                Box::<DfError>::from(format!("Span index {} out of bounds", s_idx))
+            })?;
+            Ok(s.1)
+        }
+
+        /// Get span end line.
+        pub fn span_end_line(
+            &self,
+            g_idx: usize,
+            s_idx: usize,
+        ) -> Result<i64, Box<DfError>> {
+            let g = self.guarantees.get(g_idx).ok_or_else(|| {
+                Box::<DfError>::from(format!("Guarantee index {} out of bounds", g_idx))
+            })?;
+            let s = g.spans.get(s_idx).ok_or_else(|| {
+                Box::<DfError>::from(format!("Span index {} out of bounds", s_idx))
+            })?;
+            Ok(s.2)
+        }
+
+        /// Get span end column.
+        pub fn span_end_col(
+            &self,
+            g_idx: usize,
+            s_idx: usize,
+        ) -> Result<i64, Box<DfError>> {
+            let g = self.guarantees.get(g_idx).ok_or_else(|| {
+                Box::<DfError>::from(format!("Guarantee index {} out of bounds", g_idx))
+            })?;
+            let s = g.spans.get(s_idx).ok_or_else(|| {
+                Box::<DfError>::from(format!("Span index {} out of bounds", s_idx))
+            })?;
+            Ok(s.3)
+        }
+
+        /// Number of literals for guarantee at index idx.
+        pub fn literal_count(&self, idx: usize) -> Result<usize, Box<DfError>> {
+            let g = self.guarantees.get(idx).ok_or_else(|| {
+                Box::<DfError>::from(format!("Guarantee index {} out of bounds", idx))
+            })?;
+            Ok(g.literal_protos.len())
+        }
+
+        /// Get pre-serialized proto bytes for a specific literal.
+        pub fn literal_proto_bytes(
+            &self,
+            g_idx: usize,
+            l_idx: usize,
+        ) -> Result<Box<DfExprBytes>, Box<DfError>> {
+            let g = self.guarantees.get(g_idx).ok_or_else(|| {
+                Box::<DfError>::from(format!("Guarantee index {} out of bounds", g_idx))
+            })?;
+            let bytes = g.literal_protos.get(l_idx).ok_or_else(|| {
+                Box::<DfError>::from(format!("Literal index {} out of bounds", l_idx))
+            })?;
+            Ok(Box::new(DfExprBytes {
+                bytes: bytes.clone(),
+            }))
         }
     }
 
@@ -1292,6 +1490,76 @@ pub mod ffi {
             let df = self.df.clone();
             self.rt.block_on(df.write_json(path_str, Default::default(), None))?;
             Ok(())
+        }
+    }
+}
+
+/// Pre-serialized data for a single LiteralGuarantee.
+struct GuaranteeData {
+    column_name: String,
+    table_ref_proto: Vec<u8>,
+    guarantee_type: i32, // 0=In, 1=NotIn
+    spans: Vec<(i64, i64, i64, i64)>, // (start_line, start_col, end_line, end_col)
+    literal_protos: Vec<Vec<u8>>,
+}
+
+/// Serialize a ScalarValue to protobuf bytes.
+fn scalar_to_proto_bytes(value: &datafusion::common::ScalarValue) -> Result<Vec<u8>, String> {
+    let proto: datafusion_proto::protobuf::ScalarValue = value
+        .try_into()
+        .map_err(|e: datafusion_proto::protobuf::ToProtoError| {
+            format!("Failed to convert ScalarValue to proto: {}", e)
+        })?;
+    Ok(prost::Message::encode_to_vec(&proto))
+}
+
+/// Serialize an `Option<TableReference>` to protobuf bytes.
+fn table_reference_to_proto_bytes(
+    relation: &Option<datafusion::common::TableReference>,
+) -> Vec<u8> {
+    use datafusion::common::TableReference;
+    use datafusion_proto::protobuf as proto;
+
+    match relation {
+        None => Vec::new(),
+        Some(rel) => {
+            let proto_ref = match rel {
+                TableReference::Bare { table } => proto::TableReference {
+                    table_reference_enum: Some(
+                        proto::table_reference::TableReferenceEnum::Bare(
+                            proto::BareTableReference {
+                                table: table.to_string(),
+                            },
+                        ),
+                    ),
+                },
+                TableReference::Partial { schema, table } => proto::TableReference {
+                    table_reference_enum: Some(
+                        proto::table_reference::TableReferenceEnum::Partial(
+                            proto::PartialTableReference {
+                                schema: schema.to_string(),
+                                table: table.to_string(),
+                            },
+                        ),
+                    ),
+                },
+                TableReference::Full {
+                    catalog,
+                    schema,
+                    table,
+                } => proto::TableReference {
+                    table_reference_enum: Some(
+                        proto::table_reference::TableReferenceEnum::Full(
+                            proto::FullTableReference {
+                                catalog: catalog.to_string(),
+                                schema: schema.to_string(),
+                                table: table.to_string(),
+                            },
+                        ),
+                    ),
+                },
+            };
+            prost::Message::encode_to_vec(&proto_ref)
         }
     }
 }

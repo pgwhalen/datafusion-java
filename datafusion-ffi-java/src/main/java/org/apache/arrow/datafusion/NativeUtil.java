@@ -1,237 +1,19 @@
 package org.apache.arrow.datafusion;
 
-import java.lang.foreign.*;
-import java.lang.invoke.MethodHandle;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /**
- * Utility class for handling errors from native DataFusion functions.
+ * Utility class for adapter helpers and Diplomat slice readers.
  *
- * <p>This class provides high-level methods for calling native functions with automatic error
- * handling. The preferred API uses functional interfaces to encapsulate the native call:
- *
- * <pre>{@code
- * // For void operations (int result code, 0 = success):
- * NativeUtil.call(arena, "Register table", errorOut ->
- *     (int) REGISTER.invokeExact(ctx, name, errorOut));
- *
- * // For pointer-returning operations:
- * MemorySegment df = NativeUtil.callForPointer(arena, "Execute SQL", errorOut ->
- *     (MemorySegment) SQL.invokeExact(ctx, query, errorOut));
- * }</pre>
+ * <p>Used by Diplomat-generated trait adapters (Df*Adapter classes) and by Diplomat-generated code
+ * for reading slice parameters.
  */
 final class NativeUtil {
-  private static final Linker LINKER = Linker.nativeLinker();
-  private static final SymbolLookup LOOKUP = NativeLoader.get();
-
-  static final MethodHandle STRING_LEN =
-      downcall(
-          "datafusion_string_len",
-          FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
-
-  static final MethodHandle FREE_STRING =
-      downcall("datafusion_free_string", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
 
   private NativeUtil() {}
-
-  // ========================================================================
-  // Functional interfaces for native calls
-  // ========================================================================
-
-  /**
-   * A native function call that returns an int result code.
-   *
-   * <p>Used with {@link #call}.
-   */
-  @FunctionalInterface
-  interface NativeIntCall {
-    /**
-     * Invokes the native function.
-     *
-     * @param errorOut the error output segment to pass to the native function
-     * @return the int result code
-     * @throws Throwable if the invocation fails
-     */
-    int invoke(MemorySegment errorOut) throws Throwable;
-  }
-
-  /**
-   * A native function call that returns a pointer.
-   *
-   * <p>Used with {@link #callForPointer}.
-   */
-  @FunctionalInterface
-  interface NativePointerCall {
-    /**
-     * Invokes the native function.
-     *
-     * @param errorOut the error output segment to pass to the native function
-     * @return the pointer result
-     * @throws Throwable if the invocation fails
-     */
-    MemorySegment invoke(MemorySegment errorOut) throws Throwable;
-  }
-
-  // ========================================================================
-  // High-level call methods with automatic error handling
-  // ========================================================================
-
-  /**
-   * Calls a native function that returns an int result code (0 = success).
-   *
-   * <p>This method allocates an error output segment, invokes the native function, and checks the
-   * result. If the result is non-zero, it extracts the error message and throws an exception.
-   *
-   * @param arena the arena to allocate the error output from
-   * @param operation a description of the operation for error messages
-   * @param call the native function to invoke
-   * @throws NativeErrorException if the native function returns a non-zero result
-   * @throws DataFusionException if the invocation fails unexpectedly
-   */
-  static void call(Arena arena, String operation, NativeIntCall call) {
-    MemorySegment errorOut = allocateErrorOut(arena);
-    try {
-      int result = call.invoke(errorOut);
-      checkResult(result, errorOut, operation);
-    } catch (NativeErrorException e) {
-      throw e;
-    } catch (Throwable e) {
-      throw new DataFusionException("Failed to " + operation, e);
-    }
-  }
-
-  /**
-   * Calls a native function that returns a pointer (non-null = success).
-   *
-   * <p>This method allocates an error output segment, invokes the native function, and checks the
-   * result. If the pointer is null, it extracts the error message and throws an exception.
-   *
-   * @param arena the arena to allocate the error output from
-   * @param operation a description of the operation for error messages
-   * @param call the native function to invoke
-   * @return the non-null pointer returned by the native function
-   * @throws NativeErrorException if the native function returns a null pointer
-   * @throws DataFusionException if the invocation fails unexpectedly
-   */
-  static MemorySegment callForPointer(Arena arena, String operation, NativePointerCall call) {
-    MemorySegment errorOut = allocateErrorOut(arena);
-    try {
-      MemorySegment pointer = call.invoke(errorOut);
-      checkPointer(pointer, errorOut, operation);
-      return pointer;
-    } catch (NativeErrorException e) {
-      throw e;
-    } catch (Throwable e) {
-      throw new DataFusionException("Failed to " + operation, e);
-    }
-  }
-
-  // ========================================================================
-  // Lower-level utilities
-  // ========================================================================
-
-  /**
-   * Allocates and initializes an error output pointer.
-   *
-   * <p>The returned segment should be passed to native functions that accept an error_out
-   * parameter. After the native call returns, use {@link #checkResult} or {@link #checkPointer} to
-   * check for errors.
-   *
-   * @param arena The arena to allocate from
-   * @return A memory segment initialized to NULL, suitable for error output
-   */
-  static MemorySegment allocateErrorOut(Arena arena) {
-    MemorySegment errorOut = arena.allocate(ValueLayout.ADDRESS);
-    errorOut.set(ValueLayout.ADDRESS, 0, MemorySegment.NULL);
-    return errorOut;
-  }
-
-  /**
-   * Checks a result code and throws an exception if it indicates an error.
-   *
-   * <p>Use this for functions that return 0 on success and non-zero on error.
-   *
-   * @param result The result code from the native function
-   * @param errorOut The error output pointer from the native function call
-   * @param operation A description of the operation for error messages
-   * @throws NativeErrorException if result is non-zero
-   */
-  static void checkResult(int result, MemorySegment errorOut, String operation) {
-    if (result != 0) {
-      String message = extractAndFreeError(errorOut);
-      throw new NativeErrorException(operation, message);
-    }
-  }
-
-  /**
-   * Checks a pointer result and throws an exception if it is NULL.
-   *
-   * <p>Use this for functions that return a pointer on success and NULL on error.
-   *
-   * @param pointer The pointer returned from the native function
-   * @param errorOut The error output pointer from the native function call
-   * @param operation A description of the operation for error messages
-   * @throws NativeErrorException if pointer is NULL
-   */
-  static void checkPointer(MemorySegment pointer, MemorySegment errorOut, String operation) {
-    if (pointer.equals(MemorySegment.NULL)) {
-      String message = extractAndFreeError(errorOut);
-      throw new NativeErrorException(operation, message);
-    }
-  }
-
-  /**
-   * Extracts and frees an error message from a native error pointer.
-   *
-   * <p>This method reads the error string from the native memory, frees the native memory, and
-   * returns the Java string. It handles error messages of any length by first querying the string
-   * length from the native code.
-   *
-   * @param errorOut The error output pointer from a native function call
-   * @return The error message, or null if no error was set
-   */
-  private static String extractAndFreeError(MemorySegment errorOut) {
-    MemorySegment errorPtr = errorOut.get(ValueLayout.ADDRESS, 0);
-    if (errorPtr.equals(MemorySegment.NULL)) {
-      return null;
-    }
-
-    try {
-      return readNullTerminatedString(errorPtr);
-    } finally {
-      try {
-        FREE_STRING.invokeExact(errorPtr);
-      } catch (Throwable ignored) {
-        // Nothing we can do if free fails
-      }
-    }
-  }
-
-  /**
-   * Reads a null-terminated C string from a native memory pointer.
-   *
-   * <p>Uses {@code datafusion_string_len} to determine the exact length of the string, avoiding
-   * hardcoded buffer sizes. Returns an empty string if the pointer is NULL.
-   *
-   * @param ptr the pointer to the null-terminated C string
-   * @return the Java string, or empty string if ptr is NULL
-   */
-  private static String readNullTerminatedString(MemorySegment ptr) {
-    if (ptr.equals(MemorySegment.NULL)) {
-      return "";
-    }
-
-    try {
-      long len = (long) STRING_LEN.invokeExact(ptr);
-      if (len == 0) {
-        return "";
-      }
-      return ptr.reinterpret(len + 1).getString(0);
-    } catch (Throwable e) {
-      return "(failed to read string: " + e.getMessage() + ")";
-    }
-  }
 
   static long writeStrings(long bufAddr, long bufCap, List<String> names) {
     byte[] bytes = String.join("\0", names).getBytes(StandardCharsets.UTF_8);
@@ -292,11 +74,5 @@ final class NativeUtil {
     long len = view.get(ValueLayout.JAVA_LONG, 8);
     if (len == 0) return new int[0];
     return dataPtr.reinterpret(len * 4).toArray(ValueLayout.JAVA_INT);
-  }
-
-  static MethodHandle downcall(String name, FunctionDescriptor descriptor) {
-    MemorySegment symbol =
-        LOOKUP.find(name).orElseThrow(() -> new RuntimeException("Symbol not found: " + name));
-    return LINKER.downcallHandle(symbol, descriptor);
   }
 }
