@@ -1,7 +1,5 @@
 package org.apache.arrow.datafusion;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
 import org.apache.arrow.vector.types.pojo.Schema;
 
 /**
@@ -10,13 +8,11 @@ import org.apache.arrow.vector.types.pojo.Schema;
  * <p>Mirrors Rust's {@code ParquetReadOptions}. Use {@link #builder()} to create instances.
  */
 public final class ParquetReadOptions {
-  private final String fileExtension;
   private final Boolean parquetPruning;
   private final Boolean skipMetadata;
   private final Schema schema;
 
   private ParquetReadOptions(Builder builder) {
-    this.fileExtension = builder.fileExtension;
     this.parquetPruning = builder.parquetPruning;
     this.skipMetadata = builder.skipMetadata;
     this.schema = builder.schema;
@@ -32,32 +28,26 @@ public final class ParquetReadOptions {
     return schema;
   }
 
-  /** Encodes the options (excluding schema) as null-separated key-value bytes. */
+  /** Encodes the options (excluding schema) as protobuf bytes (ParquetOptions proto). */
   byte[] encodeOptions() {
-    Map<String, String> kv = new LinkedHashMap<>();
-    kv.put("file_extension", fileExtension);
+    org.apache.arrow.datafusion.proto.ParquetOptions.Builder b =
+        org.apache.arrow.datafusion.proto.ParquetOptions.newBuilder();
     if (parquetPruning != null) {
-      kv.put("parquet_pruning", String.valueOf(parquetPruning));
+      b.setPruning(parquetPruning);
     }
     if (skipMetadata != null) {
-      kv.put("skip_metadata", String.valueOf(skipMetadata));
+      b.setSkipMetadata(skipMetadata);
     }
-    return CsvReadOptions.encodeKeyValues(kv);
+    return b.build().toByteArray();
   }
 
   /** Builder for {@link ParquetReadOptions}. */
   public static final class Builder {
-    private String fileExtension = ".parquet";
     private Boolean parquetPruning = null;
     private Boolean skipMetadata = null;
     private Schema schema = null;
 
     private Builder() {}
-
-    public Builder fileExtension(String fileExtension) {
-      this.fileExtension = fileExtension;
-      return this;
-    }
 
     public Builder parquetPruning(Boolean parquetPruning) {
       this.parquetPruning = parquetPruning;

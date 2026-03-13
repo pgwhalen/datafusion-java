@@ -1015,6 +1015,194 @@ public class DataFrameTest {
   }
 
   // ==========================================================================
+  // Phase 4b: Write operations with options
+  // ==========================================================================
+
+  @Test
+  void testWriteParquetWithOptions(@TempDir Path tempDir) {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+      registerEmployees(ctx, allocator);
+
+      Path outDir = tempDir.resolve("output_opts.parquet");
+      DataFrameWriteOptions writeOpts =
+          DataFrameWriteOptions.builder().singleFileOutput(true).build();
+      ParquetWriteOptions parquetOpts =
+          ParquetWriteOptions.builder().compression("SNAPPY").maxRowGroupSize(100L).build();
+      try (DataFrame df = ctx.sql("SELECT * FROM employees")) {
+        df.writeParquet(outDir.toString(), writeOpts, parquetOpts);
+      }
+
+      // Read back and verify data
+      try (DataFrame df = ctx.readParquet(outDir.toString()).sort(col("age").sortAsc());
+          RecordBatchStream stream = df.executeStream(allocator)) {
+        assertTrue(stream.loadNextBatch());
+        VectorSchemaRoot root = stream.getVectorSchemaRoot();
+        assertEquals(3, root.getRowCount());
+
+        BigIntVector age = (BigIntVector) root.getVector("age");
+        assertEquals(25, age.get(0));
+        assertEquals("Bob", root.getVector("name").getObject(0).toString());
+        assertEquals(30, age.get(1));
+        assertEquals("Alice", root.getVector("name").getObject(1).toString());
+        assertEquals(35, age.get(2));
+        assertEquals("Charlie", root.getVector("name").getObject(2).toString());
+      }
+    }
+  }
+
+  @Test
+  void testWriteParquetWithWriteOptionsOnly(@TempDir Path tempDir) {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+      registerEmployees(ctx, allocator);
+
+      Path outDir = tempDir.resolve("output_wo.parquet");
+      DataFrameWriteOptions writeOpts = DataFrameWriteOptions.builder().build();
+      try (DataFrame df = ctx.sql("SELECT * FROM employees")) {
+        df.writeParquet(outDir.toString(), writeOpts);
+      }
+
+      // Read back and verify data
+      try (DataFrame df = ctx.readParquet(outDir.toString()).sort(col("age").sortAsc());
+          RecordBatchStream stream = df.executeStream(allocator)) {
+        assertTrue(stream.loadNextBatch());
+        VectorSchemaRoot root = stream.getVectorSchemaRoot();
+        assertEquals(3, root.getRowCount());
+
+        BigIntVector age = (BigIntVector) root.getVector("age");
+        assertEquals(25, age.get(0));
+        assertEquals(30, age.get(1));
+        assertEquals(35, age.get(2));
+      }
+    }
+  }
+
+  @Test
+  void testWriteCsvWithOptions(@TempDir Path tempDir) throws IOException {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+      registerEmployees(ctx, allocator);
+
+      Path outDir = tempDir.resolve("output_opts.csv");
+      DataFrameWriteOptions writeOpts = DataFrameWriteOptions.builder().build();
+      CsvWriteOptions csvOpts = CsvWriteOptions.builder().delimiter((byte) '\t').build();
+      try (DataFrame df = ctx.sql("SELECT age, salary FROM employees")) {
+        df.writeCsv(outDir.toString(), writeOpts, csvOpts);
+      }
+
+      // Read back with tab delimiter and verify data
+      CsvReadOptions readOpts = CsvReadOptions.builder().delimiter((byte) '\t').build();
+      try (DataFrame df =
+              ctx.readCsv(outDir.toString(), readOpts, allocator).sort(col("age").sortAsc());
+          RecordBatchStream stream = df.executeStream(allocator)) {
+        assertTrue(stream.loadNextBatch());
+        VectorSchemaRoot root = stream.getVectorSchemaRoot();
+        assertEquals(3, root.getRowCount());
+
+        BigIntVector age = (BigIntVector) root.getVector("age");
+        BigIntVector salary = (BigIntVector) root.getVector("salary");
+        assertEquals(25, age.get(0));
+        assertEquals(30000, salary.get(0));
+        assertEquals(30, age.get(1));
+        assertEquals(50000, salary.get(1));
+        assertEquals(35, age.get(2));
+        assertEquals(70000, salary.get(2));
+      }
+    }
+  }
+
+  @Test
+  void testWriteCsvWithWriteOptionsOnly(@TempDir Path tempDir) throws IOException {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+      registerEmployees(ctx, allocator);
+
+      Path outDir = tempDir.resolve("output_wo.csv");
+      DataFrameWriteOptions writeOpts = DataFrameWriteOptions.builder().build();
+      try (DataFrame df = ctx.sql("SELECT age, salary FROM employees")) {
+        df.writeCsv(outDir.toString(), writeOpts);
+      }
+
+      // Read back and verify
+      try (DataFrame df = ctx.readCsv(outDir.toString()).sort(col("age").sortAsc());
+          RecordBatchStream stream = df.executeStream(allocator)) {
+        assertTrue(stream.loadNextBatch());
+        VectorSchemaRoot root = stream.getVectorSchemaRoot();
+        assertEquals(3, root.getRowCount());
+
+        BigIntVector age = (BigIntVector) root.getVector("age");
+        assertEquals(25, age.get(0));
+        assertEquals(30, age.get(1));
+        assertEquals(35, age.get(2));
+      }
+    }
+  }
+
+  @Test
+  void testWriteJsonWithOptions(@TempDir Path tempDir) throws IOException {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+      registerEmployees(ctx, allocator);
+
+      Path outDir = tempDir.resolve("output_opts.json");
+      DataFrameWriteOptions writeOpts = DataFrameWriteOptions.builder().build();
+      JsonWriteOptions jsonOpts = JsonWriteOptions.builder().build();
+      try (DataFrame df = ctx.sql("SELECT * FROM employees")) {
+        df.writeJson(outDir.toString(), writeOpts, jsonOpts);
+      }
+
+      // Read back and verify
+      try (DataFrame df = ctx.readJson(outDir.toString()).sort(col("age").sortAsc());
+          RecordBatchStream stream = df.executeStream(allocator)) {
+        assertTrue(stream.loadNextBatch());
+        VectorSchemaRoot root = stream.getVectorSchemaRoot();
+        assertEquals(3, root.getRowCount());
+
+        BigIntVector age = (BigIntVector) root.getVector("age");
+        VarCharVector name = (VarCharVector) root.getVector("name");
+        BigIntVector salary = (BigIntVector) root.getVector("salary");
+        assertEquals(25, age.get(0));
+        assertEquals("Bob", name.getObject(0).toString());
+        assertEquals(30000, salary.get(0));
+        assertEquals(30, age.get(1));
+        assertEquals("Alice", name.getObject(1).toString());
+        assertEquals(50000, salary.get(1));
+        assertEquals(35, age.get(2));
+        assertEquals("Charlie", name.getObject(2).toString());
+        assertEquals(70000, salary.get(2));
+      }
+    }
+  }
+
+  @Test
+  void testWriteJsonWithWriteOptionsOnly(@TempDir Path tempDir) throws IOException {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+      registerEmployees(ctx, allocator);
+
+      Path outDir = tempDir.resolve("output_wo.json");
+      DataFrameWriteOptions writeOpts = DataFrameWriteOptions.builder().build();
+      try (DataFrame df = ctx.sql("SELECT * FROM employees")) {
+        df.writeJson(outDir.toString(), writeOpts);
+      }
+
+      // Read back and verify
+      try (DataFrame df = ctx.readJson(outDir.toString()).sort(col("age").sortAsc());
+          RecordBatchStream stream = df.executeStream(allocator)) {
+        assertTrue(stream.loadNextBatch());
+        VectorSchemaRoot root = stream.getVectorSchemaRoot();
+        assertEquals(3, root.getRowCount());
+
+        BigIntVector age = (BigIntVector) root.getVector("age");
+        assertEquals(25, age.get(0));
+        assertEquals(30, age.get(1));
+        assertEquals(35, age.get(2));
+      }
+    }
+  }
+
+  // ==========================================================================
   // Phase 5: Advanced features
   // ==========================================================================
 

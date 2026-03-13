@@ -314,6 +314,30 @@ public class DataFrame implements AutoCloseable {
   }
 
   /**
+   * Write results to a Parquet file with write options.
+   *
+   * @param path path to write the Parquet file to
+   * @param options write options controlling output behavior
+   * @throws DataFusionException if writing fails
+   */
+  public void writeParquet(String path, DataFrameWriteOptions options) {
+    bridge.writeParquet(path, options, null);
+  }
+
+  /**
+   * Write results to a Parquet file with write and format options.
+   *
+   * @param path path to write the Parquet file to
+   * @param options write options controlling output behavior
+   * @param parquetOptions Parquet-specific format options
+   * @throws DataFusionException if writing fails
+   */
+  public void writeParquet(
+      String path, DataFrameWriteOptions options, ParquetWriteOptions parquetOptions) {
+    bridge.writeParquet(path, options, parquetOptions);
+  }
+
+  /**
    * Write results to a CSV file.
    *
    * @param path path to write the CSV file to
@@ -324,6 +348,29 @@ public class DataFrame implements AutoCloseable {
   }
 
   /**
+   * Write results to a CSV file with write options.
+   *
+   * @param path path to write the CSV file to
+   * @param options write options controlling output behavior
+   * @throws DataFusionException if writing fails
+   */
+  public void writeCsv(String path, DataFrameWriteOptions options) {
+    bridge.writeCsv(path, options, null);
+  }
+
+  /**
+   * Write results to a CSV file with write and format options.
+   *
+   * @param path path to write the CSV file to
+   * @param options write options controlling output behavior
+   * @param csvOptions CSV-specific format options
+   * @throws DataFusionException if writing fails
+   */
+  public void writeCsv(String path, DataFrameWriteOptions options, CsvWriteOptions csvOptions) {
+    bridge.writeCsv(path, options, csvOptions);
+  }
+
+  /**
    * Write results to a JSON file.
    *
    * @param path path to write the JSON file to
@@ -331,6 +378,29 @@ public class DataFrame implements AutoCloseable {
    */
   public void writeJson(String path) {
     bridge.writeJson(path);
+  }
+
+  /**
+   * Write results to a JSON file with write options.
+   *
+   * @param path path to write the JSON file to
+   * @param options write options controlling output behavior
+   * @throws DataFusionException if writing fails
+   */
+  public void writeJson(String path, DataFrameWriteOptions options) {
+    bridge.writeJson(path, options, null);
+  }
+
+  /**
+   * Write results to a JSON file with write and format options.
+   *
+   * @param path path to write the JSON file to
+   * @param options write options controlling output behavior
+   * @param jsonOptions JSON-specific format options
+   * @throws DataFusionException if writing fails
+   */
+  public void writeJson(String path, DataFrameWriteOptions options, JsonWriteOptions jsonOptions) {
+    bridge.writeJson(path, options, jsonOptions);
   }
 
   // ── Terminal operations ──

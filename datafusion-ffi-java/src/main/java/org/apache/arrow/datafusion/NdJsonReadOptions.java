@@ -1,7 +1,5 @@
 package org.apache.arrow.datafusion;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
 import org.apache.arrow.vector.types.pojo.Schema;
 
 /**
@@ -11,16 +9,10 @@ import org.apache.arrow.vector.types.pojo.Schema;
  */
 public final class NdJsonReadOptions {
   private final int schemaInferMaxRecords;
-  private final String fileExtension;
-  private final String fileCompressionType;
-  private final boolean infinite;
   private final Schema schema;
 
   private NdJsonReadOptions(Builder builder) {
     this.schemaInferMaxRecords = builder.schemaInferMaxRecords;
-    this.fileExtension = builder.fileExtension;
-    this.fileCompressionType = builder.fileCompressionType;
-    this.infinite = builder.infinite;
     this.schema = builder.schema;
   }
 
@@ -34,43 +26,25 @@ public final class NdJsonReadOptions {
     return schema;
   }
 
-  /** Encodes the options (excluding schema) as null-separated key-value bytes. */
+  /** Encodes the options (excluding schema) as protobuf bytes (JsonOptions proto). */
   byte[] encodeOptions() {
-    Map<String, String> kv = new LinkedHashMap<>();
-    kv.put("schema_infer_max_records", String.valueOf(schemaInferMaxRecords));
-    kv.put("file_extension", fileExtension);
-    kv.put("file_compression_type", fileCompressionType);
-    kv.put("infinite", String.valueOf(infinite));
-    return CsvReadOptions.encodeKeyValues(kv);
+    org.apache.arrow.datafusion.proto.JsonOptions.Builder b =
+        org.apache.arrow.datafusion.proto.JsonOptions.newBuilder();
+    b.setSchemaInferMaxRec(schemaInferMaxRecords);
+    // UNCOMPRESSED = 4
+    b.setCompressionValue(4);
+    return b.build().toByteArray();
   }
 
   /** Builder for {@link NdJsonReadOptions}. */
   public static final class Builder {
     private int schemaInferMaxRecords = 100;
-    private String fileExtension = ".json";
-    private String fileCompressionType = "UNCOMPRESSED";
-    private boolean infinite = false;
     private Schema schema = null;
 
     private Builder() {}
 
     public Builder schemaInferMaxRecords(int schemaInferMaxRecords) {
       this.schemaInferMaxRecords = schemaInferMaxRecords;
-      return this;
-    }
-
-    public Builder fileExtension(String fileExtension) {
-      this.fileExtension = fileExtension;
-      return this;
-    }
-
-    public Builder fileCompressionType(String fileCompressionType) {
-      this.fileCompressionType = fileCompressionType;
-      return this;
-    }
-
-    public Builder infinite(boolean infinite) {
-      this.infinite = infinite;
       return this;
     }
 

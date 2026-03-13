@@ -303,6 +303,49 @@ final class DataFrameBridge implements AutoCloseable {
     }
   }
 
+  void writeParquet(
+      String path, DataFrameWriteOptions writeOpts, ParquetWriteOptions formatOpts) {
+    checkNotClosed();
+    try {
+      DfWriteOptions dfOpts = toDfWriteOptions(writeOpts);
+      byte[] partitionBytes = encodeNullSeparated(writeOpts.partitionBy().toArray(new String[0]));
+      byte[] formatBytes = formatOpts != null ? formatOpts.encodeOptions() : new byte[0];
+      dfDf.writeParquetWithOptions(path, dfOpts, partitionBytes, formatBytes);
+    } catch (DfError e) {
+      throw new DataFusionException(dfErrorMessage(e));
+    } catch (Exception e) {
+      throw new DataFusionException("Failed to write parquet", e);
+    }
+  }
+
+  void writeCsv(String path, DataFrameWriteOptions writeOpts, CsvWriteOptions formatOpts) {
+    checkNotClosed();
+    try {
+      DfWriteOptions dfOpts = toDfWriteOptions(writeOpts);
+      byte[] partitionBytes = encodeNullSeparated(writeOpts.partitionBy().toArray(new String[0]));
+      byte[] formatBytes = formatOpts != null ? formatOpts.encodeOptions() : new byte[0];
+      dfDf.writeCsvWithOptions(path, dfOpts, partitionBytes, formatBytes);
+    } catch (DfError e) {
+      throw new DataFusionException(dfErrorMessage(e));
+    } catch (Exception e) {
+      throw new DataFusionException("Failed to write csv", e);
+    }
+  }
+
+  void writeJson(String path, DataFrameWriteOptions writeOpts, JsonWriteOptions formatOpts) {
+    checkNotClosed();
+    try {
+      DfWriteOptions dfOpts = toDfWriteOptions(writeOpts);
+      byte[] partitionBytes = encodeNullSeparated(writeOpts.partitionBy().toArray(new String[0]));
+      byte[] formatBytes = formatOpts != null ? formatOpts.encodeOptions() : new byte[0];
+      dfDf.writeJsonWithOptions(path, dfOpts, partitionBytes, formatBytes);
+    } catch (DfError e) {
+      throw new DataFusionException(dfErrorMessage(e));
+    } catch (Exception e) {
+      throw new DataFusionException("Failed to write json", e);
+    }
+  }
+
   void show() {
     checkNotClosed();
     try {
@@ -339,6 +382,21 @@ final class DataFrameBridge implements AutoCloseable {
   }
 
   // ── Private helpers ──
+
+  private static DfWriteOptions toDfWriteOptions(DataFrameWriteOptions writeOpts) {
+    DfWriteOptions dfOpts = new DfWriteOptions();
+    dfOpts.singleFileOutput = writeOpts.singleFileOutput();
+    dfOpts.insertOp = insertOpToDfInsertOp(writeOpts.insertOp());
+    return dfOpts;
+  }
+
+  private static DfInsertOp insertOpToDfInsertOp(InsertOp insertOp) {
+    return switch (insertOp) {
+      case APPEND -> DfInsertOp.APPEND;
+      case OVERWRITE -> DfInsertOp.OVERWRITE;
+      case REPLACE -> DfInsertOp.REPLACE;
+    };
+  }
 
   private static DfJoinType joinTypeToDfJoinType(JoinType joinType) {
     return switch (joinType) {

@@ -1,8 +1,6 @@
 package org.apache.arrow.datafusion;
 
-import java.nio.charset.StandardCharsets;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import com.google.protobuf.ByteString;
 import org.apache.arrow.vector.types.pojo.Schema;
 
 /**
@@ -19,8 +17,6 @@ public final class CsvReadOptions {
   private final Byte comment;
   private final boolean newlinesInValues;
   private final int schemaInferMaxRecords;
-  private final String fileExtension;
-  private final String fileCompressionType;
   private final String nullRegex;
   private final boolean truncatedRows;
   private final Schema schema;
@@ -34,8 +30,6 @@ public final class CsvReadOptions {
     this.comment = builder.comment;
     this.newlinesInValues = builder.newlinesInValues;
     this.schemaInferMaxRecords = builder.schemaInferMaxRecords;
-    this.fileExtension = builder.fileExtension;
-    this.fileCompressionType = builder.fileCompressionType;
     this.nullRegex = builder.nullRegex;
     this.truncatedRows = builder.truncatedRows;
     this.schema = builder.schema;
@@ -51,42 +45,31 @@ public final class CsvReadOptions {
     return schema;
   }
 
-  /** Encodes the options (excluding schema) as null-separated key-value bytes. */
+  /** Encodes the options (excluding schema) as protobuf bytes (CsvOptions proto). */
   byte[] encodeOptions() {
-    Map<String, String> kv = new LinkedHashMap<>();
-    kv.put("has_header", String.valueOf(hasHeader));
-    kv.put("delimiter", String.valueOf((char) delimiter));
-    kv.put("quote", String.valueOf((char) quote));
+    org.apache.arrow.datafusion.proto.CsvOptions.Builder b =
+        org.apache.arrow.datafusion.proto.CsvOptions.newBuilder();
+    b.setHasHeader(ByteString.copyFrom(new byte[] {(byte) (hasHeader ? 1 : 0)}));
+    b.setDelimiter(ByteString.copyFrom(new byte[] {delimiter}));
+    b.setQuote(ByteString.copyFrom(new byte[] {quote}));
     if (terminator != null) {
-      kv.put("terminator", String.valueOf((char) terminator.byteValue()));
+      b.setTerminator(ByteString.copyFrom(new byte[] {terminator}));
     }
     if (escape != null) {
-      kv.put("escape", String.valueOf((char) escape.byteValue()));
+      b.setEscape(ByteString.copyFrom(new byte[] {escape}));
     }
     if (comment != null) {
-      kv.put("comment", String.valueOf((char) comment.byteValue()));
+      b.setComment(ByteString.copyFrom(new byte[] {comment}));
     }
-    kv.put("newlines_in_values", String.valueOf(newlinesInValues));
-    kv.put("schema_infer_max_records", String.valueOf(schemaInferMaxRecords));
-    kv.put("file_extension", fileExtension);
-    kv.put("file_compression_type", fileCompressionType);
+    b.setNewlinesInValues(ByteString.copyFrom(new byte[] {(byte) (newlinesInValues ? 1 : 0)}));
+    b.setSchemaInferMaxRec(schemaInferMaxRecords);
+    // UNCOMPRESSED = 4
+    b.setCompressionValue(4);
     if (nullRegex != null) {
-      kv.put("null_regex", nullRegex);
+      b.setNullRegex(nullRegex);
     }
-    kv.put("truncated_rows", String.valueOf(truncatedRows));
-    return encodeKeyValues(kv);
-  }
-
-  static byte[] encodeKeyValues(Map<String, String> kv) {
-    if (kv.isEmpty()) return new byte[0];
-    StringBuilder sb = new StringBuilder();
-    boolean first = true;
-    for (Map.Entry<String, String> entry : kv.entrySet()) {
-      if (!first) sb.append('\0');
-      sb.append(entry.getKey()).append('\0').append(entry.getValue());
-      first = false;
-    }
-    return sb.toString().getBytes(StandardCharsets.UTF_8);
+    b.setTruncatedRows(ByteString.copyFrom(new byte[] {(byte) (truncatedRows ? 1 : 0)}));
+    return b.build().toByteArray();
   }
 
   /** Builder for {@link CsvReadOptions}. */
@@ -99,8 +82,6 @@ public final class CsvReadOptions {
     private Byte comment = null;
     private boolean newlinesInValues = false;
     private int schemaInferMaxRecords = 100;
-    private String fileExtension = ".csv";
-    private String fileCompressionType = "UNCOMPRESSED";
     private String nullRegex = null;
     private boolean truncatedRows = false;
     private Schema schema = null;
@@ -144,16 +125,6 @@ public final class CsvReadOptions {
 
     public Builder schemaInferMaxRecords(int schemaInferMaxRecords) {
       this.schemaInferMaxRecords = schemaInferMaxRecords;
-      return this;
-    }
-
-    public Builder fileExtension(String fileExtension) {
-      this.fileExtension = fileExtension;
-      return this;
-    }
-
-    public Builder fileCompressionType(String fileCompressionType) {
-      this.fileCompressionType = fileCompressionType;
       return this;
     }
 

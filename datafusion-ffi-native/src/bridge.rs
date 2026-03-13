@@ -81,6 +81,19 @@ pub mod ffi {
         RightAnti,
     }
 
+    /// Insert operation mode for DataFrame write operations.
+    pub enum DfInsertOp {
+        Append,
+        Overwrite,
+        Replace,
+    }
+
+    /// Options controlling how data is written from a DataFrame.
+    pub struct DfWriteOptions {
+        pub single_file_output: bool,
+        pub insert_op: DfInsertOp,
+    }
+
     // ============================================================================
     // Diplomat traits
     // ============================================================================
@@ -1681,6 +1694,54 @@ pub mod ffi {
             self.rt.block_on(df.write_json(path_str, Default::default(), None))?;
             Ok(())
         }
+
+        /// Write results to Parquet with options.
+        pub fn write_parquet_with_options(
+            &self,
+            path: &DiplomatStr,
+            write_opts: DfWriteOptions,
+            partition_by: &[u8],
+            format_opts: &[u8],
+        ) -> Result<(), Box<DfError>> {
+            let path_str = diplomat_str(path)?;
+            let df_write_opts = super::build_write_options(&write_opts, partition_by);
+            let parquet_opts = super::decode_parquet_write_options(format_opts)?;
+            let df = self.df.clone();
+            self.rt.block_on(df.write_parquet(path_str, df_write_opts, parquet_opts))?;
+            Ok(())
+        }
+
+        /// Write results to CSV with options.
+        pub fn write_csv_with_options(
+            &self,
+            path: &DiplomatStr,
+            write_opts: DfWriteOptions,
+            partition_by: &[u8],
+            format_opts: &[u8],
+        ) -> Result<(), Box<DfError>> {
+            let path_str = diplomat_str(path)?;
+            let df_write_opts = super::build_write_options(&write_opts, partition_by);
+            let csv_opts = super::decode_csv_write_options(format_opts)?;
+            let df = self.df.clone();
+            self.rt.block_on(df.write_csv(path_str, df_write_opts, csv_opts))?;
+            Ok(())
+        }
+
+        /// Write results to JSON with options.
+        pub fn write_json_with_options(
+            &self,
+            path: &DiplomatStr,
+            write_opts: DfWriteOptions,
+            partition_by: &[u8],
+            format_opts: &[u8],
+        ) -> Result<(), Box<DfError>> {
+            let path_str = diplomat_str(path)?;
+            let df_write_opts = super::build_write_options(&write_opts, partition_by);
+            let json_opts = super::decode_json_write_options(format_opts)?;
+            let df = self.df.clone();
+            self.rt.block_on(df.write_json(path_str, df_write_opts, json_opts))?;
+            Ok(())
+        }
     }
 }
 
@@ -1766,18 +1827,6 @@ fn parse_null_separated(bytes: &[u8]) -> Vec<String> {
         .collect()
 }
 
-/// Parse null-separated key-value pairs into a HashMap.
-fn parse_kv_options(bytes: &[u8]) -> std::collections::HashMap<String, String> {
-    let strs = parse_null_separated(bytes);
-    let mut map = std::collections::HashMap::new();
-    let mut i = 0;
-    while i + 1 < strs.len() {
-        map.insert(strs[i].clone(), strs[i + 1].clone());
-        i += 2;
-    }
-    map
-}
-
 /// Import an Arrow schema from an FFI address, or return None if addr is 0.
 fn import_schema_option(
     schema_addr: usize,
@@ -1792,60 +1841,190 @@ fn import_schema_option(
     Ok(Some(std::sync::Arc::new(schema)))
 }
 
+use prost::Message as _;
+
+/// Build DataFrameWriteOptions from a DfWriteOptions and partition_by bytes.
+fn build_write_options(
+    opts: &ffi::DfWriteOptions,
+    partition_by: &[u8],
+) -> datafusion::dataframe::DataFrameWriteOptions {
+    use datafusion::dataframe::DataFrameWriteOptions;
+    use datafusion::logical_expr::dml::InsertOp;
+
+    let insert_op = match opts.insert_op {
+        ffi::DfInsertOp::Append => InsertOp::Append,
+        ffi::DfInsertOp::Overwrite => InsertOp::Overwrite,
+        ffi::DfInsertOp::Replace => InsertOp::Replace,
+    };
+
+    let mut wo = DataFrameWriteOptions::new()
+        .with_single_file_output(opts.single_file_output)
+        .with_insert_operation(insert_op);
+
+    let cols = parse_null_separated(partition_by);
+    if !cols.is_empty() {
+        wo = wo.with_partition_by(cols);
+    }
+    wo
+}
+
+/// Decode protobuf bytes into TableParquetOptions for write.
+fn decode_parquet_write_options(
+    bytes: &[u8],
+) -> Result<Option<datafusion::config::TableParquetOptions>, Box<ffi::DfError>> {
+    use datafusion_proto::protobuf as proto;
+    if bytes.is_empty() {
+        return Ok(None);
+    }
+    let proto_opts = proto::TableParquetOptions::decode(bytes).map_err(|e| {
+        Box::new(ffi::DfError(format!("Failed to decode parquet options: {}", e).into()))
+    })?;
+    let global: datafusion::config::ParquetOptions = match proto_opts.global {
+        Some(ref g) => {
+            use datafusion_proto::protobuf::parquet_options::*;
+            // Start from defaults and only override fields that were explicitly set.
+            // Proto3 scalars default to 0/""/false; oneof fields are Option.
+            let mut opts = datafusion::config::ParquetOptions::default();
+            if let Some(CompressionOpt::Compression(ref c)) = g.compression_opt {
+                opts.compression = Some(c.clone());
+            }
+            if !g.writer_version.is_empty() {
+                opts.writer_version = g.writer_version.parse().unwrap_or_default();
+            }
+            if let Some(EncodingOpt::Encoding(ref e)) = g.encoding_opt {
+                opts.encoding = Some(e.clone());
+            }
+            if let Some(StatisticsEnabledOpt::StatisticsEnabled(ref s)) =
+                g.statistics_enabled_opt
+            {
+                opts.statistics_enabled = Some(s.clone());
+            }
+            if !g.created_by.is_empty() {
+                opts.created_by = g.created_by.clone();
+            }
+            if let Some(DictionaryEnabledOpt::DictionaryEnabled(d)) =
+                g.dictionary_enabled_opt
+            {
+                opts.dictionary_enabled = Some(d);
+            }
+            if g.bloom_filter_on_write {
+                opts.bloom_filter_on_write = true;
+            }
+            if g.skip_arrow_metadata {
+                opts.skip_arrow_metadata = true;
+            }
+            if g.allow_single_file_parallelism {
+                opts.allow_single_file_parallelism = true;
+            }
+            if g.data_pagesize_limit != 0 {
+                opts.data_pagesize_limit = g.data_pagesize_limit as usize;
+            }
+            if g.write_batch_size != 0 {
+                opts.write_batch_size = g.write_batch_size as usize;
+            }
+            if g.dictionary_page_size_limit != 0 {
+                opts.dictionary_page_size_limit = g.dictionary_page_size_limit as usize;
+            }
+            if g.max_row_group_size != 0 {
+                opts.max_row_group_size = g.max_row_group_size as usize;
+            }
+            if g.data_page_row_count_limit != 0 {
+                opts.data_page_row_count_limit = g.data_page_row_count_limit as usize;
+            }
+            if g.maximum_parallel_row_group_writers != 0 {
+                opts.maximum_parallel_row_group_writers =
+                    g.maximum_parallel_row_group_writers as usize;
+            }
+            if g.maximum_buffered_record_batches_per_stream != 0 {
+                opts.maximum_buffered_record_batches_per_stream =
+                    g.maximum_buffered_record_batches_per_stream as usize;
+            }
+            if let Some(BloomFilterFppOpt::BloomFilterFpp(f)) = g.bloom_filter_fpp_opt {
+                opts.bloom_filter_fpp = Some(f);
+            }
+            if let Some(BloomFilterNdvOpt::BloomFilterNdv(n)) = g.bloom_filter_ndv_opt {
+                opts.bloom_filter_ndv = Some(n);
+            }
+            opts
+        }
+        None => datafusion::config::ParquetOptions::default(),
+    };
+    let mut column_specific_options = std::collections::HashMap::new();
+    for col_opt in proto_opts.column_specific_options {
+        if let Some(options) = col_opt.options {
+            let col_opts: datafusion::config::ParquetColumnOptions = options.into();
+            column_specific_options.insert(col_opt.column_name, col_opts);
+        }
+    }
+    let opts = datafusion::config::TableParquetOptions {
+        global,
+        column_specific_options,
+        key_value_metadata: proto_opts.key_value_metadata.into_iter().map(|(k, v)| (k, Some(v))).collect(),
+        crypto: Default::default(),
+    };
+    Ok(Some(opts))
+}
+
+/// Decode protobuf bytes into CsvOptions for write.
+fn decode_csv_write_options(
+    bytes: &[u8],
+) -> Result<Option<datafusion::config::CsvOptions>, Box<ffi::DfError>> {
+    use datafusion_proto::protobuf as proto;
+    if bytes.is_empty() {
+        return Ok(None);
+    }
+    let proto_opts = proto::CsvOptions::decode(bytes).map_err(|e| {
+        Box::new(ffi::DfError(format!("Failed to decode csv options: {}", e).into()))
+    })?;
+    let opts: datafusion::config::CsvOptions = (&proto_opts).into();
+    Ok(Some(opts))
+}
+
+/// Decode protobuf bytes into JsonOptions for write.
+fn decode_json_write_options(
+    bytes: &[u8],
+) -> Result<Option<datafusion::config::JsonOptions>, Box<ffi::DfError>> {
+    use datafusion_proto::protobuf as proto;
+    if bytes.is_empty() {
+        return Ok(None);
+    }
+    let proto_opts = proto::JsonOptions::decode(bytes).map_err(|e| {
+        Box::new(ffi::DfError(format!("Failed to decode json options: {}", e).into()))
+    })?;
+    let opts: datafusion::config::JsonOptions = (&proto_opts).into();
+    Ok(Some(opts))
+}
+
 fn parse_csv_options<'a>(
     options: &[u8],
     schema_addr: usize,
 ) -> Result<datafusion::prelude::CsvReadOptions<'a>, Box<ffi::DfError>> {
-    let kv = parse_kv_options(options);
-    let schema_ref = import_schema_option(schema_addr)?;
     let mut opts = datafusion::prelude::CsvReadOptions::new();
 
-    if let Some(v) = kv.get("has_header") {
-        opts.has_header = v == "true";
-    }
-    if let Some(v) = kv.get("delimiter") {
-        if let Some(b) = v.bytes().next() {
-            opts.delimiter = b;
-        }
-    }
-    if let Some(v) = kv.get("quote") {
-        if let Some(b) = v.bytes().next() {
-            opts.quote = b;
-        }
-    }
-    if let Some(v) = kv.get("terminator") {
-        opts.terminator = v.bytes().next();
-    }
-    if let Some(v) = kv.get("escape") {
-        opts.escape = v.bytes().next();
-    }
-    if let Some(v) = kv.get("comment") {
-        opts.comment = v.bytes().next();
-    }
-    if let Some(v) = kv.get("newlines_in_values") {
-        opts.newlines_in_values = v == "true";
-    }
-    if let Some(v) = kv.get("schema_infer_max_records") {
-        if let Ok(n) = v.parse() {
+    if !options.is_empty() {
+        let proto = datafusion_proto::protobuf::CsvOptions::decode(options).map_err(|e| {
+            Box::new(ffi::DfError(format!("Failed to decode csv options: {}", e).into()))
+        })?;
+        let csv_opts: datafusion::config::CsvOptions = (&proto).into();
+
+        opts.has_header = csv_opts.has_header.unwrap_or(true);
+        opts.delimiter = csv_opts.delimiter;
+        opts.quote = csv_opts.quote;
+        opts.terminator = csv_opts.terminator;
+        opts.escape = csv_opts.escape;
+        opts.comment = csv_opts.comment;
+        opts.newlines_in_values = csv_opts.newlines_in_values.unwrap_or(false);
+        if let Some(n) = csv_opts.schema_infer_max_rec {
             opts.schema_infer_max_records = n;
         }
+        opts.file_compression_type = csv_opts.compression.into();
+        if let Some(v) = csv_opts.null_regex {
+            opts.null_regex = Some(v);
+        }
+        opts.truncated_rows = csv_opts.truncated_rows.unwrap_or(false);
     }
-    if let Some(v) = kv.get("file_extension") {
-        opts.file_extension = Box::leak(v.clone().into_boxed_str());
-    }
-    if let Some(v) = kv.get("file_compression_type") {
-        opts.file_compression_type =
-            v.parse().unwrap_or(datafusion::datasource::file_format::file_compression_type::FileCompressionType::UNCOMPRESSED);
-    }
-    if let Some(v) = kv.get("null_regex") {
-        opts.null_regex = Some(v.clone());
-    }
-    if let Some(v) = kv.get("truncated_rows") {
-        opts.truncated_rows = v == "true";
-    }
-    // We need to keep the schema alive - leak it since CsvReadOptions borrows it
-    // The schema Arc is consumed by DataFusion after the read/register call
-    if let Some(schema) = schema_ref {
+
+    if let Some(schema) = import_schema_option(schema_addr)? {
         let leaked: &'static arrow::datatypes::Schema = Box::leak(Box::new((*schema).clone()));
         opts.schema = Some(leaked);
     }
@@ -1856,18 +2035,18 @@ fn parse_parquet_options<'a>(
     options: &[u8],
     schema_addr: usize,
 ) -> Result<datafusion::prelude::ParquetReadOptions<'a>, Box<ffi::DfError>> {
-    let kv = parse_kv_options(options);
     let mut opts = datafusion::prelude::ParquetReadOptions::default();
 
-    if let Some(v) = kv.get("file_extension") {
-        opts.file_extension = Box::leak(v.clone().into_boxed_str());
+    if !options.is_empty() {
+        let proto = datafusion_proto::protobuf::ParquetOptions::decode(options).map_err(|e| {
+            Box::new(ffi::DfError(format!("Failed to decode parquet options: {}", e).into()))
+        })?;
+        // Read only the fields we need directly from proto, avoiding the full conversion
+        // which can panic on empty writer_version
+        opts.parquet_pruning = Some(proto.pruning);
+        opts.skip_metadata = Some(proto.skip_metadata);
     }
-    if let Some(v) = kv.get("parquet_pruning") {
-        opts.parquet_pruning = Some(v == "true");
-    }
-    if let Some(v) = kv.get("skip_metadata") {
-        opts.skip_metadata = Some(v == "true");
-    }
+
     if let Some(schema) = import_schema_option(schema_addr)? {
         let leaked: &'static arrow::datatypes::Schema = Box::leak(Box::new((*schema).clone()));
         opts.schema = Some(leaked);
@@ -1879,24 +2058,20 @@ fn parse_json_options<'a>(
     options: &[u8],
     schema_addr: usize,
 ) -> Result<datafusion::prelude::NdJsonReadOptions<'a>, Box<ffi::DfError>> {
-    let kv = parse_kv_options(options);
     let mut opts = datafusion::prelude::NdJsonReadOptions::default();
 
-    if let Some(v) = kv.get("schema_infer_max_records") {
-        if let Ok(n) = v.parse() {
+    if !options.is_empty() {
+        let proto = datafusion_proto::protobuf::JsonOptions::decode(options).map_err(|e| {
+            Box::new(ffi::DfError(format!("Failed to decode json options: {}", e).into()))
+        })?;
+        let json_opts: datafusion::config::JsonOptions = (&proto).into();
+
+        if let Some(n) = json_opts.schema_infer_max_rec {
             opts.schema_infer_max_records = n;
         }
+        opts.file_compression_type = json_opts.compression.into();
     }
-    if let Some(v) = kv.get("file_extension") {
-        opts.file_extension = Box::leak(v.clone().into_boxed_str());
-    }
-    if let Some(v) = kv.get("file_compression_type") {
-        opts.file_compression_type =
-            v.parse().unwrap_or(datafusion::datasource::file_format::file_compression_type::FileCompressionType::UNCOMPRESSED);
-    }
-    if let Some(v) = kv.get("infinite") {
-        opts.infinite = v == "true";
-    }
+
     if let Some(schema) = import_schema_option(schema_addr)? {
         let leaked: &'static arrow::datatypes::Schema = Box::leak(Box::new((*schema).clone()));
         opts.schema = Some(leaked);
