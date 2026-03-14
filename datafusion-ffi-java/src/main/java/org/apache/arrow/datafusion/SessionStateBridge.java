@@ -25,7 +25,7 @@ final class SessionStateBridge implements AutoCloseable {
       DfLogicalPlan plan = dfState.createLogicalPlan(sql);
       return new LogicalPlanBridge(plan);
     } catch (DfError e) {
-      throw new DataFusionException(dfErrorMessage(e));
+      throw new NativeDataFusionException(e);
     } catch (Exception e) {
       throw new DataFusionException("Failed to create logical plan", e);
     }
@@ -39,12 +39,6 @@ final class SessionStateBridge implements AutoCloseable {
   private void checkNotClosed() {
     if (closed) {
       throw new IllegalStateException("SessionState has been closed");
-    }
-  }
-
-  private static String dfErrorMessage(DfError e) {
-    try (e) {
-      return e.toDisplay();
     }
   }
 

@@ -19,7 +19,7 @@ final class RuntimeEnvBridge implements AutoCloseable {
       this.dfRuntimeEnv = DfRuntimeEnv.newWithMemoryLimit(maxMemory, memoryFraction);
       logger.debug("Created RuntimeEnv via Diplomat bridge");
     } catch (DfError e) {
-      throw new DataFusionException(dfErrorMessage(e));
+      throw new NativeDataFusionException(e);
     } catch (Exception e) {
       throw new DataFusionException("Failed to create RuntimeEnv", e);
     }
@@ -31,12 +31,6 @@ final class RuntimeEnvBridge implements AutoCloseable {
       throw new IllegalStateException("RuntimeEnv has been closed");
     }
     return dfRuntimeEnv;
-  }
-
-  private static String dfErrorMessage(DfError e) {
-    try (e) {
-      return e.toDisplay();
-    }
   }
 
   @Override

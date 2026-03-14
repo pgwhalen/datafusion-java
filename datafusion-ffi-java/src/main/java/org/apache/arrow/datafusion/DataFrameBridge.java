@@ -46,7 +46,7 @@ final class DataFrameBridge implements AutoCloseable {
           };
       return new RecordBatchStream(new RecordBatchStreamBridge(adapter, allocator));
     } catch (DfError e) {
-      throw new DataFusionException(dfErrorMessage(e));
+      throw new NativeDataFusionException(e);
     } catch (Exception e) {
       throw new DataFusionException("Failed to execute stream", e);
     }
@@ -72,7 +72,7 @@ final class DataFrameBridge implements AutoCloseable {
           };
       return new RecordBatchStream(new RecordBatchStreamBridge(adapter, allocator));
     } catch (DfError e) {
-      throw new DataFusionException(dfErrorMessage(e));
+      throw new NativeDataFusionException(e);
     } catch (Exception e) {
       throw new DataFusionException("Failed to collect", e);
     }
@@ -85,7 +85,7 @@ final class DataFrameBridge implements AutoCloseable {
       DfDataFrame result = dfDf.filterBytes(bytes);
       return new DataFrameBridge(result);
     } catch (DfError e) {
-      throw new DataFusionException(dfErrorMessage(e));
+      throw new NativeDataFusionException(e);
     } catch (Exception e) {
       throw new DataFusionException("Failed to filter", e);
     }
@@ -98,7 +98,7 @@ final class DataFrameBridge implements AutoCloseable {
       DfDataFrame result = dfDf.selectBytes(bytes);
       return new DataFrameBridge(result);
     } catch (DfError e) {
-      throw new DataFusionException(dfErrorMessage(e));
+      throw new NativeDataFusionException(e);
     } catch (Exception e) {
       throw new DataFusionException("Failed to select", e);
     }
@@ -112,7 +112,7 @@ final class DataFrameBridge implements AutoCloseable {
       DfDataFrame result = dfDf.aggregateBytes(groupBytes, aggrBytes);
       return new DataFrameBridge(result);
     } catch (DfError e) {
-      throw new DataFusionException(dfErrorMessage(e));
+      throw new NativeDataFusionException(e);
     } catch (Exception e) {
       throw new DataFusionException("Failed to aggregate", e);
     }
@@ -125,7 +125,7 @@ final class DataFrameBridge implements AutoCloseable {
       DfDataFrame result = dfDf.sortBytes(bytes);
       return new DataFrameBridge(result);
     } catch (DfError e) {
-      throw new DataFusionException(dfErrorMessage(e));
+      throw new NativeDataFusionException(e);
     } catch (Exception e) {
       throw new DataFusionException("Failed to sort", e);
     }
@@ -137,7 +137,7 @@ final class DataFrameBridge implements AutoCloseable {
       DfDataFrame result = dfDf.limit(skip, fetch);
       return new DataFrameBridge(result);
     } catch (DfError e) {
-      throw new DataFusionException(dfErrorMessage(e));
+      throw new NativeDataFusionException(e);
     } catch (Exception e) {
       throw new DataFusionException("Failed to limit", e);
     }
@@ -159,7 +159,7 @@ final class DataFrameBridge implements AutoCloseable {
           dfDf.join(right.dfDf, joinTypeToDfJoinType(joinType), leftBytes, rightBytes, filterBytes);
       return new DataFrameBridge(result);
     } catch (DfError e) {
-      throw new DataFusionException(dfErrorMessage(e));
+      throw new NativeDataFusionException(e);
     } catch (Exception e) {
       throw new DataFusionException("Failed to join", e);
     }
@@ -172,7 +172,7 @@ final class DataFrameBridge implements AutoCloseable {
       DfDataFrame result = dfDf.joinOnBytes(right.dfDf, joinTypeToDfJoinType(joinType), bytes);
       return new DataFrameBridge(result);
     } catch (DfError e) {
-      throw new DataFusionException(dfErrorMessage(e));
+      throw new NativeDataFusionException(e);
     } catch (Exception e) {
       throw new DataFusionException("Failed to join_on", e);
     }
@@ -183,7 +183,7 @@ final class DataFrameBridge implements AutoCloseable {
     try {
       return new DataFrameBridge(dfDf.union(other.dfDf));
     } catch (DfError e) {
-      throw new DataFusionException(dfErrorMessage(e));
+      throw new NativeDataFusionException(e);
     } catch (Exception e) {
       throw new DataFusionException("Failed to union", e);
     }
@@ -194,7 +194,7 @@ final class DataFrameBridge implements AutoCloseable {
     try {
       return new DataFrameBridge(dfDf.unionDistinct(other.dfDf));
     } catch (DfError e) {
-      throw new DataFusionException(dfErrorMessage(e));
+      throw new NativeDataFusionException(e);
     } catch (Exception e) {
       throw new DataFusionException("Failed to union distinct", e);
     }
@@ -205,7 +205,7 @@ final class DataFrameBridge implements AutoCloseable {
     try {
       return new DataFrameBridge(dfDf.intersect(other.dfDf));
     } catch (DfError e) {
-      throw new DataFusionException(dfErrorMessage(e));
+      throw new NativeDataFusionException(e);
     } catch (Exception e) {
       throw new DataFusionException("Failed to intersect", e);
     }
@@ -216,7 +216,7 @@ final class DataFrameBridge implements AutoCloseable {
     try {
       return new DataFrameBridge(dfDf.exceptAll(other.dfDf));
     } catch (DfError e) {
-      throw new DataFusionException(dfErrorMessage(e));
+      throw new NativeDataFusionException(e);
     } catch (Exception e) {
       throw new DataFusionException("Failed to except", e);
     }
@@ -227,7 +227,7 @@ final class DataFrameBridge implements AutoCloseable {
     try {
       return new DataFrameBridge(dfDf.distinct());
     } catch (DfError e) {
-      throw new DataFusionException(dfErrorMessage(e));
+      throw new NativeDataFusionException(e);
     } catch (Exception e) {
       throw new DataFusionException("Failed to distinct", e);
     }
@@ -240,7 +240,7 @@ final class DataFrameBridge implements AutoCloseable {
       DfDataFrame result = dfDf.withColumn(name, bytes);
       return new DataFrameBridge(result);
     } catch (DfError e) {
-      throw new DataFusionException(dfErrorMessage(e));
+      throw new NativeDataFusionException(e);
     } catch (Exception e) {
       throw new DataFusionException("Failed to with_column", e);
     }
@@ -251,7 +251,7 @@ final class DataFrameBridge implements AutoCloseable {
     try {
       return new DataFrameBridge(dfDf.withColumnRenamed(oldName, newName));
     } catch (DfError e) {
-      throw new DataFusionException(dfErrorMessage(e));
+      throw new NativeDataFusionException(e);
     } catch (Exception e) {
       throw new DataFusionException("Failed to with_column_renamed", e);
     }
@@ -264,7 +264,7 @@ final class DataFrameBridge implements AutoCloseable {
       DfDataFrame result = dfDf.dropColumns(bytes);
       return new DataFrameBridge(result);
     } catch (DfError e) {
-      throw new DataFusionException(dfErrorMessage(e));
+      throw new NativeDataFusionException(e);
     } catch (Exception e) {
       throw new DataFusionException("Failed to drop_columns", e);
     }
@@ -275,7 +275,7 @@ final class DataFrameBridge implements AutoCloseable {
     try {
       dfDf.writeParquet(path);
     } catch (DfError e) {
-      throw new DataFusionException(dfErrorMessage(e));
+      throw new NativeDataFusionException(e);
     } catch (Exception e) {
       throw new DataFusionException("Failed to write parquet", e);
     }
@@ -286,7 +286,7 @@ final class DataFrameBridge implements AutoCloseable {
     try {
       dfDf.writeCsv(path);
     } catch (DfError e) {
-      throw new DataFusionException(dfErrorMessage(e));
+      throw new NativeDataFusionException(e);
     } catch (Exception e) {
       throw new DataFusionException("Failed to write csv", e);
     }
@@ -297,14 +297,13 @@ final class DataFrameBridge implements AutoCloseable {
     try {
       dfDf.writeJson(path);
     } catch (DfError e) {
-      throw new DataFusionException(dfErrorMessage(e));
+      throw new NativeDataFusionException(e);
     } catch (Exception e) {
       throw new DataFusionException("Failed to write json", e);
     }
   }
 
-  void writeParquet(
-      String path, DataFrameWriteOptions writeOpts, ParquetWriteOptions formatOpts) {
+  void writeParquet(String path, DataFrameWriteOptions writeOpts, ParquetWriteOptions formatOpts) {
     checkNotClosed();
     try {
       DfWriteOptions dfOpts = toDfWriteOptions(writeOpts);
@@ -312,7 +311,7 @@ final class DataFrameBridge implements AutoCloseable {
       byte[] formatBytes = formatOpts != null ? formatOpts.encodeOptions() : new byte[0];
       dfDf.writeParquetWithOptions(path, dfOpts, partitionBytes, formatBytes);
     } catch (DfError e) {
-      throw new DataFusionException(dfErrorMessage(e));
+      throw new NativeDataFusionException(e);
     } catch (Exception e) {
       throw new DataFusionException("Failed to write parquet", e);
     }
@@ -326,7 +325,7 @@ final class DataFrameBridge implements AutoCloseable {
       byte[] formatBytes = formatOpts != null ? formatOpts.encodeOptions() : new byte[0];
       dfDf.writeCsvWithOptions(path, dfOpts, partitionBytes, formatBytes);
     } catch (DfError e) {
-      throw new DataFusionException(dfErrorMessage(e));
+      throw new NativeDataFusionException(e);
     } catch (Exception e) {
       throw new DataFusionException("Failed to write csv", e);
     }
@@ -340,7 +339,7 @@ final class DataFrameBridge implements AutoCloseable {
       byte[] formatBytes = formatOpts != null ? formatOpts.encodeOptions() : new byte[0];
       dfDf.writeJsonWithOptions(path, dfOpts, partitionBytes, formatBytes);
     } catch (DfError e) {
-      throw new DataFusionException(dfErrorMessage(e));
+      throw new NativeDataFusionException(e);
     } catch (Exception e) {
       throw new DataFusionException("Failed to write json", e);
     }
@@ -351,7 +350,7 @@ final class DataFrameBridge implements AutoCloseable {
     try {
       dfDf.show();
     } catch (DfError e) {
-      throw new DataFusionException(dfErrorMessage(e));
+      throw new NativeDataFusionException(e);
     } catch (Exception e) {
       throw new DataFusionException("Failed to show", e);
     }
@@ -362,7 +361,7 @@ final class DataFrameBridge implements AutoCloseable {
     try {
       return dfDf.count();
     } catch (DfError e) {
-      throw new DataFusionException(dfErrorMessage(e));
+      throw new NativeDataFusionException(e);
     } catch (Exception e) {
       throw new DataFusionException("Failed to count", e);
     }
@@ -375,7 +374,7 @@ final class DataFrameBridge implements AutoCloseable {
       dfDf.schemaTo(ffiSchema.memoryAddress());
       return Data.importSchema(tempAllocator, ffiSchema, null);
     } catch (DfError e) {
-      throw new DataFusionException(dfErrorMessage(e));
+      throw new NativeDataFusionException(e);
     } catch (Exception e) {
       throw new DataFusionException("Failed to get schema", e);
     }
@@ -445,12 +444,6 @@ final class DataFrameBridge implements AutoCloseable {
       closed = true;
       dfDf.close();
       logger.debug("Closed DataFrame");
-    }
-  }
-
-  private static String dfErrorMessage(DfError e) {
-    try (e) {
-      return e.toDisplay();
     }
   }
 }

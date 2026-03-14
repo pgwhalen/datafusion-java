@@ -85,9 +85,7 @@ final class LiteralGuaranteeBridge {
 
       return result;
     } catch (DfError e) {
-      try (e) {
-        throw new DataFusionException(e.toDisplay());
-      }
+      throw new NativeDataFusionException(e);
     }
   }
 

@@ -58,7 +58,7 @@ final class RecordBatchStreamBridge implements AutoCloseable {
       logger.debug("Loaded batch with {} rows", vectorSchemaRoot.getRowCount());
       return true;
     } catch (DfError e) {
-      throw new DataFusionException(dfErrorMessage(e));
+      throw new NativeDataFusionException(e);
     } catch (DataFusionException e) {
       throw e;
     } catch (Exception e) {
@@ -87,7 +87,7 @@ final class RecordBatchStreamBridge implements AutoCloseable {
       dfStream.schemaTo(arrowSchema.memoryAddress());
       return Data.importSchema(allocator, arrowSchema, dictionaryProvider);
     } catch (DfError e) {
-      throw new DataFusionException(dfErrorMessage(e));
+      throw new NativeDataFusionException(e);
     } catch (Exception e) {
       throw new DataFusionException("Failed to get schema", e);
     }
@@ -96,12 +96,6 @@ final class RecordBatchStreamBridge implements AutoCloseable {
   private void checkNotClosed() {
     if (closed) {
       throw new IllegalStateException("RecordBatchStream has been closed");
-    }
-  }
-
-  private static String dfErrorMessage(DfError e) {
-    try (e) {
-      return e.toDisplay();
     }
   }
 
