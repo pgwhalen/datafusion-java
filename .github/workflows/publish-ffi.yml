@@ -28,6 +28,7 @@ jobs:
           - os: ubuntu-24.04-arm
             platform: linux_arm64
             lib_name: libdatafusion_ffi_native.so
+            cargo_flags: '-j 2'  # Limit parallelism to avoid OOM on ARM runners
           - os: macos-14
             platform: osx_64
             rust_target: x86_64-apple-darwin
@@ -62,7 +63,7 @@ jobs:
 
       - name: Build release library
         if: ${{ !matrix.rust_target }}
-        run: cargo build --release
+        run: cargo build --release ${{ matrix.cargo_flags || '' }}
         working-directory: datafusion-ffi-native
 
       - name: Build release library (cross-compile)
