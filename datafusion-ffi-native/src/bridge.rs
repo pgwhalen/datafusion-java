@@ -16,7 +16,7 @@ pub mod ffi {
     use datafusion_proto::logical_plan::to_proto::serialize_exprs;
     use datafusion_proto::logical_plan::DefaultLogicalExtensionCodec;
     use datafusion_proto::protobuf::{LogicalExprList, SortExprNodeCollection};
-    use diplomat_runtime::{DiplomatStr, DiplomatWrite};
+    use diplomat_runtime::{DiplomatStr, DiplomatStrSlice, DiplomatWrite};
     use prost::Message;
     use std::collections::HashMap;
     use std::fmt::Write;
@@ -86,6 +86,40 @@ pub mod ffi {
         Append,
         Overwrite,
         Replace,
+    }
+
+    /// Guarantee type for literal guarantees.
+    pub enum DfGuaranteeType {
+        In,
+        NotIn,
+    }
+
+    /// Table reference type for literal guarantees.
+    pub enum DfTableRefType {
+        None,
+        Bare,
+        Partial,
+        Full,
+    }
+
+    /// A source-code span with start/end line and column.
+    #[diplomat::attr(auto, abi_compatible)]
+    pub struct DfSpan {
+        pub start_line: i64,
+        pub start_col: i64,
+        pub end_line: i64,
+        pub end_col: i64,
+    }
+
+    /// A single literal guarantee item returned by get().
+    pub struct DfLiteralGuarantee<'a> {
+        pub column_name: DiplomatStrSlice<'a>,
+        pub guarantee_type: DfGuaranteeType,
+        pub table_ref_type: DfTableRefType,
+        pub table_ref_table: DiplomatStrSlice<'a>,
+        pub table_ref_schema: DiplomatStrSlice<'a>,
+        pub table_ref_catalog: DiplomatStrSlice<'a>,
+        pub literal_count: i64,
     }
 
     /// Options controlling how data is written from a DataFrame.
@@ -753,30 +787,64 @@ pub mod ffi {
 
         /// Analyze this physical expression for literal guarantees.
         pub fn analyze_guarantees(&self) -> Box<DfLiteralGuarantees> {
+            use datafusion::common::TableReference;
             use datafusion::physical_expr::utils::LiteralGuarantee;
 
             let guarantees = LiteralGuarantee::analyze(&self.expr);
-            let data: Vec<super::GuaranteeData> = guarantees
+            let data: Vec<super::LiteralGuarantee> = guarantees
                 .iter()
                 .map(|g| {
                     let column_name = g.column.name.clone();
-                    let table_ref_proto = super::table_reference_to_proto_bytes(&g.column.relation);
                     let guarantee_type = match g.guarantee {
-                        datafusion::physical_expr::utils::Guarantee::In => 0,
-                        datafusion::physical_expr::utils::Guarantee::NotIn => 1,
+                        datafusion::physical_expr::utils::Guarantee::In => DfGuaranteeType::In,
+                        datafusion::physical_expr::utils::Guarantee::NotIn => {
+                            DfGuaranteeType::NotIn
+                        }
                     };
-                    let spans: Vec<(i64, i64, i64, i64)> = g
+
+                    // Extract table reference parts as strings
+                    let (table_ref_type, table_ref_table, table_ref_schema, table_ref_catalog) =
+                        match &g.column.relation {
+                            None => (
+                                DfTableRefType::None,
+                                String::new(),
+                                String::new(),
+                                String::new(),
+                            ),
+                            Some(TableReference::Bare { table }) => (
+                                DfTableRefType::Bare,
+                                table.to_string(),
+                                String::new(),
+                                String::new(),
+                            ),
+                            Some(TableReference::Partial { schema, table }) => (
+                                DfTableRefType::Partial,
+                                table.to_string(),
+                                schema.to_string(),
+                                String::new(),
+                            ),
+                            Some(TableReference::Full {
+                                catalog,
+                                schema,
+                                table,
+                            }) => (
+                                DfTableRefType::Full,
+                                table.to_string(),
+                                schema.to_string(),
+                                catalog.to_string(),
+                            ),
+                        };
+
+                    let spans: Vec<DfSpan> = g
                         .column
                         .spans
                         .0
                         .iter()
-                        .map(|s| {
-                            (
-                                s.start.line as i64,
-                                s.start.column as i64,
-                                s.end.line as i64,
-                                s.end.column as i64,
-                            )
+                        .map(|s| DfSpan {
+                            start_line: s.start.line as i64,
+                            start_col: s.start.column as i64,
+                            end_line: s.end.line as i64,
+                            end_col: s.end.column as i64,
                         })
                         .collect();
 
@@ -791,10 +859,13 @@ pub mod ffi {
                         .map(|sv| super::scalar_to_proto_bytes(sv).unwrap_or_default())
                         .collect();
 
-                    super::GuaranteeData {
+                    super::LiteralGuarantee {
                         column_name,
-                        table_ref_proto,
                         guarantee_type,
+                        table_ref_type,
+                        table_ref_table,
+                        table_ref_schema,
+                        table_ref_catalog,
                         spans,
                         literal_protos,
                     }
@@ -812,7 +883,7 @@ pub mod ffi {
     /// Opaque wrapper holding the results of LiteralGuarantee::analyze().
     #[diplomat::opaque]
     pub struct DfLiteralGuarantees {
-        pub(super) guarantees: Vec<super::GuaranteeData>,
+        pub(super) guarantees: Vec<super::LiteralGuarantee>,
     }
 
     impl DfLiteralGuarantees {
@@ -821,114 +892,28 @@ pub mod ffi {
             self.guarantees.len()
         }
 
-        /// Get the column name for guarantee at index idx.
-        pub fn column_name(
-            &self,
-            idx: usize,
-            write: &mut DiplomatWrite,
-        ) -> Result<(), Box<DfError>> {
+        /// Get the guarantee item at index idx as a struct.
+        pub fn get<'a>(&'a self, idx: usize) -> Result<DfLiteralGuarantee<'a>, Box<DfError>> {
             let g = self.guarantees.get(idx).ok_or_else(|| {
                 Box::<DfError>::from(format!("Guarantee index {} out of bounds", idx))
             })?;
-            let _ = write!(write, "{}", g.column_name);
-            Ok(())
+            Ok(DfLiteralGuarantee {
+                column_name: g.column_name.as_bytes().into(),
+                guarantee_type: g.guarantee_type,
+                table_ref_type: g.table_ref_type,
+                table_ref_table: g.table_ref_table.as_bytes().into(),
+                table_ref_schema: g.table_ref_schema.as_bytes().into(),
+                table_ref_catalog: g.table_ref_catalog.as_bytes().into(),
+                literal_count: g.literal_protos.len() as i64,
+            })
         }
 
-        /// Get the guarantee type (0=In, 1=NotIn) for guarantee at index idx.
-        pub fn guarantee_type(&self, idx: usize) -> Result<i32, Box<DfError>> {
+        /// Get the spans for guarantee at index idx.
+        pub fn spans<'a>(&'a self, idx: usize) -> Result<&'a [DfSpan], Box<DfError>> {
             let g = self.guarantees.get(idx).ok_or_else(|| {
                 Box::<DfError>::from(format!("Guarantee index {} out of bounds", idx))
             })?;
-            Ok(g.guarantee_type)
-        }
-
-        /// Get the pre-serialized table reference proto bytes for guarantee at index idx.
-        pub fn table_ref_proto_bytes(
-            &self,
-            idx: usize,
-        ) -> Result<Box<DfExprBytes>, Box<DfError>> {
-            let g = self.guarantees.get(idx).ok_or_else(|| {
-                Box::<DfError>::from(format!("Guarantee index {} out of bounds", idx))
-            })?;
-            Ok(Box::new(DfExprBytes {
-                bytes: g.table_ref_proto.clone(),
-            }))
-        }
-
-        /// Number of spans for guarantee at index idx.
-        pub fn span_count(&self, idx: usize) -> Result<usize, Box<DfError>> {
-            let g = self.guarantees.get(idx).ok_or_else(|| {
-                Box::<DfError>::from(format!("Guarantee index {} out of bounds", idx))
-            })?;
-            Ok(g.spans.len())
-        }
-
-        /// Get span start line.
-        pub fn span_start_line(
-            &self,
-            g_idx: usize,
-            s_idx: usize,
-        ) -> Result<i64, Box<DfError>> {
-            let g = self.guarantees.get(g_idx).ok_or_else(|| {
-                Box::<DfError>::from(format!("Guarantee index {} out of bounds", g_idx))
-            })?;
-            let s = g.spans.get(s_idx).ok_or_else(|| {
-                Box::<DfError>::from(format!("Span index {} out of bounds", s_idx))
-            })?;
-            Ok(s.0)
-        }
-
-        /// Get span start column.
-        pub fn span_start_col(
-            &self,
-            g_idx: usize,
-            s_idx: usize,
-        ) -> Result<i64, Box<DfError>> {
-            let g = self.guarantees.get(g_idx).ok_or_else(|| {
-                Box::<DfError>::from(format!("Guarantee index {} out of bounds", g_idx))
-            })?;
-            let s = g.spans.get(s_idx).ok_or_else(|| {
-                Box::<DfError>::from(format!("Span index {} out of bounds", s_idx))
-            })?;
-            Ok(s.1)
-        }
-
-        /// Get span end line.
-        pub fn span_end_line(
-            &self,
-            g_idx: usize,
-            s_idx: usize,
-        ) -> Result<i64, Box<DfError>> {
-            let g = self.guarantees.get(g_idx).ok_or_else(|| {
-                Box::<DfError>::from(format!("Guarantee index {} out of bounds", g_idx))
-            })?;
-            let s = g.spans.get(s_idx).ok_or_else(|| {
-                Box::<DfError>::from(format!("Span index {} out of bounds", s_idx))
-            })?;
-            Ok(s.2)
-        }
-
-        /// Get span end column.
-        pub fn span_end_col(
-            &self,
-            g_idx: usize,
-            s_idx: usize,
-        ) -> Result<i64, Box<DfError>> {
-            let g = self.guarantees.get(g_idx).ok_or_else(|| {
-                Box::<DfError>::from(format!("Guarantee index {} out of bounds", g_idx))
-            })?;
-            let s = g.spans.get(s_idx).ok_or_else(|| {
-                Box::<DfError>::from(format!("Span index {} out of bounds", s_idx))
-            })?;
-            Ok(s.3)
-        }
-
-        /// Number of literals for guarantee at index idx.
-        pub fn literal_count(&self, idx: usize) -> Result<usize, Box<DfError>> {
-            let g = self.guarantees.get(idx).ok_or_else(|| {
-                Box::<DfError>::from(format!("Guarantee index {} out of bounds", idx))
-            })?;
-            Ok(g.literal_protos.len())
+            Ok(&g.spans)
         }
 
         /// Get pre-serialized proto bytes for a specific literal.
@@ -1746,11 +1731,14 @@ pub mod ffi {
 }
 
 /// Pre-serialized data for a single LiteralGuarantee.
-struct GuaranteeData {
+struct LiteralGuarantee {
     column_name: String,
-    table_ref_proto: Vec<u8>,
-    guarantee_type: i32, // 0=In, 1=NotIn
-    spans: Vec<(i64, i64, i64, i64)>, // (start_line, start_col, end_line, end_col)
+    guarantee_type: ffi::DfGuaranteeType,
+    table_ref_type: ffi::DfTableRefType,
+    table_ref_table: String,
+    table_ref_schema: String,
+    table_ref_catalog: String,
+    spans: Vec<ffi::DfSpan>,
     literal_protos: Vec<Vec<u8>>,
 }
 
@@ -1762,57 +1750,6 @@ fn scalar_to_proto_bytes(value: &datafusion::common::ScalarValue) -> Result<Vec<
             format!("Failed to convert ScalarValue to proto: {}", e)
         })?;
     Ok(prost::Message::encode_to_vec(&proto))
-}
-
-/// Serialize an `Option<TableReference>` to protobuf bytes.
-fn table_reference_to_proto_bytes(
-    relation: &Option<datafusion::common::TableReference>,
-) -> Vec<u8> {
-    use datafusion::common::TableReference;
-    use datafusion_proto::protobuf as proto;
-
-    match relation {
-        None => Vec::new(),
-        Some(rel) => {
-            let proto_ref = match rel {
-                TableReference::Bare { table } => proto::TableReference {
-                    table_reference_enum: Some(
-                        proto::table_reference::TableReferenceEnum::Bare(
-                            proto::BareTableReference {
-                                table: table.to_string(),
-                            },
-                        ),
-                    ),
-                },
-                TableReference::Partial { schema, table } => proto::TableReference {
-                    table_reference_enum: Some(
-                        proto::table_reference::TableReferenceEnum::Partial(
-                            proto::PartialTableReference {
-                                schema: schema.to_string(),
-                                table: table.to_string(),
-                            },
-                        ),
-                    ),
-                },
-                TableReference::Full {
-                    catalog,
-                    schema,
-                    table,
-                } => proto::TableReference {
-                    table_reference_enum: Some(
-                        proto::table_reference::TableReferenceEnum::Full(
-                            proto::FullTableReference {
-                                catalog: catalog.to_string(),
-                                schema: schema.to_string(),
-                                table: table.to_string(),
-                            },
-                        ),
-                    ),
-                },
-            };
-            prost::Message::encode_to_vec(&proto_ref)
-        }
-    }
 }
 
 /// Parse null-separated UTF-8 strings from a byte slice.

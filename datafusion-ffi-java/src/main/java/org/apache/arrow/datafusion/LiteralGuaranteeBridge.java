@@ -32,40 +32,39 @@ final class LiteralGuaranteeBridge {
 
       List<LiteralGuarantee> result = new ArrayList<>((int) count);
 
-      for (long gIdx = 0; gIdx < count; gIdx++) {
-        // Column name
-        String columnName = guarantees.columnName(gIdx);
+      for (long i = 0; i < count; i++) {
+        DfLiteralGuarantee item = guarantees.get(i);
 
-        // Table reference from proto bytes
-        TableReference relation = readTableRef(guarantees, gIdx);
-
-        // Spans
-        long spansCount = guarantees.spanCount(gIdx);
-        List<Span> spans = new ArrayList<>((int) spansCount);
-        for (long sIdx = 0; sIdx < spansCount; sIdx++) {
-          spans.add(
-              new Span(
-                  new Location(
-                      guarantees.spanStartLine(gIdx, sIdx), guarantees.spanStartCol(gIdx, sIdx)),
-                  new Location(
-                      guarantees.spanEndLine(gIdx, sIdx), guarantees.spanEndCol(gIdx, sIdx))));
-        }
-
-        // Guarantee type
-        int guaranteeTypeVal = guarantees.guaranteeType(gIdx);
-        Guarantee guaranteeType =
-            switch (guaranteeTypeVal) {
-              case 0 -> Guarantee.IN;
-              case 1 -> Guarantee.NOT_IN;
-              default ->
-                  throw new DataFusionException("Unknown guarantee type: " + guaranteeTypeVal);
+        // Table reference from enum + string parts
+        TableReference relation =
+            switch (item.tableRefType) {
+              case NONE -> null;
+              case BARE -> new TableReference.Bare(item.tableRefTable);
+              case PARTIAL -> new TableReference.Partial(item.tableRefSchema, item.tableRefTable);
+              case FULL ->
+                  new TableReference.Full(
+                      item.tableRefCatalog, item.tableRefSchema, item.tableRefTable);
             };
 
-        // Literals
-        long literalCount = guarantees.literalCount(gIdx);
-        Set<ScalarValue> literals = new LinkedHashSet<>((int) literalCount);
-        for (long lIdx = 0; lIdx < literalCount; lIdx++) {
-          byte[] protoBytes = readExprBytes(guarantees.literalProtoBytes(gIdx, lIdx));
+        // Spans from DfSpan array
+        DfSpan[] dfSpans = guarantees.spans(i);
+        List<Span> spans = new ArrayList<>(dfSpans.length);
+        for (DfSpan s : dfSpans) {
+          spans.add(
+              new Span(new Location(s.startLine, s.startCol), new Location(s.endLine, s.endCol)));
+        }
+
+        // Guarantee type from enum
+        Guarantee guaranteeType =
+            switch (item.guaranteeType) {
+              case IN -> Guarantee.IN;
+              case NOT_IN -> Guarantee.NOT_IN;
+            };
+
+        // Literals via per-literal proto bytes
+        Set<ScalarValue> literals = new LinkedHashSet<>((int) item.literalCount);
+        for (long k = 0; k < item.literalCount; k++) {
+          byte[] protoBytes = readExprBytes(guarantees.literalProtoBytes(i, k));
           if (protoBytes.length == 0) {
             literals.add(new ScalarValue.Null());
           } else {
@@ -79,25 +78,13 @@ final class LiteralGuaranteeBridge {
           }
         }
 
-        Column column = new Column(columnName, relation, new Spans(spans));
+        Column column = new Column(item.columnName, relation, new Spans(spans));
         result.add(new LiteralGuarantee(column, guaranteeType, literals));
       }
 
       return result;
     } catch (DfError e) {
       throw new NativeDataFusionException(e);
-    }
-  }
-
-  private static TableReference readTableRef(DfLiteralGuarantees guarantees, long gIdx) {
-    byte[] protoBytes = readExprBytes(guarantees.tableRefProtoBytes(gIdx));
-    if (protoBytes.length == 0) {
-      return null;
-    }
-    try {
-      return TableReferenceConverter.fromProtoBytes(protoBytes);
-    } catch (InvalidProtocolBufferException e) {
-      throw new DataFusionException("Failed to decode TableReference protobuf", e);
     }
   }
 
