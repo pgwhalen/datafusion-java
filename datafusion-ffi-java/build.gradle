@@ -46,30 +46,17 @@ spotless {
 }
 
 // --- Diplomat code generation ---
+// build.rs in datafusion-ffi-native generates Java bindings during cargo build.
+// postProcessDiplomatBindings makes them package-private and wires NativeLoader.
+// Use -PskipDiplomatGeneration in CI when pre-generated sources are provided as artifacts.
 
 def diplomatGeneratedDir = layout.buildDirectory.dir("diplomat-generated/src/main/java")
 sourceSets.main.java.srcDir diplomatGeneratedDir
 
-tasks.register('generateDiplomatBindings', Exec) {
-    dependsOn 'cargoDevBuild'
-
-    def diplomatTool = "${System.getProperty('user.home')}/.cargo/bin/diplomat-tool"
-    def configFile = "${rootDir}/diplomat-config.toml"
-    def entryFile = "${rootDir}/datafusion-ffi-native/src/lib.rs"
-    def outDir = layout.buildDirectory.dir("diplomat-generated").get().asFile
-
-    commandLine diplomatTool,
-        'java', outDir.toString(),
-        '--entry', entryFile,
-        '--config-file', configFile
-
-    inputs.files(fileTree("${rootDir}/datafusion-ffi-native/src") { include '*.rs' })
-    inputs.file(configFile)
-    outputs.dir(outDir)
-}
-
 tasks.register('postProcessDiplomatBindings') {
-    dependsOn 'generateDiplomatBindings'
+    if (!project.hasProperty('skipDiplomatGeneration')) {
+        dependsOn 'cargoDevBuild'  // cargo build generates Diplomat bindings via build.rs
+    }
     def genDir = layout.buildDirectory.dir("diplomat-generated").get().asFile
 
     doLast {
@@ -176,9 +163,11 @@ tasks.register('copyAllNativeLibraries', Copy) {
     into layout.buildDirectory.dir("resources/main/natives")
 }
 
-// Ensure javadoc runs after any task that writes to build/resources/main
+// Javadoc shares build/resources/main with native library copy tasks.
+// dependsOn satisfies Gradle's implicit-dependency validation (mustRunAfter alone is not enough).
 javadoc {
-    mustRunAfter copyAllNativeLibraries, copyReleaseLibraryForJar
+    dependsOn copyAllNativeLibraries
+    mustRunAfter copyReleaseLibraryForJar
 }
 
 // JAR with only the local platform's native library (for development)

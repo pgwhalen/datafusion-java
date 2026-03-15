@@ -23,8 +23,12 @@ async-trait = "0.1"
 half = "2"
 prost = "0.14"
 object_store = "0.12"
-diplomat = { path = "/Users/pgwhalen/code/diplomat/macro" }
-diplomat-runtime = { path = "/Users/pgwhalen/code/diplomat/runtime" }
+diplomat = { git = "https://github.com/pgwhalen/diplomat", tag = "v0.14.0-java", subdirectory = "macro" }
+diplomat-runtime = { git = "https://github.com/pgwhalen/diplomat", tag = "v0.14.0-java", subdirectory = "runtime" }
+
+[build-dependencies]
+diplomat-tool = { git = "https://github.com/pgwhalen/diplomat", tag = "v0.14.0-java", subdirectory = "tool" }
+diplomat_core = { git = "https://github.com/pgwhalen/diplomat", tag = "v0.14.0-java", subdirectory = "core" }
 
 [profile.release]
 lto = true
