@@ -29,6 +29,7 @@ jobs:
             platform: linux_arm64
             lib_name: libdatafusion_ffi_native.so
             cargo_flags: '-j 2'  # Limit parallelism to avoid OOM on ARM runners
+            cargo_profile: 'ci-arm'  # Use reduced-memory profile (no LTO)
           - os: macos-14
             platform: osx_64
             rust_target: x86_64-apple-darwin
@@ -63,7 +64,7 @@ jobs:
 
       - name: Build release library
         if: ${{ !matrix.rust_target }}
-        run: cargo build --release ${{ matrix.cargo_flags || '' }}
+        run: cargo build --profile ${{ matrix.cargo_profile || 'release' }} ${{ matrix.cargo_flags || '' }}
         working-directory: datafusion-ffi-native
 
       - name: Build release library (cross-compile)
@@ -97,7 +98,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: native-${{ matrix.platform }}
-          path: datafusion-ffi-native/target/release/${{ matrix.lib_name }}
+          path: datafusion-ffi-native/target/${{ matrix.cargo_profile || 'release' }}/${{ matrix.lib_name }}
           retention-days: 7
           if-no-files-found: error
 

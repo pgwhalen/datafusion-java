@@ -33,3 +33,8 @@ diplomat_core = { git = "https://github.com/pgwhalen/diplomat", tag = "v0.14.0-j
 [profile.release]
 lto = true
 strip = true
+
+# Reduced-memory release profile for CI ARM runners (no LTO to avoid OOM during linking)
+[profile.ci-arm]
+inherits = "release"
+lto = false
