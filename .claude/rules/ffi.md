@@ -32,7 +32,53 @@ Df*Adapter classes (DfCatalogAdapter, DfTableAdapter, ...)
 User Java interfaces (CatalogProvider, TableProvider, ...)
 ```
 
-## Bridge Class Pattern
+## Diplomat Rules
+
+### Naming Conventions
+
+| Pattern                        | Naming                                  |
+|--------------------------------|-----------------------------------------|
+| Diplomat opaque (Rust)         | `DfFoo` in `bridge.rs`                 |
+| Diplomat trait (Rust)          | `DfFooTrait` in `bridge.rs`            |
+| Diplomat-generated Java class  | `DfFoo` (package-private)              |
+| Bridge class                   | `FooBridge` (package-private)          |
+| Adapter class                  | `DfFooAdapter` (package-private)       |
+| Converter class                | `FooConverter` (package-private)       |
+| Public API class               | `Foo` (public)                         |
+
+### Enum Types
+
+**NEVER return an integer value to represent an enumerated type across the FFI boundary.** Diplomat supports enums natively — always define a Diplomat enum in `bridge.rs` and let Diplomat generate the corresponding Java enum. This produces self-documenting generated code instead of opaque integer values whose meaning is only conveyed by comments.
+
+#### Bad: integer discriminant
+
+```rust
+// bridge.rs — DON'T do this
+impl DfFoo {
+    // Returns 0=Bounded, 1=Unbounded, 2=Unknown
+    pub fn get_kind(&self) -> i32 { ... }
+}
+```
+
+#### Good: Diplomat enum
+
+```rust
+// bridge.rs — DO this
+#[diplomat::enum_convert(datafusion::prelude::FooKind)]
+pub enum DfFooKind {
+    Bounded,
+    Unbounded,
+    Unknown,
+}
+
+impl DfFoo {
+    pub fn get_kind(&self) -> DfFooKind { ... }
+}
+```
+
+The same rule applies to trait callbacks (upcalls): use a Diplomat enum parameter instead of an integer discriminant.
+
+### Bridge Class Pattern
 
 Every public API class that wraps a native resource delegates to a package-private `*Bridge` class, which wraps a Diplomat-generated `Df*` opaque:
 
@@ -48,7 +94,7 @@ Bridge classes:
 - Handle error conversion: catch `DfError`, extract message via `e.toDisplay()`, throw `DataFusionException`
 - May contain factory methods (e.g., `PhysicalExprBridge.fromProtoFilters()`)
 
-## Adapter Class Pattern
+### Adapter Class Pattern
 
 For callback interfaces (Java → Rust upcalls), adapter classes translate between user-facing Java interfaces and Diplomat-generated trait interfaces:
 
@@ -64,9 +110,9 @@ Adapter classes:
 - Write errors using `Errors.writeException()`
 - Convert between Java enums and FFI integer discriminants
 
-## Error Handling
+### Error Handling
 
-### Downcalls (Java → Rust)
+#### Downcalls (Java → Rust)
 
 Diplomat-generated methods throw `DfError` (an opaque that implements `AutoCloseable`). Bridge classes catch and convert:
 
@@ -81,7 +127,7 @@ try {
 }
 ```
 
-### Upcalls (Rust → Java callbacks)
+#### Upcalls (Rust → Java callbacks)
 
 Adapter methods write error strings to Rust-provided buffers using `Errors.writeException()`:
 
@@ -92,13 +138,7 @@ Adapter methods write error strings to Rust-provided buffers using `Errors.write
 }
 ```
 
-## Arrow Data Passing
-
-Arrow schemas and arrays are passed across FFI as raw `usize` addresses pointing to `FFI_ArrowSchema` or `FFI_ArrowArray` structs. Java exports via `Data.exportSchema()` / `Data.exportVector()` and passes the `memoryAddress()`.
-
-**Important:** After Rust reads the schema by reference, Java must call `ffiSchema.release()` then `ffiSchema.close()` to avoid memory leaks.
-
-## Proto Byte Passing
+### Proto Byte Passing
 
 Expressions are serialized as protobuf bytes (`LogicalExprList`) and passed as `&[u8]` Diplomat slices. The `DfExprBytes` opaque wraps `Vec<u8>` for returning bytes from Rust.
 
@@ -114,7 +154,7 @@ try (DfExprBytes exprBytes = ...) {
 }
 ```
 
-## Encapsulation Rules
+### Encapsulation Rules
 
 Enforced by `DiplomatEncapsulationTest` (ArchUnit):
 
@@ -124,30 +164,21 @@ Enforced by `DiplomatEncapsulationTest` (ArchUnit):
 4. **`NativeLoader` confined to internal classes** — Only Diplomat-generated and bridge classes may reference it
 5. **Constructors taking internal types are package-private** — `*Ffi`, `*Bridge` parameters require package-private constructors
 
-## NativeUtil
+### NativeUtil
 
 Contains only adapter helpers and Diplomat slice readers:
 
-| Method | Used By |
-|--------|---------|
-| `writeStrings(long, long, List<String>)` | DfCatalogAdapter, DfSchemaAdapter |
-| `readString(long, long)` | Adapter classes |
-| `readU32s(long, long)` | DfTableAdapter |
-| `readBytes(long, long)` | DfTableAdapter, DfFileSourceAdapter |
-| `readDiplomatStr(Object)` | Diplomat-generated trait code |
-| `readDiplomatBytes(Object)` | Diplomat-generated trait code |
-| `readDiplomatInts(Object)` | Diplomat-generated trait code |
+| Method                                    | Used By                                  |
+|-------------------------------------------|------------------------------------------|
+| `writeStrings(long, long, List<String>)`  | DfCatalogAdapter, DfSchemaAdapter        |
+| `readString(long, long)`                  | Adapter classes                          |
+| `readU32s(long, long)`                    | DfTableAdapter                           |
+| `readBytes(long, long)`                   | DfTableAdapter, DfFileSourceAdapter      |
+| `readDiplomatStr(Object)`                 | Diplomat-generated trait code            |
+| `readDiplomatBytes(Object)`               | Diplomat-generated trait code            |
+| `readDiplomatInts(Object)`                | Diplomat-generated trait code            |
 
-## Converter Classes
-
-Pure Java proto converters with no FFI dependencies:
-
-- `TableReferenceConverter` — Converts between Java `TableReference` and protobuf
-- `ExprProtoConverter` — Converts between Java `Expr` and protobuf `LogicalExprList`
-- `ScalarValueProtoConverter` — Converts between Java `ScalarValue` and protobuf
-- `ArrowTypeProtoConverter` — Converts between Arrow types and protobuf
-
-## Build Process
+### Build Process
 
 ```bash
 # 1. Build Rust library (includes bridge.rs → Diplomat proc-macros)
@@ -166,14 +197,17 @@ Pure Java proto converters with no FFI dependencies:
 ./gradlew :datafusion-ffi-java:test
 ```
 
-## Naming Conventions
+## Arrow Data Passing
 
-| Pattern | Naming |
-|---------|--------|
-| Diplomat opaque (Rust) | `DfFoo` in `bridge.rs` |
-| Diplomat trait (Rust) | `DfFooTrait` in `bridge.rs` |
-| Diplomat-generated Java class | `DfFoo` (package-private) |
-| Bridge class | `FooBridge` (package-private) |
-| Adapter class | `DfFooAdapter` (package-private) |
-| Converter class | `FooConverter` (package-private) |
-| Public API class | `Foo` (public) |
+Arrow schemas and arrays are passed across FFI as raw `usize` addresses pointing to `FFI_ArrowSchema` or `FFI_ArrowArray` structs. Java exports via `Data.exportSchema()` / `Data.exportVector()` and passes the `memoryAddress()`.
+
+**Important:** After Rust reads the schema by reference, Java must call `ffiSchema.release()` then `ffiSchema.close()` to avoid memory leaks.
+
+## Converter Classes
+
+Pure Java proto converters with no FFI dependencies:
+
+- `TableReferenceConverter` — Converts between Java `TableReference` and protobuf
+- `ExprProtoConverter` — Converts between Java `Expr` and protobuf `LogicalExprList`
+- `ScalarValueProtoConverter` — Converts between Java `ScalarValue` and protobuf
+- `ArrowTypeProtoConverter` — Converts between Arrow types and protobuf
