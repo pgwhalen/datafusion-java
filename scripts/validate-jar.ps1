@@ -7,7 +7,7 @@
 
 $ErrorActionPreference = "Stop"
 
-$RootDir = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$RootDir = Split-Path -Parent $PSScriptRoot
 if (-not $RootDir) {
     $RootDir = (Get-Location).Path
 }
@@ -15,7 +15,8 @@ $JarDir = Join-Path $RootDir "datafusion-ffi-java/build/libs"
 $TestDir = Join-Path $RootDir "build/jar-validation"
 
 # Check Java version
-$javaVersion = (java -version 2>&1 | Select-Object -First 1) -replace '.*"(\d+).*"', '$1'
+$javaVersionLine = (java -version 2>&1 | Select-Object -First 1) -replace '.*?"(\d+)[^"]*".*', '$1'
+$javaVersion = ($javaVersionLine -split '\s+')[0]
 if ([int]$javaVersion -lt 22) {
     Write-Error "Java 22+ is required but found version $javaVersion"
     exit 1
