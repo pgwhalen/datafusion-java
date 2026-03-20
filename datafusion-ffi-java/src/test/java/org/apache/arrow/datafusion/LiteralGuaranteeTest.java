@@ -195,7 +195,7 @@ public class LiteralGuaranteeTest {
       ctx.registerCatalog("test_catalog", catalogProvider, allocator);
 
       try (DataFrame df = ctx.sql(sql);
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
         // Consume the stream to trigger scan
         while (stream.loadNextBatch()) {
           // consume

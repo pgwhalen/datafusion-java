@@ -3,7 +3,7 @@ package org.apache.arrow.datafusion;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
-import org.apache.arrow.datafusion.config.SessionConfig;
+import org.apache.arrow.datafusion.config.ConfigOptions;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.dictionary.DictionaryProvider;
@@ -14,6 +14,10 @@ import org.apache.arrow.vector.types.pojo.Schema;
  *
  * <p>This class wraps a native DataFusion SessionContext and provides methods for registering
  * tables and executing SQL queries.
+ *
+ * @see <a
+ *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html">Rust
+ *     DataFusion: SessionContext</a>
  */
 public class SessionContext implements AutoCloseable {
   private final SessionContextBridge bridge;
@@ -21,7 +25,7 @@ public class SessionContext implements AutoCloseable {
 
   /** Creates a new session context with default configuration. */
   public SessionContext() {
-    this(SessionConfig.defaults());
+    this(ConfigOptions.defaults());
   }
 
   /**
@@ -29,7 +33,7 @@ public class SessionContext implements AutoCloseable {
    *
    * @param config the session configuration
    */
-  public SessionContext(SessionConfig config) {
+  public SessionContext(ConfigOptions config) {
     this.bridge = new SessionContextBridge(config);
   }
 
@@ -57,7 +61,7 @@ public class SessionContext implements AutoCloseable {
    * @param config the session configuration
    * @return a new SessionContext
    */
-  public static SessionContext newWithConfig(SessionConfig config) {
+  public static SessionContext newWithConfig(ConfigOptions config) {
     return new SessionContext(config);
   }
 
@@ -73,7 +77,7 @@ public class SessionContext implements AutoCloseable {
    * RuntimeEnv rt = RuntimeEnvBuilder.builder()
    *     .withMemoryLimit(50_000_000, 1.0)
    *     .build();
-   * SessionConfig config = SessionConfig.defaults();
+   * ConfigOptions config = ConfigOptions.defaults();
    * try (SessionContext ctx = SessionContext.newWithConfigRt(config, rt)) {
    *     DataFrame df = ctx.sql("SELECT 1 + 1");
    *     // ...
@@ -84,9 +88,9 @@ public class SessionContext implements AutoCloseable {
    * @param config the session configuration
    * @param runtimeEnv the runtime environment (e.g., with memory pool configuration)
    * @return a new SessionContext
-   * @throws DataFusionException if context creation fails
+   * @throws DataFusionError if context creation fails
    */
-  public static SessionContext newWithConfigRt(SessionConfig config, RuntimeEnv runtimeEnv) {
+  public static SessionContext newWithConfigRt(ConfigOptions config, RuntimeEnv runtimeEnv) {
     return new SessionContext(new SessionContextBridge(config, runtimeEnv.bridge.dfRuntimeEnv()));
   }
 
@@ -99,7 +103,7 @@ public class SessionContext implements AutoCloseable {
    * @param name The table name
    * @param root The VectorSchemaRoot containing the data
    * @param allocator The buffer allocator
-   * @throws DataFusionException if registration fails
+   * @throws DataFusionError if registration fails
    */
   public void registerBatch(String name, VectorSchemaRoot root, BufferAllocator allocator) {
     registerBatch(name, root, null, allocator);
@@ -115,7 +119,7 @@ public class SessionContext implements AutoCloseable {
    * @param root The VectorSchemaRoot containing the data
    * @param provider The DictionaryProvider for dictionary-encoded columns (may be null)
    * @param allocator The buffer allocator
-   * @throws DataFusionException if registration fails
+   * @throws DataFusionError if registration fails
    */
   public void registerBatch(
       String name, VectorSchemaRoot root, DictionaryProvider provider, BufferAllocator allocator) {
@@ -132,7 +136,7 @@ public class SessionContext implements AutoCloseable {
    * @param name The table name
    * @param provider The table provider implementation
    * @param allocator The buffer allocator to use for Arrow data transfers
-   * @throws DataFusionException if registration fails
+   * @throws DataFusionError if registration fails
    */
   public void registerTable(String name, TableProvider provider, BufferAllocator allocator) {
     checkNotClosed();
@@ -144,7 +148,7 @@ public class SessionContext implements AutoCloseable {
    *
    * @param name The table name
    * @return true if a table was previously registered with this name
-   * @throws DataFusionException if deregistration fails
+   * @throws DataFusionError if deregistration fails
    */
   public boolean deregisterTable(String name) {
     checkNotClosed();
@@ -156,7 +160,7 @@ public class SessionContext implements AutoCloseable {
    *
    * @param query The SQL query to execute
    * @return A DataFrame representing the query result
-   * @throws DataFusionException if query execution fails
+   * @throws DataFusionError if query execution fails
    */
   public DataFrame sql(String query) {
     checkNotClosed();
@@ -177,7 +181,7 @@ public class SessionContext implements AutoCloseable {
    * @param name The catalog name
    * @param catalog The catalog provider implementation
    * @param allocator The buffer allocator to use for Arrow data transfers
-   * @throws DataFusionException if registration fails
+   * @throws DataFusionError if registration fails
    */
   public void registerCatalog(String name, CatalogProvider catalog, BufferAllocator allocator) {
     checkNotClosed();
@@ -190,7 +194,7 @@ public class SessionContext implements AutoCloseable {
    * <p>Once registered, the UDF can be used in SQL queries by name. For example:
    *
    * <pre>{@code
-   * ScalarUdf pow = ScalarUdf.simple("pow", Volatility.IMMUTABLE,
+   * ScalarUDF pow = ScalarUDF.simple("pow", Volatility.IMMUTABLE,
    *     List.of(new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE),
    *             new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE)),
    *     new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE),
@@ -201,9 +205,9 @@ public class SessionContext implements AutoCloseable {
    *
    * @param udf The scalar UDF implementation
    * @param allocator The buffer allocator to use for Arrow data transfers
-   * @throws DataFusionException if registration fails
+   * @throws DataFusionError if registration fails
    */
-  public void registerUdf(ScalarUdf udf, BufferAllocator allocator) {
+  public void registerUdf(ScalarUDF udf, BufferAllocator allocator) {
     checkNotClosed();
     bridge.registerUdf(udf, allocator);
   }
@@ -227,7 +231,7 @@ public class SessionContext implements AutoCloseable {
    * @param name The table name
    * @param table The listing table configuration
    * @param allocator The buffer allocator to use for Arrow data transfers
-   * @throws DataFusionException if registration fails
+   * @throws DataFusionError if registration fails
    */
   public void registerListingTable(String name, ListingTable table, BufferAllocator allocator) {
     checkNotClosed();
@@ -241,7 +245,7 @@ public class SessionContext implements AutoCloseable {
    * @param path The file or directory path
    * @param options CSV read options
    * @param allocator The buffer allocator
-   * @throws DataFusionException if registration fails
+   * @throws DataFusionError if registration fails
    */
   public void registerCsv(
       String name, String path, CsvReadOptions options, BufferAllocator allocator) {
@@ -256,7 +260,7 @@ public class SessionContext implements AutoCloseable {
    * @param path The file or directory path
    * @param options Parquet read options
    * @param allocator The buffer allocator
-   * @throws DataFusionException if registration fails
+   * @throws DataFusionError if registration fails
    */
   public void registerParquet(
       String name, String path, ParquetReadOptions options, BufferAllocator allocator) {
@@ -271,7 +275,7 @@ public class SessionContext implements AutoCloseable {
    * @param path The file or directory path
    * @param options JSON read options
    * @param allocator The buffer allocator
-   * @throws DataFusionException if registration fails
+   * @throws DataFusionError if registration fails
    */
   public void registerJson(
       String name, String path, NdJsonReadOptions options, BufferAllocator allocator) {
@@ -284,7 +288,7 @@ public class SessionContext implements AutoCloseable {
    *
    * @param name The table name
    * @return true if the table exists, false otherwise
-   * @throws DataFusionException if the existence check fails
+   * @throws DataFusionError if the existence check fails
    */
   public boolean tableExist(String name) {
     checkNotClosed();
@@ -298,7 +302,7 @@ public class SessionContext implements AutoCloseable {
    *
    * @param name The table name
    * @return An Optional containing a DataFrame for the specified table, or empty if not found
-   * @throws DataFusionException if there is an error other than the table not being found
+   * @throws DataFusionError if there is an error other than the table not being found
    */
   public Optional<DataFrame> table(String name) {
     checkNotClosed();
@@ -310,7 +314,7 @@ public class SessionContext implements AutoCloseable {
    *
    * @param path The file or directory path
    * @return A DataFrame for the Parquet data
-   * @throws DataFusionException if reading fails
+   * @throws DataFusionError if reading fails
    */
   public DataFrame readParquet(String path) {
     checkNotClosed();
@@ -324,7 +328,7 @@ public class SessionContext implements AutoCloseable {
    * @param options Parquet read options
    * @param allocator The buffer allocator (needed if schema is specified in options)
    * @return A DataFrame for the Parquet data
-   * @throws DataFusionException if reading fails
+   * @throws DataFusionError if reading fails
    */
   public DataFrame readParquet(String path, ParquetReadOptions options, BufferAllocator allocator) {
     checkNotClosed();
@@ -336,7 +340,7 @@ public class SessionContext implements AutoCloseable {
    *
    * @param path The file or directory path
    * @return A DataFrame for the CSV data
-   * @throws DataFusionException if reading fails
+   * @throws DataFusionError if reading fails
    */
   public DataFrame readCsv(String path) {
     checkNotClosed();
@@ -350,7 +354,7 @@ public class SessionContext implements AutoCloseable {
    * @param options CSV read options
    * @param allocator The buffer allocator (needed if schema is specified in options)
    * @return A DataFrame for the CSV data
-   * @throws DataFusionException if reading fails
+   * @throws DataFusionError if reading fails
    */
   public DataFrame readCsv(String path, CsvReadOptions options, BufferAllocator allocator) {
     checkNotClosed();
@@ -362,7 +366,7 @@ public class SessionContext implements AutoCloseable {
    *
    * @param path The file or directory path
    * @return A DataFrame for the JSON data
-   * @throws DataFusionException if reading fails
+   * @throws DataFusionError if reading fails
    */
   public DataFrame readJson(String path) {
     checkNotClosed();
@@ -376,7 +380,7 @@ public class SessionContext implements AutoCloseable {
    * @param options JSON read options
    * @param allocator The buffer allocator (needed if schema is specified in options)
    * @return A DataFrame for the JSON data
-   * @throws DataFusionException if reading fails
+   * @throws DataFusionError if reading fails
    */
   public DataFrame readJson(String path, NdJsonReadOptions options, BufferAllocator allocator) {
     checkNotClosed();
@@ -418,7 +422,7 @@ public class SessionContext implements AutoCloseable {
    * <p>The returned SessionState owns its own Tokio runtime and can outlive this SessionContext.
    *
    * @return a new SessionState
-   * @throws DataFusionException if the state cannot be created
+   * @throws DataFusionError if the state cannot be created
    */
   public SessionState state() {
     checkNotClosed();
@@ -441,7 +445,7 @@ public class SessionContext implements AutoCloseable {
    * @param sql the SQL expression string to parse
    * @param schema the Arrow schema describing the available columns
    * @return the parsed expression
-   * @throws DataFusionException if the expression cannot be parsed
+   * @throws DataFusionError if the expression cannot be parsed
    */
   public Expr parseSqlExpr(String sql, Schema schema) {
     checkNotClosed();
@@ -452,7 +456,7 @@ public class SessionContext implements AutoCloseable {
    * Returns the unique identifier for this session.
    *
    * @return the session ID string
-   * @throws DataFusionException if the call fails
+   * @throws DataFusionError if the call fails
    */
   public String sessionId() {
     checkNotClosed();
@@ -463,7 +467,7 @@ public class SessionContext implements AutoCloseable {
    * Returns the time this session was created.
    *
    * @return the session start time as an {@link Instant}
-   * @throws DataFusionException if the call fails
+   * @throws DataFusionError if the call fails
    */
   public Instant sessionStartTime() {
     checkNotClosed();

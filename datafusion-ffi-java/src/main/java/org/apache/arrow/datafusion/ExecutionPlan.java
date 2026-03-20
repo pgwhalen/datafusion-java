@@ -28,6 +28,10 @@ import org.apache.arrow.vector.types.pojo.Schema;
  *     }
  * }
  * }</pre>
+ *
+ * @see <a
+ *     href="https://docs.rs/datafusion/52.1.0/datafusion/physical_plan/trait.ExecutionPlan.html">Rust
+ *     DataFusion: ExecutionPlan</a>
  */
 public interface ExecutionPlan {
   /**
@@ -69,7 +73,7 @@ public interface ExecutionPlan {
    * @param partition The partition index (0-based)
    * @param allocator The buffer allocator to use for Arrow memory
    * @return A reader that produces record batches for this partition
-   * @throws DataFusionException if execution fails
+   * @throws DataFusionError if execution fails
    */
   RecordBatchReader execute(int partition, BufferAllocator allocator);
 }

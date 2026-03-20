@@ -8,6 +8,10 @@ import java.util.List;
  * Options controlling how data is written from a DataFrame.
  *
  * <p>Use {@link #builder()} to create instances.
+ *
+ * @see <a
+ *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrameWriteOptions.html">Rust
+ *     DataFusion: DataFrameWriteOptions</a>
  */
 public final class DataFrameWriteOptions {
   private final boolean singleFileOutput;

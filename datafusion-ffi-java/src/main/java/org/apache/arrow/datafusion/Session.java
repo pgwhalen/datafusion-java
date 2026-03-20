@@ -11,6 +11,9 @@ import org.apache.arrow.vector.types.pojo.Schema;
  * <p>This provides access to session-level functionality like creating physical expressions from
  * filters. It is NOT {@link AutoCloseable} because it does not own the underlying memory. It is
  * only valid during the scan callback.
+ *
+ * @see <a href="https://docs.rs/datafusion/52.1.0/datafusion/catalog/trait.Session.html">Rust
+ *     DataFusion: Session</a>
  */
 public class Session {
   private final BufferAllocator allocator;
@@ -30,11 +33,11 @@ public class Session {
    * @param tableSchema the schema of the table being scanned
    * @param filters the filter expressions to compile (borrowed, from the scan callback)
    * @return a physical expression representing the conjunction of all filters
-   * @throws DataFusionException if the physical expression cannot be created
+   * @throws DataFusionError if the physical expression cannot be created
    */
   public PhysicalExpr createPhysicalExpr(Schema tableSchema, List<Expr> filters) {
     if (filters.isEmpty()) {
-      throw new DataFusionException("No filters to create physical expression from");
+      throw new DataFusionError("No filters to create physical expression from");
     }
 
     PhysicalExprBridge bridge =

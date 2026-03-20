@@ -29,7 +29,7 @@ public class SessionStateTest {
   void testInvalidSqlThrowsException() {
     try (SessionContext ctx = new SessionContext();
         SessionState state = ctx.state()) {
-      assertThrows(DataFusionException.class, () -> state.createLogicalPlan("NOT VALID SQL %%%"));
+      assertThrows(DataFusionError.class, () -> state.createLogicalPlan("NOT VALID SQL %%%"));
     }
   }
 

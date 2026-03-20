@@ -3,7 +3,7 @@ package org.apache.arrow.datafusion;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.*;
-import org.apache.arrow.datafusion.config.SessionConfig;
+import org.apache.arrow.datafusion.config.ConfigOptions;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
@@ -39,7 +39,7 @@ import org.junit.jupiter.api.Test;
  *   <li>RecordBatchReader.loadNextBatch()
  * </ul>
  *
- * <p>Full stack traces can be enabled via {@code SessionConfig.builder().fullStackTrace(true)} or
+ * <p>Full stack traces can be enabled via {@code ConfigOptions.builder().fullStackTrace(true)} or
  * the FULL_JAVA_STACK_TRACE environment variable. This is useful for debugging callback errors.
  */
 public class ErrorPropagationTest {
@@ -157,7 +157,7 @@ public class ErrorPropagationTest {
               Exception.class,
               () -> {
                 try (DataFrame df = ctx.sql("SELECT * FROM test_catalog.my_schema.error_table");
-                    RecordBatchStream stream = df.executeStream(allocator)) {
+                    SendableRecordBatchStream stream = df.executeStream(allocator)) {
                   stream.loadNextBatch();
                 }
               });
@@ -212,7 +212,7 @@ public class ErrorPropagationTest {
               Exception.class,
               () -> {
                 try (DataFrame df = ctx.sql("SELECT * FROM test_catalog.my_schema.error_table");
-                    RecordBatchStream stream = df.executeStream(allocator)) {
+                    SendableRecordBatchStream stream = df.executeStream(allocator)) {
                   stream.loadNextBatch();
                 }
               });
@@ -267,7 +267,7 @@ public class ErrorPropagationTest {
               Exception.class,
               () -> {
                 try (DataFrame df = ctx.sql("SELECT * FROM test_catalog.my_schema.error_table");
-                    RecordBatchStream stream = df.executeStream(allocator)) {
+                    SendableRecordBatchStream stream = df.executeStream(allocator)) {
                   stream.loadNextBatch();
                 }
               });
@@ -339,7 +339,7 @@ public class ErrorPropagationTest {
               Exception.class,
               () -> {
                 try (DataFrame df = ctx.sql("SELECT * FROM test_catalog.my_schema.error_table");
-                    RecordBatchStream stream = df.executeStream(allocator)) {
+                    SendableRecordBatchStream stream = df.executeStream(allocator)) {
                   stream.loadNextBatch();
                 }
               });
@@ -352,9 +352,9 @@ public class ErrorPropagationTest {
 
   @Test
   void testStackTraceIncludedWhenConfigured() {
-    // This test verifies full stack traces are included when configured via SessionConfig.
+    // This test verifies full stack traces are included when configured via ConfigOptions.
     // Uses scan() error because schema() has no error channel in upstream FFI_TableProvider.
-    SessionConfig config = SessionConfig.builder().fullStackTrace(true).build();
+    ConfigOptions config = ConfigOptions.builder().fullStackTrace(true).build();
 
     try (BufferAllocator allocator = new RootAllocator();
         SessionContext ctx = new SessionContext(config)) {
@@ -386,7 +386,7 @@ public class ErrorPropagationTest {
               Exception.class,
               () -> {
                 try (DataFrame df = ctx.sql("SELECT * FROM test_catalog.my_schema.error_table");
-                    RecordBatchStream stream = df.executeStream(allocator)) {
+                    SendableRecordBatchStream stream = df.executeStream(allocator)) {
                   stream.loadNextBatch();
                 }
               });
@@ -417,7 +417,7 @@ public class ErrorPropagationTest {
   void testStackTraceIncludesCause() {
     // This test verifies that nested exception causes are included in full stack traces.
     // Uses scan() error because schema() has no error channel in upstream FFI_TableProvider.
-    SessionConfig config = SessionConfig.builder().fullStackTrace(true).build();
+    ConfigOptions config = ConfigOptions.builder().fullStackTrace(true).build();
 
     try (BufferAllocator allocator = new RootAllocator();
         SessionContext ctx = new SessionContext(config)) {
@@ -450,7 +450,7 @@ public class ErrorPropagationTest {
               Exception.class,
               () -> {
                 try (DataFrame df = ctx.sql("SELECT * FROM test_catalog.my_schema.error_table");
-                    RecordBatchStream stream = df.executeStream(allocator)) {
+                    SendableRecordBatchStream stream = df.executeStream(allocator)) {
                   stream.loadNextBatch();
                 }
               });
@@ -509,7 +509,7 @@ public class ErrorPropagationTest {
               Exception.class,
               () -> {
                 try (DataFrame df = ctx.sql("SELECT * FROM test_catalog.my_schema.error_table");
-                    RecordBatchStream stream = df.executeStream(allocator)) {
+                    SendableRecordBatchStream stream = df.executeStream(allocator)) {
                   stream.loadNextBatch();
                 }
               });

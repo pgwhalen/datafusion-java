@@ -44,7 +44,7 @@ final class ExprProtoConverter {
       }
       return result;
     } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-      throw new DataFusionException("Failed to decode expression protobuf", e);
+      throw new DataFusionError("Failed to decode expression protobuf", e);
     }
   }
 
@@ -227,7 +227,7 @@ final class ExprProtoConverter {
           }
           groups.add(group);
         }
-        yield new Expr.GroupingSetExpr(GroupingSetKind.GROUP_BY, groups);
+        yield new Expr.GroupingSetExpr(GroupingSet.GROUP_BY, groups);
       }
       case CUBE -> {
         CubeNode cube = proto.getCube();
@@ -235,7 +235,7 @@ final class ExprProtoConverter {
         for (var e : cube.getExprList()) {
           groups.add(List.of(fromProto(e)));
         }
-        yield new Expr.GroupingSetExpr(GroupingSetKind.CUBE, groups);
+        yield new Expr.GroupingSetExpr(GroupingSet.CUBE, groups);
       }
       case ROLLUP -> {
         RollupNode rollup = proto.getRollup();
@@ -243,7 +243,7 @@ final class ExprProtoConverter {
         for (var e : rollup.getExprList()) {
           groups.add(List.of(fromProto(e)));
         }
-        yield new Expr.GroupingSetExpr(GroupingSetKind.ROLLUP, groups);
+        yield new Expr.GroupingSetExpr(GroupingSet.ROLLUP, groups);
       }
       case PLACEHOLDER -> {
         PlaceholderNode ph = proto.getPlaceholder();
@@ -523,7 +523,7 @@ final class ExprProtoConverter {
       case "StringConcat" -> Operator.StringConcat;
       case "AtArrow" -> Operator.AtArrow;
       case "ArrowAt" -> Operator.ArrowAt;
-      default -> throw new DataFusionException("Unknown operator: " + op);
+      default -> throw new DataFusionError("Unknown operator: " + op);
     };
   }
 
@@ -562,12 +562,12 @@ final class ExprProtoConverter {
 
   private static WindowFrame convertWindowFrame(
       org.apache.arrow.datafusion.proto.WindowFrame proto) {
-    WindowFrameType frameType =
+    WindowFrameUnits frameType =
         switch (proto.getWindowFrameUnits()) {
-          case ROWS -> WindowFrameType.ROWS;
-          case RANGE -> WindowFrameType.RANGE;
-          case GROUPS -> WindowFrameType.GROUPS;
-          default -> WindowFrameType.ROWS;
+          case ROWS -> WindowFrameUnits.ROWS;
+          case RANGE -> WindowFrameUnits.RANGE;
+          case GROUPS -> WindowFrameUnits.GROUPS;
+          default -> WindowFrameUnits.ROWS;
         };
     WindowFrameBound startBound = convertWindowFrameBound(proto.getStartBound());
     WindowFrameBound endBound =

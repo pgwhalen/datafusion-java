@@ -12,8 +12,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
+import org.apache.arrow.datafusion.config.ConfigOptions;
 import org.apache.arrow.datafusion.config.ExecutionOptions;
-import org.apache.arrow.datafusion.config.SessionConfig;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.BigIntVector;
@@ -270,7 +270,7 @@ public class ListingTableTest {
         ctx.registerListingTable("tsv_data", table, allocator);
 
         try (DataFrame df = ctx.sql("SELECT id, name, value FROM tsv_data ORDER BY id");
-            RecordBatchStream stream = df.executeStream(allocator)) {
+            SendableRecordBatchStream stream = df.executeStream(allocator)) {
 
           VectorSchemaRoot root = stream.getVectorSchemaRoot();
 
@@ -326,7 +326,7 @@ public class ListingTableTest {
         ctx.registerListingTable("multi_data", table, allocator);
 
         try (DataFrame df = ctx.sql("SELECT id, name FROM multi_data ORDER BY id");
-            RecordBatchStream stream = df.executeStream(allocator)) {
+            SendableRecordBatchStream stream = df.executeStream(allocator)) {
 
           VectorSchemaRoot root = stream.getVectorSchemaRoot();
 
@@ -387,7 +387,7 @@ public class ListingTableTest {
         ctx.registerListingTable("multi_path_data", table, allocator);
 
         try (DataFrame df = ctx.sql("SELECT id, name FROM multi_path_data ORDER BY id");
-            RecordBatchStream stream = df.executeStream(allocator)) {
+            SendableRecordBatchStream stream = df.executeStream(allocator)) {
 
           VectorSchemaRoot root = stream.getVectorSchemaRoot();
 
@@ -469,7 +469,7 @@ public class ListingTableTest {
 
         // SELECT only 'id' column — DataFusion should push projection
         try (DataFrame df = ctx.sql("SELECT id FROM ctx_data");
-            RecordBatchStream stream = df.executeStream(allocator)) {
+            SendableRecordBatchStream stream = df.executeStream(allocator)) {
           while (stream.loadNextBatch()) {
             // consume all batches
           }
@@ -544,7 +544,7 @@ public class ListingTableTest {
 
         // LIMIT 2 — DataFusion should push limit to scan
         try (DataFrame df = ctx.sql("SELECT * FROM limit_data LIMIT 2");
-            RecordBatchStream stream = df.executeStream(allocator)) {
+            SendableRecordBatchStream stream = df.executeStream(allocator)) {
           while (stream.loadNextBatch()) {
             // consume all batches
           }
@@ -566,7 +566,7 @@ public class ListingTableTest {
   }
 
   @Test
-  void testScanConfigBatchSizeFromSessionConfig() throws IOException {
+  void testScanConfigBatchSizeFromConfigOptions() throws IOException {
     // Write a TSV file
     Path tsvFile = tempDir.resolve("data.tsv");
     Files.writeString(tsvFile, "id\tname\n1\tAlice\n2\tBob\n");
@@ -583,8 +583,8 @@ public class ListingTableTest {
       BufferAllocator allocator = rootAllocator.newChildAllocator("test", 0, Long.MAX_VALUE);
 
       // Create a SessionContext with a custom batch size
-      SessionConfig config =
-          SessionConfig.builder()
+      ConfigOptions config =
+          ConfigOptions.builder()
               .execution(ExecutionOptions.builder().batchSize(4096).build())
               .build();
 
@@ -624,7 +624,7 @@ public class ListingTableTest {
         ctx.registerListingTable("batch_data", table, allocator);
 
         try (DataFrame df = ctx.sql("SELECT * FROM batch_data");
-            RecordBatchStream stream = df.executeStream(allocator)) {
+            SendableRecordBatchStream stream = df.executeStream(allocator)) {
           while (stream.loadNextBatch()) {
             // consume all batches
           }
@@ -693,7 +693,7 @@ public class ListingTableTest {
         // directly observable from Java. The fact that the query succeeds
         // without crashes verifies the string was correctly transmitted.
         try (DataFrame df = ctx.sql("SELECT id, name FROM custom_type_data");
-            RecordBatchStream stream = df.executeStream(allocator)) {
+            SendableRecordBatchStream stream = df.executeStream(allocator)) {
           assertTrue(stream.loadNextBatch());
           assertEquals(1, stream.getVectorSchemaRoot().getRowCount());
           assertFalse(stream.loadNextBatch());

@@ -6,6 +6,10 @@ package org.apache.arrow.datafusion;
  * <p>A SessionState is obtained from {@link SessionContext#state()} and bundles the session
  * configuration with its own Tokio runtime. This means it can outlive the SessionContext that
  * created it.
+ *
+ * @see <a
+ *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/session_state/struct.SessionState.html">Rust
+ *     DataFusion: SessionState</a>
  */
 public class SessionState implements AutoCloseable {
 
@@ -20,7 +24,7 @@ public class SessionState implements AutoCloseable {
    *
    * @param sql the SQL query to parse into a logical plan
    * @return a LogicalPlan representing the parsed query
-   * @throws DataFusionException if the SQL is invalid or planning fails
+   * @throws DataFusionError if the SQL is invalid or planning fails
    */
   public LogicalPlan createLogicalPlan(String sql) {
     return new LogicalPlan(bridge.createLogicalPlan(sql));

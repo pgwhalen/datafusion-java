@@ -21,6 +21,10 @@ import org.apache.arrow.vector.PeriodDuration;
  * <p>Use {@link #getObject()} for untyped access returning a friendly Java type, or use {@code
  * instanceof} with sealed subinterfaces ({@link DecimalValue}, {@link DurationValue}, {@link
  * TimestampValue}, {@link DateValue}, {@link TimeValue}) for typed access without casting.
+ *
+ * @see <a
+ *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/scalar/enum.ScalarValue.html">Rust
+ *     DataFusion: ScalarValue</a>
  */
 public sealed interface ScalarValue {
 

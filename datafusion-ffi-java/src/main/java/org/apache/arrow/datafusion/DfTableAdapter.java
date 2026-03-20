@@ -125,7 +125,7 @@ final class DfTableAdapter implements DfTableTrait {
               : ExprProtoConverter.fromProtoBytes(filterBytes);
 
       // Call provider
-      List<FilterPushDown> results = provider.supportsFiltersPushdown(filterExprs);
+      List<TableProviderFilterPushDown> results = provider.supportsFiltersPushdown(filterExprs);
 
       // Write i32 discriminants to result buffer
       int count = (int) Math.min(results.size(), resultCap);

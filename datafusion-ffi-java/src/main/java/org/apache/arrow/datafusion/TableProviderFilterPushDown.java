@@ -13,8 +13,12 @@ package org.apache.arrow.datafusion;
  *       it after scan to ensure correctness.
  *   <li>{@link #EXACT} — The provider fully applies this filter. DataFusion will not re-apply it.
  * </ul>
+ *
+ * @see <a
+ *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/enum.TableProviderFilterPushDown.html">Rust
+ *     DataFusion: TableProviderFilterPushDown</a>
  */
-public enum FilterPushDown {
+public enum TableProviderFilterPushDown {
   /** The provider cannot apply this filter at all. */
   UNSUPPORTED,
   /** The provider may partially apply this filter; DataFusion will re-check. */

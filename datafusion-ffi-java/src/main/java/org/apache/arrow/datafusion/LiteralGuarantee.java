@@ -12,6 +12,9 @@ import java.util.Set;
  * @param column the column this guarantee applies to
  * @param guarantee the type of guarantee (IN or NOT_IN)
  * @param literals the set of literal values in the guarantee
+ * @see <a
+ *     href="https://docs.rs/datafusion-physical-expr/52.1.0/datafusion_physical_expr/utils/struct.LiteralGuarantee.html">Rust
+ *     DataFusion: LiteralGuarantee</a>
  */
 public record LiteralGuarantee(Column column, Guarantee guarantee, Set<ScalarValue> literals) {
 
@@ -26,7 +29,7 @@ public record LiteralGuarantee(Column column, Guarantee guarantee, Set<ScalarVal
    *
    * @param expr the physical expression to analyze
    * @return the list of literal guarantees extracted from the expression
-   * @throws DataFusionException if analysis fails
+   * @throws DataFusionError if analysis fails
    */
   public static List<LiteralGuarantee> analyze(PhysicalExpr expr) {
     return LiteralGuaranteeBridge.analyze(expr.bridge());

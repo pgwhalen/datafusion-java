@@ -55,7 +55,7 @@ public class SessionContextTest {
       }
 
       try (DataFrame df = ctx.sql("SELECT id, name FROM test ORDER BY id");
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());
         VectorSchemaRoot result = stream.getVectorSchemaRoot();
         assertEquals(2, result.getRowCount());
@@ -103,7 +103,7 @@ public class SessionContextTest {
         ctx.registerTable("my_table", provider, allocator);
 
         try (DataFrame df = ctx.sql("SELECT id, value FROM my_table ORDER BY id");
-            RecordBatchStream stream = df.executeStream(allocator)) {
+            SendableRecordBatchStream stream = df.executeStream(allocator)) {
           assertTrue(stream.loadNextBatch());
           VectorSchemaRoot result = stream.getVectorSchemaRoot();
           assertEquals(2, result.getRowCount());
@@ -176,7 +176,7 @@ public class SessionContextTest {
       ctx.registerCsv("scores", csvFile.toString(), CsvReadOptions.builder().build(), allocator);
 
       try (DataFrame df = ctx.sql("SELECT id, name, score FROM scores ORDER BY id");
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         assertEquals(3, root.getRowCount());
@@ -212,7 +212,7 @@ public class SessionContextTest {
           allocator);
 
       try (DataFrame df = ctx.sql("SELECT id, value FROM test_parquet ORDER BY id");
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         assertEquals(3, root.getRowCount());
@@ -242,7 +242,7 @@ public class SessionContextTest {
           "cities", jsonFile.toString(), NdJsonReadOptions.builder().build(), allocator);
 
       try (DataFrame df = ctx.sql("SELECT id, city FROM cities ORDER BY id");
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         assertEquals(2, root.getRowCount());
@@ -275,7 +275,7 @@ public class SessionContextTest {
           CsvReadOptions.builder().hasHeader(false).delimiter((byte) '|').build();
 
       try (DataFrame df = ctx.readCsv(csvFile.toString(), options, allocator);
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         assertEquals(2, root.getRowCount());
@@ -304,7 +304,7 @@ public class SessionContextTest {
       ParquetReadOptions options = ParquetReadOptions.builder().parquetPruning(true).build();
 
       try (DataFrame df = ctx.readParquet("src/test/resources/test.parquet", options, allocator);
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         assertEquals(3, root.getRowCount());
@@ -330,7 +330,7 @@ public class SessionContextTest {
       NdJsonReadOptions options = NdJsonReadOptions.builder().schemaInferMaxRecords(10).build();
 
       try (DataFrame df = ctx.readJson(jsonFile.toString(), options, allocator);
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         assertEquals(3, root.getRowCount());

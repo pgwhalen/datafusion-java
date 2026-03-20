@@ -4,6 +4,10 @@ package org.apache.arrow.datafusion;
  * Configuration options for a listing table.
  *
  * <p>Use {@link #builder(FileFormat)} to create a new configuration.
+ *
+ * @see <a
+ *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingOptions.html">Rust
+ *     DataFusion: ListingOptions</a>
  */
 public class ListingOptions {
   private final FileFormat format;

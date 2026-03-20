@@ -29,6 +29,10 @@ import org.apache.arrow.vector.types.pojo.Schema;
  *     }
  * }
  * }</pre>
+ *
+ * @see <a
+ *     href="https://docs.rs/datafusion-catalog/52.1.0/datafusion_catalog/trait.TableProvider.html">Rust
+ *     DataFusion: TableProvider</a>
  */
 public interface TableProvider {
   /**
@@ -72,7 +76,7 @@ public interface TableProvider {
    * @param projection Column indices to include, or empty list for all columns
    * @param limit Maximum number of rows, or null for no limit
    * @return An execution plan that produces the requested data
-   * @throws DataFusionException if creating the scan fails
+   * @throws DataFusionError if creating the scan fails
    */
   ExecutionPlan scan(Session session, List<Expr> filters, List<Integer> projection, Long limit);
 
@@ -81,16 +85,16 @@ public interface TableProvider {
    *
    * <p>DataFusion calls this method to determine which filters the provider can handle natively.
    * The returned list must have the same size as the input filters list, with one {@link
-   * FilterPushDown} value per filter.
+   * TableProviderFilterPushDown} value per filter.
    *
-   * <p>The default implementation returns {@link FilterPushDown#INEXACT} for all filters, meaning
-   * all filters are passed to {@link #scan} but DataFusion will also re-apply them after scan to
-   * ensure correctness.
+   * <p>The default implementation returns {@link TableProviderFilterPushDown#INEXACT} for all
+   * filters, meaning all filters are passed to {@link #scan} but DataFusion will also re-apply them
+   * after scan to ensure correctness.
    *
    * @param filters the filter expressions to evaluate (borrowed, valid only during this call)
    * @return a list of pushdown support values, one per filter
    */
-  default List<FilterPushDown> supportsFiltersPushdown(List<Expr> filters) {
-    return Collections.nCopies(filters.size(), FilterPushDown.INEXACT);
+  default List<TableProviderFilterPushDown> supportsFiltersPushdown(List<Expr> filters) {
+    return Collections.nCopies(filters.size(), TableProviderFilterPushDown.INEXACT);
   }
 }

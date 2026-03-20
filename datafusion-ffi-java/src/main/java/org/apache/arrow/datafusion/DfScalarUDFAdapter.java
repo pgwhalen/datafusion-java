@@ -15,20 +15,20 @@ import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.Schema;
 
 /**
- * Adapts a user-implemented {@link ScalarUdf} to the Diplomat-generated {@link DfScalarUdfTrait}
+ * Adapts a user-implemented {@link ScalarUDF} to the Diplomat-generated {@link DfScalarUdfTrait}
  * interface for FFI callbacks.
  */
-final class DfScalarUdfAdapter implements DfScalarUdfTrait {
+final class DfScalarUDFAdapter implements DfScalarUdfTrait {
   private static final long ARROW_SCHEMA_SIZE = 72;
   private static final long ARROW_ARRAY_SIZE = 80;
   // (FFI_ArrowArray, FFI_ArrowSchema) pair size
   private static final long WRAPPED_ARRAY_SIZE = ARROW_ARRAY_SIZE + ARROW_SCHEMA_SIZE;
 
-  private final ScalarUdf udf;
+  private final ScalarUDF udf;
   private final BufferAllocator allocator;
   private final boolean fullStackTrace;
 
-  DfScalarUdfAdapter(ScalarUdf udf, BufferAllocator allocator, boolean fullStackTrace) {
+  DfScalarUDFAdapter(ScalarUDF udf, BufferAllocator allocator, boolean fullStackTrace) {
     this.udf = udf;
     this.allocator = allocator;
     this.fullStackTrace = fullStackTrace;

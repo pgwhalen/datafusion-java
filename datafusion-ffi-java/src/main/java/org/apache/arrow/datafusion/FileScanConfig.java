@@ -11,6 +11,9 @@ import java.util.List;
  * @param batchSize the batch size for reading, or {@code null} for the DataFusion default
  * @param partitionedByFileGroup whether the scan is partitioned by file group
  * @param partition the partition index being scanned
+ * @see <a
+ *     href="https://docs.rs/datafusion-datasource/52.1.0/datafusion_datasource/file_scan_config/struct.FileScanConfig.html">Rust
+ *     DataFusion: FileScanConfig</a>
  */
 public record FileScanConfig(
     List<Integer> projection,

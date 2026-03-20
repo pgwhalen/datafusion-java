@@ -1,6 +1,11 @@
 package org.apache.arrow.datafusion;
 
-/** The type of a table in a DataFusion catalog. */
+/**
+ * The type of a table in a DataFusion catalog.
+ *
+ * @see <a href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/enum.TableType.html">Rust
+ *     DataFusion: TableType</a>
+ */
 public enum TableType {
   /** A base table (physical storage). */
   BASE,

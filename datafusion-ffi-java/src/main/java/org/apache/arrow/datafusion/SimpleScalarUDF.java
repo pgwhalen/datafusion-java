@@ -8,23 +8,23 @@ import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.Field;
 
 /**
- * Package-private implementation of {@link ScalarUdf} for simple fixed-type UDFs.
+ * Package-private implementation of {@link ScalarUDF} for simple fixed-type UDFs.
  *
- * <p>Created via {@link ScalarUdf#simple}.
+ * <p>Created via {@link ScalarUDF#simple}.
  */
-final class SimpleScalarUdf implements ScalarUdf {
+final class SimpleScalarUDF implements ScalarUDF {
   private final String name;
   private final Volatility volatility;
   private final List<ArrowType> inputTypes;
   private final ArrowType outputType;
-  private final SimpleScalarFunction fn;
+  private final ScalarUDFImpl fn;
 
-  SimpleScalarUdf(
+  SimpleScalarUDF(
       String name,
       Volatility volatility,
       List<ArrowType> inputTypes,
       ArrowType outputType,
-      SimpleScalarFunction fn) {
+      ScalarUDFImpl fn) {
     this.name = name;
     this.volatility = volatility;
     this.inputTypes = List.copyOf(inputTypes);

@@ -3,6 +3,10 @@ package org.apache.arrow.datafusion;
 /**
  * A reference to a table, which may be unqualified (bare), partially qualified (schema + table), or
  * fully qualified (catalog + schema + table).
+ *
+ * @see <a
+ *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/enum.TableReference.html">Rust
+ *     DataFusion: TableReference</a>
  */
 public sealed interface TableReference {
 

@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.Map;
 import org.apache.arrow.datafusion.DataFrame;
-import org.apache.arrow.datafusion.RecordBatchStream;
+import org.apache.arrow.datafusion.SendableRecordBatchStream;
 import org.apache.arrow.datafusion.SessionContext;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
@@ -12,13 +12,13 @@ import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.VarCharVector;
 import org.junit.jupiter.api.Test;
 
-/** Tests for SessionConfig and DataFusion configuration options. */
-public class SessionConfigTest {
+/** Tests for ConfigOptions and DataFusion configuration options. */
+public class ConfigOptionsTest {
 
   @Test
   void testToOptionsMapSerializesCorrectly() {
-    SessionConfig config =
-        SessionConfig.builder()
+    ConfigOptions config =
+        ConfigOptions.builder()
             .execution(ExecutionOptions.builder().batchSize(4096).targetPartitions(8).build())
             .catalog(CatalogOptions.builder().informationSchema(true).build())
             .option("datafusion.optimizer.max_passes", "5")
@@ -42,12 +42,12 @@ public class SessionConfigTest {
             "datafusion.execution.target_partitions", "4",
             "datafusion.catalog.information_schema", "true");
 
-    SessionConfig config = SessionConfig.fromStringMap(options);
+    ConfigOptions config = ConfigOptions.fromStringMap(options);
 
     try (BufferAllocator allocator = new RootAllocator();
         SessionContext ctx = new SessionContext(config)) {
       try (DataFrame df = ctx.sql("SHOW datafusion.execution.batch_size");
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());
         VarCharVector valueVector = (VarCharVector) stream.getVectorSchemaRoot().getVector("value");
         assertEquals("2048", new String(valueVector.get(0)));
@@ -58,13 +58,13 @@ public class SessionConfigTest {
   @Test
   void testEmptyConfigSameAsDefault() {
     // Builder with no options should create a default context (no FFI config call)
-    SessionConfig config = SessionConfig.builder().build();
+    ConfigOptions config = ConfigOptions.builder().build();
     assertFalse(config.hasOptions());
 
     try (BufferAllocator allocator = new RootAllocator();
         SessionContext ctx = new SessionContext(config)) {
       try (DataFrame df = ctx.sql("SELECT 42 as answer");
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());
         BigIntVector answerValues = (BigIntVector) stream.getVectorSchemaRoot().getVector("answer");
         assertEquals(42, answerValues.get(0));
@@ -74,8 +74,8 @@ public class SessionConfigTest {
 
   @Test
   void testAllCatalogOptionsViaShow() {
-    SessionConfig config =
-        SessionConfig.builder()
+    ConfigOptions config =
+        ConfigOptions.builder()
             .catalog(
                 CatalogOptions.builder()
                     .createDefaultCatalogAndSchema(true)
@@ -104,8 +104,8 @@ public class SessionConfigTest {
 
   @Test
   void testAllExecutionOptionsViaShow() {
-    SessionConfig config =
-        SessionConfig.builder()
+    ConfigOptions config =
+        ConfigOptions.builder()
             .catalog(CatalogOptions.builder().informationSchema(true).build())
             .execution(
                 ExecutionOptions.builder()
@@ -189,8 +189,8 @@ public class SessionConfigTest {
 
   @Test
   void testAllParquetOptionsViaShow() {
-    SessionConfig config =
-        SessionConfig.builder()
+    ConfigOptions config =
+        ConfigOptions.builder()
             .catalog(CatalogOptions.builder().informationSchema(true).build())
             .execution(
                 ExecutionOptions.builder()
@@ -272,8 +272,8 @@ public class SessionConfigTest {
 
   @Test
   void testAllOptimizerOptionsViaShow() {
-    SessionConfig config =
-        SessionConfig.builder()
+    ConfigOptions config =
+        ConfigOptions.builder()
             .catalog(CatalogOptions.builder().informationSchema(true).build())
             .optimizer(
                 OptimizerOptions.builder()
@@ -354,14 +354,14 @@ public class SessionConfigTest {
 
   @Test
   void testAllSqlParserOptionsViaShow() {
-    SessionConfig config =
-        SessionConfig.builder()
+    ConfigOptions config =
+        ConfigOptions.builder()
             .catalog(CatalogOptions.builder().informationSchema(true).build())
             .sqlParser(
                 SqlParserOptions.builder()
                     .parseFloatAsDecimal(true)
                     .enableIdentNormalization(false)
-                    .dialect(SqlDialect.POSTGRESQL)
+                    .dialect(Dialect.POSTGRESQL)
                     .supportVarcharWithLength(true)
                     .mapStringTypesToUtf8view(true)
                     .collectSpans(true)
@@ -386,8 +386,8 @@ public class SessionConfigTest {
 
   @Test
   void testAllExplainOptionsViaShow() {
-    SessionConfig config =
-        SessionConfig.builder()
+    ConfigOptions config =
+        ConfigOptions.builder()
             .catalog(CatalogOptions.builder().informationSchema(true).build())
             .explain(
                 ExplainOptions.builder()
@@ -418,8 +418,8 @@ public class SessionConfigTest {
 
   @Test
   void testAllFormatOptionsViaShow() {
-    SessionConfig config =
-        SessionConfig.builder()
+    ConfigOptions config =
+        ConfigOptions.builder()
             .catalog(CatalogOptions.builder().informationSchema(true).build())
             .format(
                 FormatOptions.builder()
@@ -453,7 +453,7 @@ public class SessionConfigTest {
   private static void assertShow(
       SessionContext ctx, BufferAllocator allocator, String key, String expected) {
     try (DataFrame df = ctx.sql("SHOW " + key);
-        RecordBatchStream stream = df.executeStream(allocator)) {
+        SendableRecordBatchStream stream = df.executeStream(allocator)) {
       assertTrue(stream.loadNextBatch(), "No data for SHOW " + key);
       VarCharVector valueVector = (VarCharVector) stream.getVectorSchemaRoot().getVector("value");
       assertEquals(expected, new String(valueVector.get(0)), "Mismatch for " + key);

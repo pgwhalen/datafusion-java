@@ -7,8 +7,12 @@ import java.util.Map;
  * Options for writing Parquet files.
  *
  * <p>Use {@link #builder()} to create instances.
+ *
+ * @see <a
+ *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/config/struct.ParquetOptions.html">Rust
+ *     DataFusion: ParquetOptions</a>
  */
-public final class ParquetWriteOptions {
+public final class ParquetOptions {
   private final String compression;
   private final String writerVersion;
   private final String encoding;
@@ -29,7 +33,7 @@ public final class ParquetWriteOptions {
   private final Long bloomFilterNdv;
   private final Map<String, ParquetColumnOptions> columnOptions;
 
-  private ParquetWriteOptions(Builder builder) {
+  private ParquetOptions(Builder builder) {
     this.compression = builder.compression;
     this.writerVersion = builder.writerVersion;
     this.encoding = builder.encoding;
@@ -185,7 +189,7 @@ public final class ParquetWriteOptions {
       Double bloomFilterFpp,
       Long bloomFilterNdv) {}
 
-  /** Builder for {@link ParquetWriteOptions}. */
+  /** Builder for {@link ParquetOptions}. */
   public static final class Builder {
     private String compression = null;
     private String writerVersion = null;
@@ -324,8 +328,8 @@ public final class ParquetWriteOptions {
       return this;
     }
 
-    public ParquetWriteOptions build() {
-      return new ParquetWriteOptions(this);
+    public ParquetOptions build() {
+      return new ParquetOptions(this);
     }
   }
 }

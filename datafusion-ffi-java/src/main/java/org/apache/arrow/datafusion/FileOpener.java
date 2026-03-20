@@ -25,6 +25,10 @@ package org.apache.arrow.datafusion;
  *     }
  * }
  * }</pre>
+ *
+ * @see <a
+ *     href="https://docs.rs/datafusion-datasource/52.1.0/datafusion_datasource/file_stream/trait.FileOpener.html">Rust
+ *     DataFusion: FileOpener</a>
  */
 public interface FileOpener {
   /**

@@ -18,7 +18,7 @@ import org.apache.arrow.vector.types.pojo.Schema;
 import org.junit.jupiter.api.Test;
 
 /** Tests for scalar UDF registration and execution. */
-class ScalarUdfTest {
+class ScalarUDFTest {
 
   @Test
   void testPowUdf() {
@@ -29,9 +29,9 @@ class ScalarUdfTest {
       VectorSchemaRoot testData = createFloat64TestData(allocator);
       ctx.registerBatch("t", testData, allocator);
 
-      // Create pow UDF using the full ScalarUdf interface
-      ScalarUdf pow =
-          new ScalarUdf() {
+      // Create pow UDF using the full ScalarUDF interface
+      ScalarUDF pow =
+          new ScalarUDF() {
             @Override
             public String name() {
               return "pow";
@@ -79,7 +79,7 @@ class ScalarUdfTest {
       ctx.registerUdf(pow, allocator);
 
       try (DataFrame df = ctx.sql("SELECT pow(a, b) FROM t");
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
 
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         assertTrue(stream.loadNextBatch());
@@ -113,8 +113,8 @@ class ScalarUdfTest {
       ctx.registerBatch("t", testData, allocator);
 
       // Create a simple "double_it" UDF using the factory
-      ScalarUdf doubleIt =
-          ScalarUdf.simple(
+      ScalarUDF doubleIt =
+          ScalarUDF.simple(
               "double_it",
               Volatility.IMMUTABLE,
               List.of(new ArrowType.Int(64, true)),
@@ -133,7 +133,7 @@ class ScalarUdfTest {
       ctx.registerUdf(doubleIt, allocator);
 
       try (DataFrame df = ctx.sql("SELECT double_it(x) FROM t");
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
 
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         assertTrue(stream.loadNextBatch());
@@ -160,8 +160,8 @@ class ScalarUdfTest {
           ctx.registerBatch("t", testData, allocator);
 
           // Create a UDF that always throws
-          ScalarUdf failingUdf =
-              ScalarUdf.simple(
+          ScalarUDF failingUdf =
+              ScalarUDF.simple(
                   "fail_udf",
                   Volatility.VOLATILE,
                   List.of(new ArrowType.Int(64, true)),
@@ -176,7 +176,7 @@ class ScalarUdfTest {
               Exception.class,
               () -> {
                 try (DataFrame df = ctx.sql("SELECT fail_udf(x) FROM t");
-                    RecordBatchStream stream = df.executeStream(allocator)) {
+                    SendableRecordBatchStream stream = df.executeStream(allocator)) {
                   stream.getVectorSchemaRoot();
                   stream.loadNextBatch();
                 }

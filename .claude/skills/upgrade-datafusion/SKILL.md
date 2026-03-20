@@ -124,7 +124,16 @@ For detailed instructions on which files to update and how, see [config-options.
 ./gradlew :datafusion-ffi-java:test
 ```
 
-## Step 9: Summary
+## Step 9: Update docs.rs Links
+
+1. Update the version in `.claude/rules/documentation.md` to the new DataFusion version.
+2. Search all Java files for the old version in docs.rs URLs and replace with the new version:
+   ```bash
+   grep -rn "docs.rs/datafusion.*OLD_VERSION" datafusion-ffi-java/src/main/java/
+   ```
+3. Spot-check 2-3 links to verify types haven't moved between crates/modules in the new version. If a type moved, update the full URL path.
+
+## Step 10: Summary
 
 Provide a summary including:
 - Previous version -> new version for each dependency

@@ -20,6 +20,10 @@ package org.apache.arrow.datafusion;
  *     }
  * }
  * }</pre>
+ *
+ * @see <a
+ *     href="https://docs.rs/datafusion-datasource/52.1.0/datafusion_datasource/file_format/trait.FileFormat.html">Rust
+ *     DataFusion: FileFormat</a>
  */
 public interface FileFormat {
   /**

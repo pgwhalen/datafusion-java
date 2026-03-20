@@ -7,11 +7,15 @@ import org.apache.arrow.vector.FieldVector;
 /**
  * A simplified function interface for scalar UDFs with fixed input/output types.
  *
- * <p>Use this with {@link ScalarUdf#simple} to create UDFs without implementing the full {@link
- * ScalarUdf} interface.
+ * <p>Use this with {@link ScalarUDF#simple} to create UDFs without implementing the full {@link
+ * ScalarUDF} interface.
+ *
+ * @see <a
+ *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/trait.ScalarUDFImpl.html">Rust
+ *     DataFusion: ScalarUDFImpl</a>
  */
 @FunctionalInterface
-public interface SimpleScalarFunction {
+public interface ScalarUDFImpl {
   /**
    * Invokes the scalar function on the given input vectors.
    *

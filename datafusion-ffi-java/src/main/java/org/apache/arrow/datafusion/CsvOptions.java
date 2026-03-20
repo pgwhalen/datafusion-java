@@ -6,8 +6,12 @@ import com.google.protobuf.ByteString;
  * Options for writing CSV files.
  *
  * <p>Use {@link #builder()} to create instances.
+ *
+ * @see <a
+ *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/config/struct.CsvOptions.html">Rust
+ *     DataFusion: CsvOptions</a>
  */
-public final class CsvWriteOptions {
+public final class CsvOptions {
   private final boolean hasHeader;
   private final byte delimiter;
   private final byte quote;
@@ -23,7 +27,7 @@ public final class CsvWriteOptions {
   private final String nullValue;
   private final Integer compressionLevel;
 
-  private CsvWriteOptions(Builder builder) {
+  private CsvOptions(Builder builder) {
     this.hasHeader = builder.hasHeader;
     this.delimiter = builder.delimiter;
     this.quote = builder.quote;
@@ -86,7 +90,7 @@ public final class CsvWriteOptions {
     return b.build().toByteArray();
   }
 
-  /** Builder for {@link CsvWriteOptions}. */
+  /** Builder for {@link CsvOptions}. */
   public static final class Builder {
     private boolean hasHeader = true;
     private byte delimiter = ',';
@@ -175,8 +179,8 @@ public final class CsvWriteOptions {
       return this;
     }
 
-    public CsvWriteOptions build() {
-      return new CsvWriteOptions(this);
+    public CsvOptions build() {
+      return new CsvOptions(this);
     }
   }
 }

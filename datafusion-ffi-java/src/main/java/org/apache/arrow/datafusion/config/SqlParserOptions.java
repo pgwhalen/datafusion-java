@@ -17,11 +17,14 @@ import java.util.Map;
  * @param collectSpans Whether to collect span information during parsing
  * @param recursionLimit Maximum recursion depth for the SQL parser
  * @param defaultNullOrdering Default null ordering (e.g., "nulls_first", "nulls_last")
+ * @see <a
+ *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/config/struct.SqlParserOptions.html">Rust
+ *     DataFusion: SqlParserOptions</a>
  */
 public record SqlParserOptions(
     Boolean parseFloatAsDecimal,
     Boolean enableIdentNormalization,
-    SqlDialect dialect,
+    Dialect dialect,
     Boolean supportVarcharWithLength,
     Boolean mapStringTypesToUtf8view,
     Boolean collectSpans,
@@ -59,7 +62,7 @@ public record SqlParserOptions(
   public static final class Builder {
     private Boolean parseFloatAsDecimal;
     private Boolean enableIdentNormalization;
-    private SqlDialect dialect;
+    private Dialect dialect;
     private Boolean supportVarcharWithLength;
     private Boolean mapStringTypesToUtf8view;
     private Boolean collectSpans;
@@ -81,7 +84,7 @@ public record SqlParserOptions(
     }
 
     /** SQL dialect to use for parsing. Default is GENERIC. */
-    public Builder dialect(SqlDialect value) {
+    public Builder dialect(Dialect value) {
       this.dialect = value;
       return this;
     }

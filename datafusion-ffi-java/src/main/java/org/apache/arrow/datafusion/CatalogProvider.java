@@ -26,6 +26,10 @@ import java.util.Optional;
  *     }
  * }
  * }</pre>
+ *
+ * @see <a
+ *     href="https://docs.rs/datafusion-catalog/52.1.0/datafusion_catalog/trait.CatalogProvider.html">Rust
+ *     DataFusion: CatalogProvider</a>
  */
 public interface CatalogProvider {
   /**

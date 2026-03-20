@@ -110,7 +110,7 @@ public class ParseSqlExprTest {
   void invalidSqlThrows() {
     try (SessionContext ctx = new SessionContext()) {
       assertThrows(
-          DataFusionException.class, () -> ctx.parseSqlExpr("+++invalid", new Schema(List.of())));
+          DataFusionError.class, () -> ctx.parseSqlExpr("+++invalid", new Schema(List.of())));
     }
   }
 
@@ -118,7 +118,7 @@ public class ParseSqlExprTest {
   void unknownColumnThrows() {
     try (SessionContext ctx = new SessionContext()) {
       assertThrows(
-          DataFusionException.class,
+          DataFusionError.class,
           () -> ctx.parseSqlExpr("nonexistent_col + 1", new Schema(List.of())));
     }
   }

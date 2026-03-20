@@ -4,6 +4,9 @@ package org.apache.arrow.datafusion;
  * A URL pointing to a directory of files for a listing table.
  *
  * @param url the URL string (e.g., a local directory path or object store URL)
+ * @see <a
+ *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingTableUrl.html">Rust
+ *     DataFusion: ListingTableUrl</a>
  */
 public record ListingTableUrl(String url) {
 

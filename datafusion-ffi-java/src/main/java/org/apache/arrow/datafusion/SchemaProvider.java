@@ -26,6 +26,10 @@ import java.util.Optional;
  *     }
  * }
  * }</pre>
+ *
+ * @see <a
+ *     href="https://docs.rs/datafusion-catalog/52.1.0/datafusion_catalog/trait.SchemaProvider.html">Rust
+ *     DataFusion: SchemaProvider</a>
  */
 public interface SchemaProvider {
   /**

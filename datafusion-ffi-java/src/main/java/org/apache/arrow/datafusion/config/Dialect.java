@@ -1,7 +1,12 @@
 package org.apache.arrow.datafusion.config;
 
-/** SQL dialect for the parser. Maps to DataFusion's {@code Dialect} enum. */
-public enum SqlDialect {
+/**
+ * SQL dialect for the parser.
+ *
+ * @see <a href="https://docs.rs/datafusion/52.1.0/datafusion/config/enum.Dialect.html">Rust
+ *     DataFusion: Dialect</a>
+ */
+public enum Dialect {
   GENERIC,
   MYSQL,
   POSTGRESQL,

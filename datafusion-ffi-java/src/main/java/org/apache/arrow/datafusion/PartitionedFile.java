@@ -9,5 +9,8 @@ package org.apache.arrow.datafusion;
  * @param size file size in bytes
  * @param rangeStart start of byte range (null if no range)
  * @param rangeEnd end of byte range (null if no range)
+ * @see <a
+ *     href="https://docs.rs/datafusion-datasource/52.1.0/datafusion_datasource/struct.PartitionedFile.html">Rust
+ *     DataFusion: PartitionedFile</a>
  */
 public record PartitionedFile(String path, long size, Long rangeStart, Long rangeEnd) {}

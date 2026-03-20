@@ -32,6 +32,10 @@ import org.apache.arrow.vector.types.pojo.Schema;
  *     .withSchema(mySchema)
  *     .build();
  * }</pre>
+ *
+ * @see <a
+ *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingTable.html">Rust
+ *     DataFusion: ListingTable</a>
  */
 public class ListingTable {
   private final List<ListingTableUrl> tablePaths;

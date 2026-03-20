@@ -15,7 +15,7 @@ import org.apache.arrow.vector.types.pojo.Field;
  * <p>Example usage:
  *
  * <pre>{@code
- * ScalarUdf pow = ScalarUdf.simple("pow", Volatility.IMMUTABLE,
+ * ScalarUDF pow = ScalarUDF.simple("pow", Volatility.IMMUTABLE,
  *     List.of(ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE),
  *             ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE)),
  *     ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE),
@@ -32,8 +32,12 @@ import org.apache.arrow.vector.types.pojo.Field;
  *     });
  * ctx.registerUdf(pow, allocator);
  * }</pre>
+ *
+ * @see <a
+ *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/struct.ScalarUDF.html">Rust
+ *     DataFusion: ScalarUDF</a>
  */
-public interface ScalarUdf {
+public interface ScalarUDF {
 
   /** Returns the name of this function as it will appear in SQL. */
   String name();
@@ -85,14 +89,14 @@ public interface ScalarUdf {
    * @param inputTypes the expected input Arrow types
    * @param outputType the output Arrow type
    * @param fn the function implementation
-   * @return a new ScalarUdf
+   * @return a new ScalarUDF
    */
-  static ScalarUdf simple(
+  static ScalarUDF simple(
       String name,
       Volatility volatility,
       List<ArrowType> inputTypes,
       ArrowType outputType,
-      SimpleScalarFunction fn) {
-    return new SimpleScalarUdf(name, volatility, inputTypes, outputType, fn);
+      ScalarUDFImpl fn) {
+    return new SimpleScalarUDF(name, volatility, inputTypes, outputType, fn);
   }
 }

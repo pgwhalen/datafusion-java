@@ -42,7 +42,7 @@ final class PhysicalExprBridge implements AutoCloseable {
         DfPhysicalExpr dfExpr = DfPhysicalExpr.fromProtoFilters(filterBytes, schemaAddr);
         return new PhysicalExprBridge(dfExpr);
       } catch (DfError e) {
-        throw new NativeDataFusionException(e);
+        throw new NativeDataFusionError(e);
       }
     } finally {
       ffiSchema.release();

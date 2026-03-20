@@ -22,6 +22,9 @@ import org.apache.arrow.vector.types.pojo.ArrowType;
  *
  * <p>Variants that cannot be represented via protobuf (e.g., subquery expressions) are captured by
  * {@link UnresolvedExpr}, which stores the raw proto bytes for lossless round-trip serialization.
+ *
+ * @see <a href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html">Rust
+ *     DataFusion: Expr</a>
  */
 public sealed interface Expr {
 
@@ -424,7 +427,7 @@ public sealed interface Expr {
    * @param kind the kind of grouping set
    * @param groups the grouping expressions
    */
-  record GroupingSetExpr(GroupingSetKind kind, List<List<Expr>> groups) implements Expr {}
+  record GroupingSetExpr(GroupingSet kind, List<List<Expr>> groups) implements Expr {}
 
   /**
    * A placeholder expression ({@code Expr::Placeholder}).

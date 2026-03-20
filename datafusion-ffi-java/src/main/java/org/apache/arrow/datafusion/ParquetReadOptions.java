@@ -6,6 +6,10 @@ import org.apache.arrow.vector.types.pojo.Schema;
  * Options for reading Parquet files.
  *
  * <p>Mirrors Rust's {@code ParquetReadOptions}. Use {@link #builder()} to create instances.
+ *
+ * @see <a
+ *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/file_format/options/struct.ParquetReadOptions.html">Rust
+ *     DataFusion: ParquetReadOptions</a>
  */
 public final class ParquetReadOptions {
   private final Boolean parquetPruning;

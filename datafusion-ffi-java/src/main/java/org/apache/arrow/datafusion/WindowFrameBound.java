@@ -5,6 +5,10 @@ package org.apache.arrow.datafusion;
  *
  * <p>A null {@code value} in {@link Preceding} or {@link Following} represents an unbounded
  * boundary.
+ *
+ * @see <a
+ *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/window_frame/enum.WindowFrameBound.html">Rust
+ *     DataFusion: WindowFrameBound</a>
  */
 public sealed interface WindowFrameBound {
 

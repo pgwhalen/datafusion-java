@@ -18,7 +18,7 @@ import org.apache.arrow.vector.types.pojo.Schema;
  * source DataFrame, mirroring Rust DataFusion's ownership model where these methods take {@code
  * self}. After calling a transformation, the source DataFrame is closed and must not be reused.
  * Terminal operations do NOT consume the source. This enables fluent method chaining without
- * leaking native resources:
+ * leaking native resources.
  *
  * <pre>{@code
  * import static org.apache.arrow.datafusion.Functions.*;
@@ -32,6 +32,9 @@ import org.apache.arrow.vector.types.pojo.Schema;
  *     .sort(col("avg_salary").sortDesc())
  *     .limit(0, 10);
  * }</pre>
+ *
+ * @see <a href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html">Rust
+ *     DataFusion: DataFrame</a>
  */
 public class DataFrame implements AutoCloseable {
   private final DataFrameBridge bridge;
@@ -307,7 +310,7 @@ public class DataFrame implements AutoCloseable {
    * Write results to a Parquet file.
    *
    * @param path path to write the Parquet file to
-   * @throws DataFusionException if writing fails
+   * @throws DataFusionError if writing fails
    */
   public void writeParquet(String path) {
     bridge.writeParquet(path);
@@ -318,7 +321,7 @@ public class DataFrame implements AutoCloseable {
    *
    * @param path path to write the Parquet file to
    * @param options write options controlling output behavior
-   * @throws DataFusionException if writing fails
+   * @throws DataFusionError if writing fails
    */
   public void writeParquet(String path, DataFrameWriteOptions options) {
     bridge.writeParquet(path, options, null);
@@ -330,10 +333,10 @@ public class DataFrame implements AutoCloseable {
    * @param path path to write the Parquet file to
    * @param options write options controlling output behavior
    * @param parquetOptions Parquet-specific format options
-   * @throws DataFusionException if writing fails
+   * @throws DataFusionError if writing fails
    */
   public void writeParquet(
-      String path, DataFrameWriteOptions options, ParquetWriteOptions parquetOptions) {
+      String path, DataFrameWriteOptions options, ParquetOptions parquetOptions) {
     bridge.writeParquet(path, options, parquetOptions);
   }
 
@@ -341,7 +344,7 @@ public class DataFrame implements AutoCloseable {
    * Write results to a CSV file.
    *
    * @param path path to write the CSV file to
-   * @throws DataFusionException if writing fails
+   * @throws DataFusionError if writing fails
    */
   public void writeCsv(String path) {
     bridge.writeCsv(path);
@@ -352,7 +355,7 @@ public class DataFrame implements AutoCloseable {
    *
    * @param path path to write the CSV file to
    * @param options write options controlling output behavior
-   * @throws DataFusionException if writing fails
+   * @throws DataFusionError if writing fails
    */
   public void writeCsv(String path, DataFrameWriteOptions options) {
     bridge.writeCsv(path, options, null);
@@ -364,9 +367,9 @@ public class DataFrame implements AutoCloseable {
    * @param path path to write the CSV file to
    * @param options write options controlling output behavior
    * @param csvOptions CSV-specific format options
-   * @throws DataFusionException if writing fails
+   * @throws DataFusionError if writing fails
    */
-  public void writeCsv(String path, DataFrameWriteOptions options, CsvWriteOptions csvOptions) {
+  public void writeCsv(String path, DataFrameWriteOptions options, CsvOptions csvOptions) {
     bridge.writeCsv(path, options, csvOptions);
   }
 
@@ -374,7 +377,7 @@ public class DataFrame implements AutoCloseable {
    * Write results to a JSON file.
    *
    * @param path path to write the JSON file to
-   * @throws DataFusionException if writing fails
+   * @throws DataFusionError if writing fails
    */
   public void writeJson(String path) {
     bridge.writeJson(path);
@@ -385,7 +388,7 @@ public class DataFrame implements AutoCloseable {
    *
    * @param path path to write the JSON file to
    * @param options write options controlling output behavior
-   * @throws DataFusionException if writing fails
+   * @throws DataFusionError if writing fails
    */
   public void writeJson(String path, DataFrameWriteOptions options) {
     bridge.writeJson(path, options, null);
@@ -397,9 +400,9 @@ public class DataFrame implements AutoCloseable {
    * @param path path to write the JSON file to
    * @param options write options controlling output behavior
    * @param jsonOptions JSON-specific format options
-   * @throws DataFusionException if writing fails
+   * @throws DataFusionError if writing fails
    */
-  public void writeJson(String path, DataFrameWriteOptions options, JsonWriteOptions jsonOptions) {
+  public void writeJson(String path, DataFrameWriteOptions options, JsonOptions jsonOptions) {
     bridge.writeJson(path, options, jsonOptions);
   }
 
@@ -409,32 +412,32 @@ public class DataFrame implements AutoCloseable {
    * Executes the DataFrame and returns a stream of record batches.
    *
    * @param allocator The buffer allocator for Arrow data
-   * @return A RecordBatchStream for iterating over results
-   * @throws DataFusionException if execution fails
+   * @return A SendableRecordBatchStream for iterating over results
+   * @throws DataFusionError if execution fails
    */
-  public RecordBatchStream executeStream(BufferAllocator allocator) {
+  public SendableRecordBatchStream executeStream(BufferAllocator allocator) {
     return bridge.executeStream(allocator);
   }
 
   /**
-   * Execute the query, buffer all results, and return a RecordBatchStream.
+   * Execute the query, buffer all results, and return a SendableRecordBatchStream.
    *
    * <p>Unlike {@link #executeStream}, all computation is complete when this method returns. The
    * returned stream lets the caller iterate batches as usual, but the data is already fully
    * materialized in memory.
    *
    * @param allocator The buffer allocator for Arrow data
-   * @return A RecordBatchStream with all results materialized
-   * @throws DataFusionException if execution fails
+   * @return A SendableRecordBatchStream with all results materialized
+   * @throws DataFusionError if execution fails
    */
-  public RecordBatchStream collect(BufferAllocator allocator) {
+  public SendableRecordBatchStream collect(BufferAllocator allocator) {
     return bridge.collect(allocator);
   }
 
   /**
    * Execute and print results to stdout.
    *
-   * @throws DataFusionException if execution fails
+   * @throws DataFusionError if execution fails
    */
   public void show() {
     bridge.show();
@@ -444,7 +447,7 @@ public class DataFrame implements AutoCloseable {
    * Execute and return the row count.
    *
    * @return the number of rows
-   * @throws DataFusionException if execution fails
+   * @throws DataFusionError if execution fails
    */
   public long count() {
     return bridge.count();
@@ -454,7 +457,7 @@ public class DataFrame implements AutoCloseable {
    * Get the schema of this DataFrame.
    *
    * @return the Arrow schema
-   * @throws DataFusionException if the schema cannot be retrieved
+   * @throws DataFusionError if the schema cannot be retrieved
    */
   public Schema schema() {
     return bridge.schema();

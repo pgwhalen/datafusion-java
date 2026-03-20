@@ -4,11 +4,15 @@ package org.apache.arrow.datafusion;
  * Options for writing JSON files.
  *
  * <p>Use {@link #builder()} to create instances.
+ *
+ * @see <a
+ *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/config/struct.JsonOptions.html">Rust
+ *     DataFusion: JsonOptions</a>
  */
-public final class JsonWriteOptions {
+public final class JsonOptions {
   private final Integer compressionLevel;
 
-  private JsonWriteOptions(Builder builder) {
+  private JsonOptions(Builder builder) {
     this.compressionLevel = builder.compressionLevel;
   }
 
@@ -29,7 +33,7 @@ public final class JsonWriteOptions {
     return b.build().toByteArray();
   }
 
-  /** Builder for {@link JsonWriteOptions}. */
+  /** Builder for {@link JsonOptions}. */
   public static final class Builder {
     private Integer compressionLevel = null;
 
@@ -40,8 +44,8 @@ public final class JsonWriteOptions {
       return this;
     }
 
-    public JsonWriteOptions build() {
-      return new JsonWriteOptions(this);
+    public JsonOptions build() {
+      return new JsonOptions(this);
     }
   }
 }

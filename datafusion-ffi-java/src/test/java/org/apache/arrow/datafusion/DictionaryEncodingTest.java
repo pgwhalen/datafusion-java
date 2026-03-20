@@ -87,7 +87,7 @@ public class DictionaryEncodingTest {
 
       // Query the table - DataFusion should handle the dictionary-encoded data
       try (DataFrame df = ctx.sql("SELECT id, fruit FROM fruits ORDER BY id");
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
 
         VectorSchemaRoot result = stream.getVectorSchemaRoot();
 

@@ -13,22 +13,24 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Bridge between public RecordBatchStream API and Diplomat-generated DfRecordBatchStream.
+ * Bridge between public SendableRecordBatchStream API and Diplomat-generated DfRecordBatchStream.
  *
  * <p>This replaces RecordBatchStreamFfi, delegating to the Diplomat-generated class for all native
  * calls.
  */
-final class RecordBatchStreamBridge implements AutoCloseable {
-  private static final Logger logger = LoggerFactory.getLogger(RecordBatchStreamBridge.class);
+final class SendableRecordBatchStreamBridge implements AutoCloseable {
+  private static final Logger logger =
+      LoggerFactory.getLogger(SendableRecordBatchStreamBridge.class);
 
-  private final NativeRecordBatchStream dfStream;
+  private final NativeSendableRecordBatchStream dfStream;
   private final BufferAllocator allocator;
   private final CDataDictionaryProvider dictionaryProvider;
   private VectorSchemaRoot vectorSchemaRoot;
   private boolean initialized = false;
   private volatile boolean closed = false;
 
-  RecordBatchStreamBridge(NativeRecordBatchStream dfStream, BufferAllocator allocator) {
+  SendableRecordBatchStreamBridge(
+      NativeSendableRecordBatchStream dfStream, BufferAllocator allocator) {
     this.dfStream = dfStream;
     this.allocator = allocator;
     this.dictionaryProvider = new CDataDictionaryProvider();
@@ -58,11 +60,11 @@ final class RecordBatchStreamBridge implements AutoCloseable {
       logger.debug("Loaded batch with {} rows", vectorSchemaRoot.getRowCount());
       return true;
     } catch (DfError e) {
-      throw new NativeDataFusionException(e);
-    } catch (DataFusionException e) {
+      throw new NativeDataFusionError(e);
+    } catch (DataFusionError e) {
       throw e;
     } catch (Exception e) {
-      throw new DataFusionException("Failed to load next batch", e);
+      throw new DataFusionError("Failed to load next batch", e);
     }
   }
 
@@ -87,15 +89,15 @@ final class RecordBatchStreamBridge implements AutoCloseable {
       dfStream.schemaTo(arrowSchema.memoryAddress());
       return Data.importSchema(allocator, arrowSchema, dictionaryProvider);
     } catch (DfError e) {
-      throw new NativeDataFusionException(e);
+      throw new NativeDataFusionError(e);
     } catch (Exception e) {
-      throw new DataFusionException("Failed to get schema", e);
+      throw new DataFusionError("Failed to get schema", e);
     }
   }
 
   private void checkNotClosed() {
     if (closed) {
-      throw new IllegalStateException("RecordBatchStream has been closed");
+      throw new IllegalStateException("SendableRecordBatchStream has been closed");
     }
   }
 
@@ -126,9 +128,9 @@ final class RecordBatchStreamBridge implements AutoCloseable {
       }
 
       if (firstError != null) {
-        throw new DataFusionException("Error closing RecordBatchStream", firstError);
+        throw new DataFusionError("Error closing SendableRecordBatchStream", firstError);
       }
-      logger.debug("Closed RecordBatchStream");
+      logger.debug("Closed SendableRecordBatchStream");
     }
   }
 }

@@ -10,7 +10,7 @@ import java.util.Optional;
 import org.apache.arrow.c.ArrowArray;
 import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
-import org.apache.arrow.datafusion.config.SessionConfig;
+import org.apache.arrow.datafusion.config.ConfigOptions;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.dictionary.DictionaryProvider;
@@ -27,14 +27,14 @@ final class SessionContextBridge implements AutoCloseable {
   private static final Logger logger = LoggerFactory.getLogger(SessionContextBridge.class);
 
   private final DfSessionContext dfCtx;
-  private final SessionConfig config;
+  private final ConfigOptions config;
 
   // Shared arena for all registered providers/UDFs (needs to live as long as the context)
   private final Arena sharedArena;
   // Keep references to prevent GC of Diplomat trait impls while Rust holds pointers
   private final List<Object> traitImpls = new ArrayList<>();
 
-  SessionContextBridge(SessionConfig config) {
+  SessionContextBridge(ConfigOptions config) {
     this.config = config;
     this.sharedArena = Arena.ofShared();
     try {
@@ -46,14 +46,14 @@ final class SessionContextBridge implements AutoCloseable {
       logger.debug("Created SessionContext via Diplomat bridge");
     } catch (DfError e) {
       sharedArena.close();
-      throw new NativeDataFusionException(e);
+      throw new NativeDataFusionError(e);
     } catch (Exception e) {
       sharedArena.close();
-      throw new DataFusionException("Failed to create SessionContext", e);
+      throw new DataFusionError("Failed to create SessionContext", e);
     }
   }
 
-  SessionContextBridge(SessionConfig config, DfRuntimeEnv rtEnv) {
+  SessionContextBridge(ConfigOptions config, DfRuntimeEnv rtEnv) {
     this.config = config;
     this.sharedArena = Arena.ofShared();
     try {
@@ -61,18 +61,18 @@ final class SessionContextBridge implements AutoCloseable {
       logger.debug("Created SessionContext with RuntimeEnv via Diplomat bridge");
     } catch (DfError e) {
       sharedArena.close();
-      throw new NativeDataFusionException(e);
+      throw new NativeDataFusionError(e);
     } catch (Exception e) {
       sharedArena.close();
-      throw new DataFusionException("Failed to create SessionContext", e);
+      throw new DataFusionError("Failed to create SessionContext", e);
     }
   }
 
-  private static DfSessionContext createWithConfig(SessionConfig config) {
+  private static DfSessionContext createWithConfig(ConfigOptions config) {
     return createFromOptions(config.toOptionsMap(), null);
   }
 
-  private static DfSessionContext createWithConfigRt(SessionConfig config, DfRuntimeEnv rtEnv) {
+  private static DfSessionContext createWithConfigRt(ConfigOptions config, DfRuntimeEnv rtEnv) {
     Map<String, String> options = config.hasOptions() ? config.toOptionsMap() : Map.of();
     return createFromOptions(options, rtEnv);
   }
@@ -123,11 +123,11 @@ final class SessionContextBridge implements AutoCloseable {
       }
       logger.debug("Registered batch as table '{}' with {} rows", name, root.getRowCount());
     } catch (DfError e) {
-      throw new NativeDataFusionException(e);
-    } catch (DataFusionException e) {
+      throw new NativeDataFusionError(e);
+    } catch (DataFusionError e) {
       throw e;
     } catch (Exception e) {
-      throw new DataFusionException("Failed to register batch", e);
+      throw new DataFusionError("Failed to register batch", e);
     }
   }
 
@@ -140,9 +140,9 @@ final class SessionContextBridge implements AutoCloseable {
       adapter.closeFfiSchema();
       logger.debug("Registered table provider '{}'", name);
     } catch (DfError e) {
-      throw new NativeDataFusionException(e);
+      throw new NativeDataFusionError(e);
     } catch (Exception e) {
-      throw new DataFusionException("Failed to register table provider", e);
+      throw new DataFusionError("Failed to register table provider", e);
     }
   }
 
@@ -150,9 +150,9 @@ final class SessionContextBridge implements AutoCloseable {
     try {
       return dfCtx.deregisterTable(name);
     } catch (DfError e) {
-      throw new NativeDataFusionException(e);
+      throw new NativeDataFusionError(e);
     } catch (Exception e) {
-      throw new DataFusionException("Failed to deregister table", e);
+      throw new DataFusionError("Failed to deregister table", e);
     }
   }
 
@@ -162,9 +162,9 @@ final class SessionContextBridge implements AutoCloseable {
       logger.debug("Executed SQL query via Diplomat bridge");
       return new DataFrameBridge(df);
     } catch (DfError e) {
-      throw new NativeDataFusionException(e);
+      throw new NativeDataFusionError(e);
     } catch (Exception e) {
-      throw new DataFusionException("Failed to execute SQL", e);
+      throw new DataFusionError("Failed to execute SQL", e);
     }
   }
 
@@ -173,9 +173,9 @@ final class SessionContextBridge implements AutoCloseable {
       DfSessionState dfState = dfCtx.state();
       return new SessionStateBridge(dfState);
     } catch (DfError e) {
-      throw new NativeDataFusionException(e);
+      throw new NativeDataFusionError(e);
     } catch (Exception e) {
-      throw new DataFusionException("Failed to get session state", e);
+      throw new DataFusionError("Failed to get session state", e);
     }
   }
 
@@ -197,11 +197,11 @@ final class SessionContextBridge implements AutoCloseable {
         }
       }
     } catch (DfError e) {
-      throw new NativeDataFusionException(e);
-    } catch (DataFusionException e) {
+      throw new NativeDataFusionError(e);
+    } catch (DataFusionError e) {
       throw e;
     } catch (Exception e) {
-      throw new DataFusionException("Failed to parse SQL expression", e);
+      throw new DataFusionError("Failed to parse SQL expression", e);
     }
   }
 
@@ -220,22 +220,22 @@ final class SessionContextBridge implements AutoCloseable {
       dfCtx.registerCatalog(name, adapter);
       logger.debug("Registered catalog '{}'", name);
     } catch (DfError e) {
-      throw new NativeDataFusionException(e);
+      throw new NativeDataFusionError(e);
     } catch (Exception e) {
-      throw new DataFusionException("Failed to register catalog", e);
+      throw new DataFusionError("Failed to register catalog", e);
     }
   }
 
-  void registerUdf(ScalarUdf udf, BufferAllocator allocator) {
+  void registerUdf(ScalarUDF udf, BufferAllocator allocator) {
     try {
-      DfScalarUdfAdapter adapter = new DfScalarUdfAdapter(udf, allocator, config.fullStackTrace());
+      DfScalarUDFAdapter adapter = new DfScalarUDFAdapter(udf, allocator, config.fullStackTrace());
       traitImpls.add(adapter);
       dfCtx.registerUdf(adapter);
       logger.debug("Registered UDF '{}'", udf.name());
     } catch (DfError e) {
-      throw new NativeDataFusionException(e);
+      throw new NativeDataFusionError(e);
     } catch (Exception e) {
-      throw new DataFusionException("Failed to register UDF", e);
+      throw new DataFusionError("Failed to register UDF", e);
     }
   }
 
@@ -271,11 +271,11 @@ final class SessionContextBridge implements AutoCloseable {
       }
       logger.debug("Registered listing table '{}'", name);
     } catch (DfError e) {
-      throw new NativeDataFusionException(e);
-    } catch (DataFusionException e) {
+      throw new NativeDataFusionError(e);
+    } catch (DataFusionError e) {
       throw e;
     } catch (Exception e) {
-      throw new DataFusionException("Failed to register listing table", e);
+      throw new DataFusionError("Failed to register listing table", e);
     }
   }
 
@@ -283,9 +283,9 @@ final class SessionContextBridge implements AutoCloseable {
     try {
       return dfCtx.tableExist(name);
     } catch (DfError e) {
-      throw new NativeDataFusionException(e);
+      throw new NativeDataFusionError(e);
     } catch (Exception e) {
-      throw new DataFusionException("Failed to check table existence", e);
+      throw new DataFusionError("Failed to check table existence", e);
     }
   }
 
@@ -297,9 +297,9 @@ final class SessionContextBridge implements AutoCloseable {
       DfDataFrame df = dfCtx.table(name);
       return Optional.of(new DataFrameBridge(df));
     } catch (DfError e) {
-      throw new NativeDataFusionException(e);
+      throw new NativeDataFusionError(e);
     } catch (Exception e) {
-      throw new DataFusionException("Failed to get table", e);
+      throw new DataFusionError("Failed to get table", e);
     }
   }
 
@@ -308,9 +308,9 @@ final class SessionContextBridge implements AutoCloseable {
       DfDataFrame df = dfCtx.readParquet(path);
       return new DataFrameBridge(df);
     } catch (DfError e) {
-      throw new NativeDataFusionException(e);
+      throw new NativeDataFusionError(e);
     } catch (Exception e) {
-      throw new DataFusionException("Failed to read Parquet file", e);
+      throw new DataFusionError("Failed to read Parquet file", e);
     }
   }
 
@@ -319,9 +319,9 @@ final class SessionContextBridge implements AutoCloseable {
       DfDataFrame df = dfCtx.readCsv(path);
       return new DataFrameBridge(df);
     } catch (DfError e) {
-      throw new NativeDataFusionException(e);
+      throw new NativeDataFusionError(e);
     } catch (Exception e) {
-      throw new DataFusionException("Failed to read CSV file", e);
+      throw new DataFusionError("Failed to read CSV file", e);
     }
   }
 
@@ -330,9 +330,9 @@ final class SessionContextBridge implements AutoCloseable {
       DfDataFrame df = dfCtx.readJson(path);
       return new DataFrameBridge(df);
     } catch (DfError e) {
-      throw new NativeDataFusionException(e);
+      throw new NativeDataFusionError(e);
     } catch (Exception e) {
-      throw new DataFusionException("Failed to read JSON file", e);
+      throw new DataFusionError("Failed to read JSON file", e);
     }
   }
 
@@ -347,11 +347,11 @@ final class SessionContextBridge implements AutoCloseable {
           });
       logger.debug("Registered CSV table '{}'", name);
     } catch (DfError e) {
-      throw new NativeDataFusionException(e);
-    } catch (DataFusionException e) {
+      throw new NativeDataFusionError(e);
+    } catch (DataFusionError e) {
       throw e;
     } catch (Exception e) {
-      throw new DataFusionException("Failed to register CSV", e);
+      throw new DataFusionError("Failed to register CSV", e);
     }
   }
 
@@ -367,11 +367,11 @@ final class SessionContextBridge implements AutoCloseable {
           });
       logger.debug("Registered Parquet table '{}'", name);
     } catch (DfError e) {
-      throw new NativeDataFusionException(e);
-    } catch (DataFusionException e) {
+      throw new NativeDataFusionError(e);
+    } catch (DataFusionError e) {
       throw e;
     } catch (Exception e) {
-      throw new DataFusionException("Failed to register Parquet", e);
+      throw new DataFusionError("Failed to register Parquet", e);
     }
   }
 
@@ -387,11 +387,11 @@ final class SessionContextBridge implements AutoCloseable {
           });
       logger.debug("Registered JSON table '{}'", name);
     } catch (DfError e) {
-      throw new NativeDataFusionException(e);
-    } catch (DataFusionException e) {
+      throw new NativeDataFusionError(e);
+    } catch (DataFusionError e) {
       throw e;
     } catch (Exception e) {
-      throw new DataFusionException("Failed to register JSON", e);
+      throw new DataFusionError("Failed to register JSON", e);
     }
   }
 
@@ -405,11 +405,11 @@ final class SessionContextBridge implements AutoCloseable {
             return new DataFrameBridge(df);
           });
     } catch (DfError e) {
-      throw new NativeDataFusionException(e);
-    } catch (DataFusionException e) {
+      throw new NativeDataFusionError(e);
+    } catch (DataFusionError e) {
       throw e;
     } catch (Exception e) {
-      throw new DataFusionException("Failed to read CSV with options", e);
+      throw new DataFusionError("Failed to read CSV with options", e);
     }
   }
 
@@ -424,11 +424,11 @@ final class SessionContextBridge implements AutoCloseable {
             return new DataFrameBridge(df);
           });
     } catch (DfError e) {
-      throw new NativeDataFusionException(e);
-    } catch (DataFusionException e) {
+      throw new NativeDataFusionError(e);
+    } catch (DataFusionError e) {
       throw e;
     } catch (Exception e) {
-      throw new DataFusionException("Failed to read Parquet with options", e);
+      throw new DataFusionError("Failed to read Parquet with options", e);
     }
   }
 
@@ -442,11 +442,11 @@ final class SessionContextBridge implements AutoCloseable {
             return new DataFrameBridge(df);
           });
     } catch (DfError e) {
-      throw new NativeDataFusionException(e);
-    } catch (DataFusionException e) {
+      throw new NativeDataFusionError(e);
+    } catch (DataFusionError e) {
       throw e;
     } catch (Exception e) {
-      throw new DataFusionException("Failed to read JSON with options", e);
+      throw new DataFusionError("Failed to read JSON with options", e);
     }
   }
 
@@ -462,9 +462,9 @@ final class SessionContextBridge implements AutoCloseable {
         return decodeNullSeparatedBytes(bytes);
       }
     } catch (DfError e) {
-      throw new NativeDataFusionException(e);
+      throw new NativeDataFusionError(e);
     } catch (Exception e) {
-      throw new DataFusionException("Failed to get schema names", e);
+      throw new DataFusionError("Failed to get schema names", e);
     }
   }
 
@@ -474,9 +474,9 @@ final class SessionContextBridge implements AutoCloseable {
         return decodeNullSeparatedBytes(bytes);
       }
     } catch (DfError e) {
-      throw new NativeDataFusionException(e);
+      throw new NativeDataFusionError(e);
     } catch (Exception e) {
-      throw new DataFusionException("Failed to get table names", e);
+      throw new DataFusionError("Failed to get table names", e);
     }
   }
 
@@ -484,9 +484,9 @@ final class SessionContextBridge implements AutoCloseable {
     try {
       return dfCtx.catalogTableExists(catalogName, schemaName, tableName);
     } catch (DfError e) {
-      throw new NativeDataFusionException(e);
+      throw new NativeDataFusionError(e);
     } catch (Exception e) {
-      throw new DataFusionException("Failed to check table existence in catalog", e);
+      throw new DataFusionError("Failed to check table existence in catalog", e);
     }
   }
 
@@ -547,7 +547,7 @@ final class SessionContextBridge implements AutoCloseable {
     }
     traitImpls.clear();
     if (firstError != null) {
-      throw new DataFusionException("Error closing SessionContext", firstError);
+      throw new DataFusionError("Error closing SessionContext", firstError);
     }
     logger.debug("Closed SessionContext");
   }

@@ -43,6 +43,9 @@ import java.util.Map;
  * @param preferExistingUnion Whether to prefer existing union ordering
  * @param expandViewsAtOutput Whether to expand views at the output level
  * @param enableSortPushdown Whether to enable sort pushdown optimization
+ * @see <a
+ *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/config/struct.OptimizerOptions.html">Rust
+ *     DataFusion: OptimizerOptions</a>
  */
 public record OptimizerOptions(
     Boolean enableDistinctAggregationSoftLimit,

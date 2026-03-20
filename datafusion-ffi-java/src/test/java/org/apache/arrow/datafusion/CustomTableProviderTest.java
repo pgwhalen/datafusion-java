@@ -45,7 +45,7 @@ public class CustomTableProviderTest {
 
       // Query it via fully-qualified table name
       try (DataFrame df = ctx.sql("SELECT * FROM my_catalog.my_schema.my_table");
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
 
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
 
@@ -77,7 +77,7 @@ public class CustomTableProviderTest {
       // Query with WHERE clause - filter happens in DataFusion
       try (DataFrame df =
               ctx.sql("SELECT id, name FROM test_catalog.public.test_table WHERE id > 1");
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
 
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
 
@@ -107,7 +107,7 @@ public class CustomTableProviderTest {
 
       // Query with column selection
       try (DataFrame df = ctx.sql("SELECT name FROM app.main.data WHERE id = 2");
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
 
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
 
@@ -140,7 +140,7 @@ public class CustomTableProviderTest {
 
       // Query without ORDER BY to avoid coalescing batches during sort
       try (DataFrame df = ctx.sql("SELECT * FROM batch_catalog.test.multi_batch");
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
 
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
 
@@ -189,7 +189,7 @@ public class CustomTableProviderTest {
 
       // Query the first table
       try (DataFrame df = ctx.sql("SELECT * FROM store.default.users ORDER BY id");
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
 
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         assertTrue(stream.loadNextBatch());
@@ -203,7 +203,7 @@ public class CustomTableProviderTest {
 
       // Query the second table
       try (DataFrame df = ctx.sql("SELECT * FROM store.default.products ORDER BY product_id");
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
 
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         assertTrue(stream.loadNextBatch());
@@ -221,7 +221,7 @@ public class CustomTableProviderTest {
                       + "FROM store.default.users u "
                       + "JOIN store.default.products p ON u.id = p.user_id "
                       + "ORDER BY p.product_id");
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
 
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         assertTrue(stream.loadNextBatch());
@@ -265,7 +265,7 @@ public class CustomTableProviderTest {
 
       // Query the initial table
       try (DataFrame df = ctx.sql("SELECT * FROM dynamic.default.users ORDER BY id");
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
 
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         assertTrue(stream.loadNextBatch());
@@ -280,7 +280,7 @@ public class CustomTableProviderTest {
 
       // Query the newly registered table
       try (DataFrame df = ctx.sql("SELECT * FROM dynamic.default.products ORDER BY product_id");
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
 
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         assertTrue(stream.loadNextBatch());
@@ -337,7 +337,7 @@ public class CustomTableProviderTest {
 
       // Query with LIMIT clause
       try (DataFrame df = ctx.sql("SELECT * FROM limit_catalog.test.limit_test LIMIT 2");
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
 
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         assertTrue(stream.loadNextBatch());
@@ -383,7 +383,7 @@ public class CustomTableProviderTest {
 
       // Query without LIMIT clause
       try (DataFrame df = ctx.sql("SELECT * FROM no_limit_catalog.test.no_limit_test");
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
 
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         assertTrue(stream.loadNextBatch());
@@ -439,7 +439,7 @@ public class CustomTableProviderTest {
 
       // Query the table - should work correctly regardless of plan properties
       try (DataFrame df = ctx.sql("SELECT * FROM props_catalog.default.props_test ORDER BY id");
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
 
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         assertTrue(stream.loadNextBatch());
@@ -463,7 +463,8 @@ public class CustomTableProviderTest {
       Schema schema = createUsersSchema();
 
       // Create a table provider that returns EXACT for "id" column filters, INEXACT for others
-      AtomicReference<List<FilterPushDown>> capturedPushdowns = new AtomicReference<>();
+      AtomicReference<List<TableProviderFilterPushDown>> capturedPushdowns =
+          new AtomicReference<>();
       TableProvider filterTable =
           new TableProvider() {
             @Override
@@ -472,12 +473,13 @@ public class CustomTableProviderTest {
             }
 
             @Override
-            public List<FilterPushDown> supportsFiltersPushdown(List<Expr> filters) {
+            public List<TableProviderFilterPushDown> supportsFiltersPushdown(List<Expr> filters) {
               // Return EXACT for all filters (we can't inspect Expr contents easily,
               // but we can verify the callback is invoked with the right count)
-              List<FilterPushDown> result =
+              List<TableProviderFilterPushDown> result =
                   new ArrayList<>(
-                      java.util.Collections.nCopies(filters.size(), FilterPushDown.EXACT));
+                      java.util.Collections.nCopies(
+                          filters.size(), TableProviderFilterPushDown.EXACT));
               capturedPushdowns.set(result);
               return result;
             }
@@ -496,7 +498,7 @@ public class CustomTableProviderTest {
 
       // Query with WHERE clause - filters are pushed down
       try (DataFrame df = ctx.sql("SELECT * FROM filter_catalog.test.filter_test WHERE id > 1");
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
 
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         assertTrue(stream.loadNextBatch());
@@ -528,8 +530,9 @@ public class CustomTableProviderTest {
             }
 
             @Override
-            public List<FilterPushDown> supportsFiltersPushdown(List<Expr> filters) {
-              return java.util.Collections.nCopies(filters.size(), FilterPushDown.UNSUPPORTED);
+            public List<TableProviderFilterPushDown> supportsFiltersPushdown(List<Expr> filters) {
+              return java.util.Collections.nCopies(
+                  filters.size(), TableProviderFilterPushDown.UNSUPPORTED);
             }
 
             @Override
@@ -548,7 +551,7 @@ public class CustomTableProviderTest {
       // Query with WHERE clause
       try (DataFrame df =
               ctx.sql("SELECT * FROM unsupported_catalog.test.unsupported_test WHERE id > 1");
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
 
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         assertTrue(stream.loadNextBatch());
@@ -582,7 +585,7 @@ public class CustomTableProviderTest {
 
       // Query with WHERE clause — INEXACT means DataFusion re-applies filter post-scan
       try (DataFrame df = ctx.sql("SELECT * FROM default_catalog.test.default_test WHERE id > 1");
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
 
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         assertTrue(stream.loadNextBatch());
@@ -629,7 +632,7 @@ public class CustomTableProviderTest {
 
       // Query with WHERE clause - filter is "id > 1"
       try (DataFrame df = ctx.sql("SELECT * FROM expr_catalog.test.expr_test WHERE id > 1");
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         while (stream.loadNextBatch()) {
           // consume all batches
@@ -678,9 +681,10 @@ public class CustomTableProviderTest {
             }
 
             @Override
-            public List<FilterPushDown> supportsFiltersPushdown(List<Expr> filters) {
+            public List<TableProviderFilterPushDown> supportsFiltersPushdown(List<Expr> filters) {
               capturedFilters.set(filters);
-              return java.util.Collections.nCopies(filters.size(), FilterPushDown.INEXACT);
+              return java.util.Collections.nCopies(
+                  filters.size(), TableProviderFilterPushDown.INEXACT);
             }
 
             @Override
@@ -700,7 +704,7 @@ public class CustomTableProviderTest {
       try (DataFrame df =
               ctx.sql(
                   "SELECT * FROM complex_catalog.test.complex_test WHERE id > 1 AND name = 'Bob'");
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         while (stream.loadNextBatch()) {
           // consume all batches
@@ -974,7 +978,7 @@ public class CustomTableProviderTest {
       ctx.registerCatalog("lazy_cat", myCatalog, allocator);
 
       try (DataFrame df = ctx.sql("SELECT * FROM lazy_cat.s.lazy_table");
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
 
         // executeStream() must return without fetching any batches yet.
         assertEquals(
@@ -1026,7 +1030,7 @@ public class CustomTableProviderTest {
       List<String> names = new ArrayList<>();
 
       try (DataFrame df = ctx.sql("SELECT * FROM multi_cat.s.multi ORDER BY id");
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
 
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         while (stream.loadNextBatch()) {

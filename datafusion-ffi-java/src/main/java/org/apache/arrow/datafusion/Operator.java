@@ -1,6 +1,11 @@
 package org.apache.arrow.datafusion;
 
-/** Operators for binary expressions, corresponding to DataFusion's {@code Operator} enum. */
+/**
+ * Operators for binary expressions, corresponding to DataFusion's {@code Operator} enum.
+ *
+ * @see <a href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Operator.html">Rust
+ *     DataFusion: Operator</a>
+ */
 public enum Operator {
   Eq,
   NotEq,

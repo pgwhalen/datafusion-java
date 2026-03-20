@@ -17,6 +17,10 @@ package org.apache.arrow.datafusion;
  * // Create a default runtime env (no memory limit)
  * RuntimeEnv defaultRt = RuntimeEnvBuilder.builder().build();
  * }</pre>
+ *
+ * @see <a
+ *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/runtime_env/struct.RuntimeEnvBuilder.html">Rust
+ *     DataFusion: RuntimeEnvBuilder</a>
  */
 public final class RuntimeEnvBuilder {
   private long maxMemory = 0;
@@ -58,7 +62,7 @@ public final class RuntimeEnvBuilder {
    * Builds the {@link RuntimeEnv}.
    *
    * @return a new RuntimeEnv
-   * @throws DataFusionException if the native RuntimeEnv cannot be created
+   * @throws DataFusionError if the native RuntimeEnv cannot be created
    */
   public RuntimeEnv build() {
     return new RuntimeEnv(new RuntimeEnvBridge(maxMemory, memoryFraction));

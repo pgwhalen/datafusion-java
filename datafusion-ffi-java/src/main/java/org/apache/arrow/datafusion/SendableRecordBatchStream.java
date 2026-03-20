@@ -10,16 +10,20 @@ import org.apache.arrow.vector.dictionary.DictionaryProvider;
  *
  * <p>This class provides zero-copy access to Arrow data returned from DataFusion through the Arrow
  * C Data Interface. Implements DictionaryProvider to allow decoding of dictionary-encoded columns.
+ *
+ * @see <a
+ *     href="https://docs.rs/datafusion/52.1.0/datafusion/physical_plan/type.SendableRecordBatchStream.html">Rust
+ *     DataFusion: SendableRecordBatchStream</a>
  */
-public class RecordBatchStream implements RecordBatchReader, DictionaryProvider {
-  private final RecordBatchStreamBridge bridge;
+public class SendableRecordBatchStream implements RecordBatchReader, DictionaryProvider {
+  private final SendableRecordBatchStreamBridge bridge;
 
   /**
-   * Creates a RecordBatchStream from a bridge wrapper.
+   * Creates a SendableRecordBatchStream from a bridge wrapper.
    *
    * @param bridge the bridge wrapper holding native stream and allocator
    */
-  RecordBatchStream(RecordBatchStreamBridge bridge) {
+  SendableRecordBatchStream(SendableRecordBatchStreamBridge bridge) {
     this.bridge = bridge;
   }
 

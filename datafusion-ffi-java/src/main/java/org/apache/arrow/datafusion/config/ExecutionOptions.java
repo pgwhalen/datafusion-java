@@ -40,6 +40,9 @@ import java.util.Map;
  * @param perfectHashJoinSmallBuildThreshold Maximum entries for "small" side in a perfect hash join
  * @param perfectHashJoinMinKeyDensity Minimum key density for perfect hash join eligibility
  * @param parquet Parquet-specific options
+ * @see <a
+ *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/config/struct.ExecutionOptions.html">Rust
+ *     DataFusion: ExecutionOptions</a>
  */
 public record ExecutionOptions(
     Integer batchSize,

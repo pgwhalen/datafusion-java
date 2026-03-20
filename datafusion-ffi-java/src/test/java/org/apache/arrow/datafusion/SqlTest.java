@@ -25,7 +25,7 @@ public class SqlTest {
 
       // Execute a simple SQL query that doesn't require any tables
       try (DataFrame df = ctx.sql("SELECT 1 as x, 2 as y");
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
 
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         org.apache.arrow.vector.types.pojo.Schema schema = root.getSchema();
@@ -58,7 +58,7 @@ public class SqlTest {
 
       // Query the registered table
       try (DataFrame df = ctx.sql("SELECT x, y FROM test WHERE x > 1");
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
 
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
 
@@ -92,7 +92,7 @@ public class SqlTest {
 
       // Execute aggregate query
       try (DataFrame df = ctx.sql("SELECT SUM(y) as total FROM test");
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
 
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
 
@@ -120,7 +120,7 @@ public class SqlTest {
       // Execute multiple queries on the same context
       for (int i = 0; i < 3; i++) {
         try (DataFrame df = ctx.sql("SELECT COUNT(*) as cnt FROM test");
-            RecordBatchStream stream = df.executeStream(allocator)) {
+            SendableRecordBatchStream stream = df.executeStream(allocator)) {
 
           assertTrue(stream.loadNextBatch());
           BigIntVector countValues = (BigIntVector) stream.getVectorSchemaRoot().getVector("cnt");
@@ -146,7 +146,7 @@ public class SqlTest {
       try (DataFrame df =
               ctx.sql(
                   "SELECT category, COUNT(*) as cnt FROM categories GROUP BY category ORDER BY category");
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
 
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
 
@@ -188,7 +188,7 @@ public class SqlTest {
       ctx.registerBatch("categories", testData, allocator);
 
       try (DataFrame df = ctx.sql("SELECT DISTINCT category FROM categories ORDER BY category");
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
 
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
 

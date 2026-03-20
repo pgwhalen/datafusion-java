@@ -8,14 +8,18 @@ import org.apache.arrow.vector.VectorSchemaRoot;
  * <p>This interface is used in two directions:
  *
  * <ul>
- *   <li>Consuming data from Rust: {@link RecordBatchStream} implements this to iterate over query
- *       results
+ *   <li>Consuming data from Rust: {@link SendableRecordBatchStream} implements this to iterate over
+ *       query results
  *   <li>Providing data to Rust: User implementations provide data for custom {@link ExecutionPlan}s
  * </ul>
  *
  * <p>The pattern follows Arrow's ArrowReader approach: call {@link #getVectorSchemaRoot()} once to
  * get the schema and buffer container, then call {@link #loadNextBatch()} to populate it with each
  * batch of data.
+ *
+ * @see <a href="https://docs.rs/arrow/54.0.0/arrow/record_batch/struct.RecordBatch.html">Rust
+ *     Arrow: RecordBatch</a>
+ * @see SendableRecordBatchStream
  */
 public interface RecordBatchReader extends AutoCloseable {
   /**
@@ -36,7 +40,7 @@ public interface RecordBatchReader extends AutoCloseable {
    * more data is available.
    *
    * @return true if a batch was loaded, false if no more batches are available
-   * @throws DataFusionException if loading fails
+   * @throws DataFusionError if loading fails
    */
   boolean loadNextBatch();
 

@@ -1,6 +1,12 @@
 package org.apache.arrow.datafusion;
 
-/** The volatility of a scalar UDF, indicating how its result depends on its inputs. */
+/**
+ * The volatility of a scalar UDF, indicating how its result depends on its inputs.
+ *
+ * @see <a
+ *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Volatility.html">Rust
+ *     DataFusion: Volatility</a>
+ */
 public enum Volatility {
   /** The function always returns the same result for the same input. */
   IMMUTABLE,

@@ -27,6 +27,10 @@ import org.apache.arrow.vector.types.pojo.Schema;
  *     }
  * }
  * }</pre>
+ *
+ * @see <a
+ *     href="https://docs.rs/datafusion-datasource/52.1.0/datafusion_datasource/file/trait.FileSource.html">Rust
+ *     DataFusion: FileSource</a>
  */
 public interface FileSource {
   /**

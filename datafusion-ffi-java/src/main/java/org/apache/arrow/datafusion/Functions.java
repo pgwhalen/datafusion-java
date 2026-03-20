@@ -16,6 +16,9 @@ import org.apache.arrow.vector.types.pojo.ArrowType;
  * }</pre>
  *
  * <p>This parallels Rust DataFusion's {@code prelude} module and Spark's {@code functions} class.
+ *
+ * @see <a href="https://docs.rs/datafusion/52.1.0/datafusion/prelude/index.html">Rust DataFusion:
+ *     datafusion::prelude</a>
  */
 public final class Functions {
   private Functions() {}

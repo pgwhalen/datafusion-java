@@ -7,7 +7,7 @@ import java.util.Map;
 /**
  * Configuration options for a SessionContext.
  *
- * <p>This class mirrors DataFusion's {@code SessionConfig} and supports two modes of configuration:
+ * <p>This class mirrors DataFusion's {@code ConfigOptions} and supports two modes of configuration:
  *
  * <ul>
  *   <li><b>Typed builders</b> -- Use nested option classes like {@link ExecutionOptions}, {@link
@@ -26,7 +26,7 @@ import java.util.Map;
  * <p>Example:
  *
  * <pre>{@code
- * SessionConfig config = SessionConfig.builder()
+ * ConfigOptions config = ConfigOptions.builder()
  *     .execution(ExecutionOptions.builder()
  *         .batchSize(4096)
  *         .targetPartitions(8)
@@ -40,8 +40,12 @@ import java.util.Map;
  *     DataFrame df = ctx.sql("SELECT 1");
  * }
  * }</pre>
+ *
+ * @see <a
+ *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/config/struct.ConfigOptions.html">Rust
+ *     DataFusion: ConfigOptions</a>
  */
-public final class SessionConfig {
+public final class ConfigOptions {
 
   private static final boolean DEFAULT_FULL_STACK_TRACE =
       System.getenv("FULL_JAVA_STACK_TRACE") != null
@@ -57,7 +61,7 @@ public final class SessionConfig {
   private final Map<String, String> additionalOptions;
   private final Map<String, String> rawOptions;
 
-  private SessionConfig(Builder builder) {
+  private ConfigOptions(Builder builder) {
     this.fullStackTrace = builder.fullStackTrace;
     this.catalog = builder.catalog;
     this.execution = builder.execution;
@@ -69,7 +73,7 @@ public final class SessionConfig {
     this.rawOptions = null;
   }
 
-  private SessionConfig(Map<String, String> rawOptions, boolean fullStackTrace) {
+  private ConfigOptions(Map<String, String> rawOptions, boolean fullStackTrace) {
     this.fullStackTrace = fullStackTrace;
     this.catalog = null;
     this.execution = null;
@@ -82,7 +86,7 @@ public final class SessionConfig {
   }
 
   /** Returns the default configuration (reads from environment variables). */
-  public static SessionConfig defaults() {
+  public static ConfigOptions defaults() {
     return new Builder().build();
   }
 
@@ -92,16 +96,16 @@ public final class SessionConfig {
   }
 
   /**
-   * Creates a SessionConfig from a raw string map, bypassing typed option records.
+   * Creates a ConfigOptions from a raw string map, bypassing typed option records.
    *
    * <p>Keys should use DataFusion's dotted notation (e.g., {@code
    * "datafusion.execution.batch_size"}).
    *
    * @param options the configuration options map
-   * @return a new SessionConfig
+   * @return a new ConfigOptions
    */
-  public static SessionConfig fromStringMap(Map<String, String> options) {
-    return new SessionConfig(options, DEFAULT_FULL_STACK_TRACE);
+  public static ConfigOptions fromStringMap(Map<String, String> options) {
+    return new ConfigOptions(options, DEFAULT_FULL_STACK_TRACE);
   }
 
   /**
@@ -171,7 +175,7 @@ public final class SessionConfig {
     return map;
   }
 
-  /** Builder for SessionConfig. */
+  /** Builder for ConfigOptions. */
   public static final class Builder {
     private boolean fullStackTrace = DEFAULT_FULL_STACK_TRACE;
     private CatalogOptions catalog;
@@ -276,9 +280,9 @@ public final class SessionConfig {
       return this;
     }
 
-    /** Builds the SessionConfig. */
-    public SessionConfig build() {
-      return new SessionConfig(this);
+    /** Builds the ConfigOptions. */
+    public ConfigOptions build() {
+      return new ConfigOptions(this);
     }
   }
 }

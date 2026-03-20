@@ -3,10 +3,10 @@ package org.apache.arrow.datafusion;
 /**
  * Exception indicating an error originating from the native DataFusion library.
  *
- * <p>This is package-private because users should catch the parent {@link DataFusionException}.
+ * <p>This is package-private because users should catch the parent {@link DataFusionError}.
  */
-final class NativeDataFusionException extends DataFusionException {
-  NativeDataFusionException(DfError error) {
+final class NativeDataFusionError extends DataFusionError {
+  NativeDataFusionError(DfError error) {
     super(extractMessage(error));
   }
 

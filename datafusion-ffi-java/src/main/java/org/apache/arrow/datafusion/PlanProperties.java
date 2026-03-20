@@ -6,6 +6,9 @@ package org.apache.arrow.datafusion;
  * @param outputPartitioning The number of output partitions
  * @param emissionType How the plan produces output
  * @param boundedness Whether the plan's input data is finite or infinite
+ * @see <a
+ *     href="https://docs.rs/datafusion/52.1.0/datafusion/physical_plan/struct.PlanProperties.html">Rust
+ *     DataFusion: PlanProperties</a>
  */
 public record PlanProperties(
     int outputPartitioning, EmissionType emissionType, Boundedness boundedness) {

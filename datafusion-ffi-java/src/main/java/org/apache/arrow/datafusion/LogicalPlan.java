@@ -7,6 +7,10 @@ package org.apache.arrow.datafusion;
  * parsed SQL query. It can be passed back to DataFusion for further processing. The plan is a pure
  * data structure with no runtime dependency, so it can outlive both the SessionState and
  * SessionContext that created it.
+ *
+ * @see <a
+ *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.LogicalPlan.html">Rust
+ *     DataFusion: LogicalPlan</a>
  */
 public class LogicalPlan implements AutoCloseable {
 

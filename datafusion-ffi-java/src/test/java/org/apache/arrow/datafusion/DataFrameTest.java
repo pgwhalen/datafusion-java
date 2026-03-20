@@ -229,7 +229,7 @@ public class DataFrameTest {
               ctx.sql("SELECT * FROM employees")
                   .filter(op.apply(col("age"), lit(30)))
                   .sort(col("age").sortAsc());
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         assertEquals(expectedAges.length, root.getRowCount());
@@ -251,7 +251,7 @@ public class DataFrameTest {
               ctx.sql("SELECT * FROM employees")
                   .select(col("name"), col("salary"))
                   .sort(col("name").sortAsc());
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         Schema schema = root.getSchema();
@@ -282,7 +282,7 @@ public class DataFrameTest {
               ctx.sql("SELECT * FROM employees")
                   .selectColumns("name", "age")
                   .sort(col("name").sortAsc());
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         Schema schema = root.getSchema();
@@ -336,7 +336,7 @@ public class DataFrameTest {
       try (DataFrame df =
               ctx.sql("SELECT * FROM employees")
                   .aggregate(List.of(), List.of(aggFn.apply(col("salary")).alias("result")));
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         assertEquals(1, root.getRowCount(), name + " should produce 1 row");
@@ -355,7 +355,7 @@ public class DataFrameTest {
       try (DataFrame df =
               ctx.sql("SELECT * FROM employees")
                   .aggregate(List.of(), List.of(countAll().alias("result")));
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());
         assertEquals(3.0, getNumericValue(stream.getVectorSchemaRoot(), "result", 0), 0.01);
       }
@@ -374,7 +374,7 @@ public class DataFrameTest {
                       List.of(col("dept")),
                       List.of(sum(col("salary")).alias("total"), count(col("name")).alias("cnt")))
                   .sort(col("dept").sortAsc());
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         assertEquals(2, root.getRowCount());
@@ -400,7 +400,7 @@ public class DataFrameTest {
       registerEmployees(ctx, allocator);
 
       try (DataFrame df = ctx.sql("SELECT * FROM employees").sort(col("salary").sortDesc());
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         assertEquals(3, root.getRowCount());
@@ -424,7 +424,7 @@ public class DataFrameTest {
 
       try (DataFrame df =
               ctx.sql("SELECT * FROM employees").sort(col("age").sortAsc()).limit(0, 2);
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         assertEquals(2, root.getRowCount());
@@ -446,7 +446,7 @@ public class DataFrameTest {
 
       try (DataFrame df =
               ctx.sql("SELECT * FROM employees").sort(col("age").sortAsc()).limit(1, 2);
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         assertEquals(2, root.getRowCount());
@@ -465,7 +465,7 @@ public class DataFrameTest {
       registerEmployees(ctx, allocator);
 
       try (DataFrame df = ctx.sql("SELECT * FROM employees ORDER BY name");
-          RecordBatchStream stream = df.collect(allocator)) {
+          SendableRecordBatchStream stream = df.collect(allocator)) {
         assertTrue(stream.loadNextBatch());
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         assertEquals(3, root.getRowCount());
@@ -540,7 +540,7 @@ public class DataFrameTest {
               employees
                   .join(departments, JoinType.INNER, List.of("dept"), List.of("dept_name"))
                   .sort(col("name").sortAsc());
-          RecordBatchStream stream = joined.executeStream(allocator)) {
+          SendableRecordBatchStream stream = joined.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         assertEquals(3, root.getRowCount());
@@ -574,7 +574,7 @@ public class DataFrameTest {
               employees
                   .joinOn(departments, JoinType.INNER, List.of(col("dept").eq(col("dept_name"))))
                   .sort(col("name").sortAsc());
-          RecordBatchStream stream = joined.executeStream(allocator)) {
+          SendableRecordBatchStream stream = joined.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         assertEquals(3, root.getRowCount());
@@ -610,7 +610,7 @@ public class DataFrameTest {
                       List.of("dept_name"),
                       col("location").eq(lit("SF")))
                   .sort(col("name").sortAsc());
-          RecordBatchStream stream = joined.executeStream(allocator)) {
+          SendableRecordBatchStream stream = joined.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         // Only Engineering employees (SF): Alice and Charlie
@@ -640,7 +640,7 @@ public class DataFrameTest {
               employees
                   .join(departments, JoinType.LEFT, List.of("dept"), List.of("dept_name"))
                   .sort(col("name").sortAsc());
-          RecordBatchStream stream = joined.executeStream(allocator)) {
+          SendableRecordBatchStream stream = joined.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         // Left join: all 3 employees retained
@@ -667,7 +667,7 @@ public class DataFrameTest {
       try (DataFrame df1 = ctx.sql("SELECT name, age FROM employees WHERE age <= 30");
           DataFrame df2 = ctx.sql("SELECT name, age FROM employees WHERE age > 25");
           DataFrame unioned = df1.union(df2).sort(col("age").sortAsc(), col("name").sortAsc());
-          RecordBatchStream stream = unioned.executeStream(allocator)) {
+          SendableRecordBatchStream stream = unioned.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         // Union ALL: Bob(25) + Alice(30) from df1 + Alice(30) + Charlie(35) from df2 = 4 rows
@@ -696,7 +696,7 @@ public class DataFrameTest {
       try (DataFrame df1 = ctx.sql("SELECT name, age FROM employees WHERE age <= 30");
           DataFrame df2 = ctx.sql("SELECT name, age FROM employees WHERE age > 25");
           DataFrame unioned = df1.unionDistinct(df2).sort(col("age").sortAsc());
-          RecordBatchStream stream = unioned.executeStream(allocator)) {
+          SendableRecordBatchStream stream = unioned.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         // Union distinct: Bob(25) + Alice(30) + Charlie(35) = 3 unique rows
@@ -723,7 +723,7 @@ public class DataFrameTest {
       try (DataFrame df1 = ctx.sql("SELECT name, age FROM employees WHERE age <= 30");
           DataFrame df2 = ctx.sql("SELECT name, age FROM employees WHERE age >= 30");
           DataFrame intersected = df1.intersect(df2);
-          RecordBatchStream stream = intersected.executeStream(allocator)) {
+          SendableRecordBatchStream stream = intersected.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         // Intersection: only Alice(30) is in both
@@ -746,7 +746,7 @@ public class DataFrameTest {
       try (DataFrame df1 = ctx.sql("SELECT name, age FROM employees");
           DataFrame df2 = ctx.sql("SELECT name, age FROM employees WHERE age = 30");
           DataFrame excepted = df1.except(df2).sort(col("age").sortAsc());
-          RecordBatchStream stream = excepted.executeStream(allocator)) {
+          SendableRecordBatchStream stream = excepted.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         // Except: all employees minus Alice(30) = Bob(25) and Charlie(35)
@@ -770,7 +770,7 @@ public class DataFrameTest {
 
       try (DataFrame df =
               ctx.sql("SELECT dept FROM employees").distinct().sort(col("dept").sortAsc());
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         // 2 distinct departments: Engineering and Sales
@@ -794,7 +794,7 @@ public class DataFrameTest {
       registerEmployees(ctx, allocator);
 
       try (DataFrame df = ctx.table("employees").orElseThrow().sort(col("name").sortAsc());
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
         Schema schema = df.schema();
         assertEquals(4, schema.getFields().size());
 
@@ -840,7 +840,7 @@ public class DataFrameTest {
     try (BufferAllocator allocator = new RootAllocator();
         SessionContext ctx = new SessionContext();
         DataFrame df = ctx.readCsv(csvFile.toString()).sort(col("id").sortAsc());
-        RecordBatchStream stream = df.executeStream(allocator)) {
+        SendableRecordBatchStream stream = df.executeStream(allocator)) {
       Schema schema = df.schema();
       assertEquals(3, schema.getFields().size());
       assertEquals("id", schema.getFields().get(0).getName());
@@ -879,7 +879,7 @@ public class DataFrameTest {
     try (BufferAllocator allocator = new RootAllocator();
         SessionContext ctx = new SessionContext();
         DataFrame df = ctx.readJson(jsonFile.toString()).sort(col("id").sortAsc());
-        RecordBatchStream stream = df.executeStream(allocator)) {
+        SendableRecordBatchStream stream = df.executeStream(allocator)) {
       assertTrue(stream.loadNextBatch());
       VectorSchemaRoot root = stream.getVectorSchemaRoot();
       assertEquals(2, root.getRowCount());
@@ -907,7 +907,7 @@ public class DataFrameTest {
         SessionContext ctx = new SessionContext();
         DataFrame df =
             ctx.readParquet("src/test/resources/test.parquet").sort(col("id").sortAsc());
-        RecordBatchStream stream = df.executeStream(allocator)) {
+        SendableRecordBatchStream stream = df.executeStream(allocator)) {
       assertTrue(stream.loadNextBatch());
       VectorSchemaRoot root = stream.getVectorSchemaRoot();
       assertEquals(3, root.getRowCount());
@@ -938,7 +938,7 @@ public class DataFrameTest {
       // Note: Parquet read-back may use ViewVarCharVector instead of VarCharVector,
       // so use getObject().toString() for string comparison.
       try (DataFrame df = ctx.readParquet(outDir.toString()).sort(col("age").sortAsc());
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         assertEquals(3, root.getRowCount());
@@ -967,7 +967,7 @@ public class DataFrameTest {
 
       // Read back and verify
       try (DataFrame df = ctx.readCsv(outDir.toString()).sort(col("age").sortAsc());
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         assertEquals(3, root.getRowCount());
@@ -993,7 +993,7 @@ public class DataFrameTest {
 
       // Read back and verify
       try (DataFrame df = ctx.readJson(outDir.toString()).sort(col("age").sortAsc());
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         assertEquals(3, root.getRowCount());
@@ -1027,15 +1027,15 @@ public class DataFrameTest {
       Path outDir = tempDir.resolve("output_opts.parquet");
       DataFrameWriteOptions writeOpts =
           DataFrameWriteOptions.builder().singleFileOutput(true).build();
-      ParquetWriteOptions parquetOpts =
-          ParquetWriteOptions.builder().compression("SNAPPY").maxRowGroupSize(100L).build();
+      ParquetOptions parquetOpts =
+          ParquetOptions.builder().compression("SNAPPY").maxRowGroupSize(100L).build();
       try (DataFrame df = ctx.sql("SELECT * FROM employees")) {
         df.writeParquet(outDir.toString(), writeOpts, parquetOpts);
       }
 
       // Read back and verify data
       try (DataFrame df = ctx.readParquet(outDir.toString()).sort(col("age").sortAsc());
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         assertEquals(3, root.getRowCount());
@@ -1065,7 +1065,7 @@ public class DataFrameTest {
 
       // Read back and verify data
       try (DataFrame df = ctx.readParquet(outDir.toString()).sort(col("age").sortAsc());
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         assertEquals(3, root.getRowCount());
@@ -1086,7 +1086,7 @@ public class DataFrameTest {
 
       Path outDir = tempDir.resolve("output_opts.csv");
       DataFrameWriteOptions writeOpts = DataFrameWriteOptions.builder().build();
-      CsvWriteOptions csvOpts = CsvWriteOptions.builder().delimiter((byte) '\t').build();
+      CsvOptions csvOpts = CsvOptions.builder().delimiter((byte) '\t').build();
       try (DataFrame df = ctx.sql("SELECT age, salary FROM employees")) {
         df.writeCsv(outDir.toString(), writeOpts, csvOpts);
       }
@@ -1095,7 +1095,7 @@ public class DataFrameTest {
       CsvReadOptions readOpts = CsvReadOptions.builder().delimiter((byte) '\t').build();
       try (DataFrame df =
               ctx.readCsv(outDir.toString(), readOpts, allocator).sort(col("age").sortAsc());
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         assertEquals(3, root.getRowCount());
@@ -1126,7 +1126,7 @@ public class DataFrameTest {
 
       // Read back and verify
       try (DataFrame df = ctx.readCsv(outDir.toString()).sort(col("age").sortAsc());
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         assertEquals(3, root.getRowCount());
@@ -1147,14 +1147,14 @@ public class DataFrameTest {
 
       Path outDir = tempDir.resolve("output_opts.json");
       DataFrameWriteOptions writeOpts = DataFrameWriteOptions.builder().build();
-      JsonWriteOptions jsonOpts = JsonWriteOptions.builder().build();
+      JsonOptions jsonOpts = JsonOptions.builder().build();
       try (DataFrame df = ctx.sql("SELECT * FROM employees")) {
         df.writeJson(outDir.toString(), writeOpts, jsonOpts);
       }
 
       // Read back and verify
       try (DataFrame df = ctx.readJson(outDir.toString()).sort(col("age").sortAsc());
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         assertEquals(3, root.getRowCount());
@@ -1189,7 +1189,7 @@ public class DataFrameTest {
 
       // Read back and verify
       try (DataFrame df = ctx.readJson(outDir.toString()).sort(col("age").sortAsc());
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         assertEquals(3, root.getRowCount());
@@ -1215,7 +1215,7 @@ public class DataFrameTest {
       try (DataFrame df =
               ctx.sql("SELECT * FROM employees")
                   .withColumn("bonus", col("salary").multiply(lit(0.1)));
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
         Schema schema = stream.getVectorSchemaRoot().getSchema();
         // Original 4 + bonus = 5 columns
         assertEquals(5, schema.getFields().size());
@@ -1276,7 +1276,7 @@ public class DataFrameTest {
                   .select(col("name"), col("salary"))
                   .sort(col("salary").sortDesc())
                   .limit(0, 1);
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());
         assertEquals(1, stream.getVectorSchemaRoot().getRowCount());
         // Highest salary among age>=30: Charlie(70000) > Alice(50000)
@@ -1300,7 +1300,7 @@ public class DataFrameTest {
                           avg(col("salary")).alias("avg_salary"),
                           count(col("name")).alias("headcount")))
                   .sort(col("avg_salary").sortDesc());
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         assertEquals(2, root.getRowCount());
@@ -1330,7 +1330,7 @@ public class DataFrameTest {
                   .orElseThrow()
                   .selectColumns("name", "salary")
                   .filter(col("salary").gt(lit(50000)));
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         // Only Charlie with salary > 50000
@@ -1358,7 +1358,7 @@ public class DataFrameTest {
                           .when(col("salary").gt(lit(40000)), lit("mid"))
                           .otherwise(lit("low")))
                   .sort(col("name").sortAsc());
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         assertEquals(5, root.getSchema().getFields().size());
@@ -1397,7 +1397,7 @@ public class DataFrameTest {
                 .filter(col("product").eq(lit("Widget")))
                 .aggregate(List.of(col("region")), List.of(sum(col("amount")).alias("total")))
                 .sort(col("region").sortAsc());
-        RecordBatchStream stream = df.executeStream(allocator)) {
+        SendableRecordBatchStream stream = df.executeStream(allocator)) {
       assertTrue(stream.loadNextBatch());
       VectorSchemaRoot root = stream.getVectorSchemaRoot();
       assertEquals(2, root.getRowCount());
@@ -1428,7 +1428,7 @@ public class DataFrameTest {
                       col("salary").multiply(lit(12)).alias("annual_salary"),
                       col("age").plus(lit(1)).alias("next_age"))
                   .sort(col("name").sortAsc());
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         Schema schema = root.getSchema();
@@ -1463,7 +1463,7 @@ public class DataFrameTest {
       // limit(1, null) means skip 1 row, no fetch limit
       try (DataFrame df =
               ctx.sql("SELECT * FROM employees").sort(col("age").sortAsc()).limit(1, null);
-          RecordBatchStream stream = df.collect(allocator)) {
+          SendableRecordBatchStream stream = df.collect(allocator)) {
         assertTrue(stream.loadNextBatch());
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         assertEquals(2, root.getRowCount()); // Skip 1, return remaining 2
@@ -1489,7 +1489,7 @@ public class DataFrameTest {
       try (DataFrame df =
               ctx.sql("SELECT * FROM employees")
                   .sort(col("dept").sortAsc(), col("salary").sortDesc());
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         assertEquals(3, root.getRowCount());
@@ -1531,7 +1531,7 @@ public class DataFrameTest {
                           count(col("name")).alias("cnt"),
                           min(col("age")).alias("youngest"),
                           max(col("age")).alias("oldest")));
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         assertEquals(1, root.getRowCount());

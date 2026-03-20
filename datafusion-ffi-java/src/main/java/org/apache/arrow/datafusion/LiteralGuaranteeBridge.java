@@ -73,7 +73,7 @@ final class LiteralGuaranteeBridge {
                   org.apache.arrow.datafusion.proto.ScalarValue.parseFrom(protoBytes);
               literals.add(ScalarValueProtoConverter.fromProto(proto));
             } catch (InvalidProtocolBufferException e) {
-              throw new DataFusionException("Failed to decode ScalarValue protobuf", e);
+              throw new DataFusionError("Failed to decode ScalarValue protobuf", e);
             }
           }
         }
@@ -84,7 +84,7 @@ final class LiteralGuaranteeBridge {
 
       return result;
     } catch (DfError e) {
-      throw new NativeDataFusionException(e);
+      throw new NativeDataFusionError(e);
     }
   }
 

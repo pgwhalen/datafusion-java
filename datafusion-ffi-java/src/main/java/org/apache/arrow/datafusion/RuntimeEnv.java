@@ -13,11 +13,15 @@ package org.apache.arrow.datafusion;
  * RuntimeEnv rt = RuntimeEnvBuilder.builder()
  *     .withMemoryLimit(50_000_000, 1.0)
  *     .build();
- * SessionContext ctx = SessionContext.newWithConfigRt(SessionConfig.defaults(), rt);
+ * SessionContext ctx = SessionContext.newWithConfigRt(ConfigOptions.defaults(), rt);
  * // ... use ctx ...
  * ctx.close();
  * rt.close();
  * }</pre>
+ *
+ * @see <a
+ *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/runtime_env/struct.RuntimeEnv.html">Rust
+ *     DataFusion: RuntimeEnv</a>
  */
 public class RuntimeEnv implements AutoCloseable {
   final RuntimeEnvBridge bridge;

@@ -6,6 +6,10 @@ import org.apache.arrow.vector.types.pojo.Schema;
  * Options for reading newline-delimited JSON files.
  *
  * <p>Mirrors Rust's {@code NdJsonReadOptions}. Use {@link #builder()} to create instances.
+ *
+ * @see <a
+ *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/file_format/options/struct.NdJsonReadOptions.html">Rust
+ *     DataFusion: NdJsonReadOptions</a>
  */
 public final class NdJsonReadOptions {
   private final int schemaInferMaxRecords;
