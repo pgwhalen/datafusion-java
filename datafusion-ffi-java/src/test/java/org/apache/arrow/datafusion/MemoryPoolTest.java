@@ -3,6 +3,11 @@ package org.apache.arrow.datafusion;
 import static org.junit.jupiter.api.Assertions.*;
 
 import org.apache.arrow.datafusion.config.ConfigOptions;
+import org.apache.arrow.datafusion.dataframe.DataFrame;
+import org.apache.arrow.datafusion.execution.RuntimeEnv;
+import org.apache.arrow.datafusion.execution.RuntimeEnvBuilder;
+import org.apache.arrow.datafusion.execution.SessionContext;
+import org.apache.arrow.datafusion.physical_plan.SendableRecordBatchStream;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.junit.jupiter.api.Test;

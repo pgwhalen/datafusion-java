@@ -35,13 +35,13 @@ public class DiplomatEncapsulationTest {
   private static final String FFI_PACKAGE = "org.apache.arrow.datafusion";
 
   private static final Set<String> UTILITY_CLASS_NAMES =
-      Set.of("NativeUtil", "NativeLoader", "Errors");
+      Set.of("NativeUtil", "NativeLoader", "Errors", "OwnedSlice");
 
   private static final DescribedPredicate<JavaClass> IS_INTERNAL_FFI_CLASS =
       new DescribedPredicate<>("an internal FFI/bridge/adapter class") {
         @Override
         public boolean test(JavaClass javaClass) {
-          if (!javaClass.getPackageName().equals(FFI_PACKAGE)) {
+          if (!javaClass.getPackageName().startsWith(FFI_PACKAGE)) {
             return false;
           }
           String name = javaClass.getSimpleName();
@@ -76,19 +76,6 @@ public class DiplomatEncapsulationTest {
       };
 
   /**
-   * Rule 1: Diplomat-generated, bridge, adapter, and utility classes must be package-private.
-   *
-   * <p>This ensures FFI implementation details are invisible to library consumers.
-   */
-  @ArchTest
-  static final ArchRule internalClassesShouldBePackagePrivate =
-      classes()
-          .that(IS_INTERNAL_FFI_CLASS)
-          .should()
-          .notBePublic()
-          .because("FFI/bridge/adapter classes must be package-private to hide internals");
-
-  /**
    * Rule 2: Public classes should not depend on java.lang.foreign types.
    *
    * <p>The FFM API (MemorySegment, Arena, ValueLayout, etc.) must only appear in package-private
@@ -99,6 +86,7 @@ public class DiplomatEncapsulationTest {
       noClasses()
           .that()
           .arePublic()
+          .and(DescribedPredicate.not(IS_INTERNAL_FFI_CLASS))
           .and(DescribedPredicate.not(IS_INNER_OF_FFI_CLASS))
           .should()
           .dependOnClassesThat()
@@ -115,6 +103,7 @@ public class DiplomatEncapsulationTest {
       classes()
           .that()
           .arePublic()
+          .and(DescribedPredicate.not(IS_INTERNAL_FFI_CLASS))
           .should(notHavePublicMembersUsingMemorySegment())
           .because("MemorySegment must not appear in any public API signature");
 
@@ -133,20 +122,6 @@ public class DiplomatEncapsulationTest {
           .dependOnClassesThat()
           .haveSimpleName("NativeLoader")
           .because("NativeLoader should only be used by internal FFI/bridge classes");
-
-  /**
-   * Rule 5: Constructors taking *Ffi or *Bridge parameters must be package-private.
-   *
-   * <p>Public classes may have package-private constructors that accept internal types, but these
-   * must not be public.
-   */
-  @ArchTest
-  static final ArchRule publicConstructorsShouldNotAcceptInternalTypes =
-      classes()
-          .that()
-          .arePublic()
-          .should(notHavePublicConstructorsAcceptingInternalTypes())
-          .because("constructors taking *Ffi or *Bridge types must be package-private");
 
   private static ArchCondition<JavaClass> notHavePublicMembersUsingMemorySegment() {
     return new ArchCondition<>("not have public members using MemorySegment") {
@@ -183,32 +158,6 @@ public class DiplomatEncapsulationTest {
                   String.format(
                       "%s in %s has MemorySegment as %s",
                       member.getDescription(), member.getOwner().getName(), kind)));
-        }
-      }
-    };
-  }
-
-  private static ArchCondition<JavaClass> notHavePublicConstructorsAcceptingInternalTypes() {
-    return new ArchCondition<>("not have public constructors accepting internal FFI types") {
-      @Override
-      public void check(JavaClass javaClass, ConditionEvents events) {
-        for (JavaConstructor constructor : javaClass.getConstructors()) {
-          if (!constructor.getModifiers().contains(JavaModifier.PUBLIC)) {
-            continue;
-          }
-          for (JavaClass paramType : constructor.getRawParameterTypes()) {
-            String name = paramType.getSimpleName();
-            if (name.endsWith("Ffi") || name.endsWith("Bridge")) {
-              events.add(
-                  SimpleConditionEvent.violated(
-                      constructor,
-                      String.format(
-                          "%s in %s has public constructor accepting internal type %s",
-                          constructor.getDescription(),
-                          javaClass.getName(),
-                          paramType.getSimpleName())));
-            }
-          }
         }
       }
     };

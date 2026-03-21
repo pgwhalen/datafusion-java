@@ -68,11 +68,6 @@ tasks.register('postProcessDiplomatBindings') {
                     /System\.loadLibrary\("[^"]+"\);\s*\n\s*LIB = SymbolLookup\.loaderLookup\(\);/,
                     'LIB = org.apache.arrow.datafusion.NativeLoader.get();'
                 )
-                // Make generated classes, interfaces, and enums package-private
-                text = text.replace('public final class ', 'final class ')
-                text = text.replace('public class ', 'class ')
-                text = text.replace('public interface ', 'interface ')
-                text = text.replace('public enum ', 'enum ')
                 f.text = text
             }
         }

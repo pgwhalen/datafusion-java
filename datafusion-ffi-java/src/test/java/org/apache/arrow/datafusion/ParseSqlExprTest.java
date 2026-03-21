@@ -3,6 +3,10 @@ package org.apache.arrow.datafusion;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.List;
+import org.apache.arrow.datafusion.common.DataFusionError;
+import org.apache.arrow.datafusion.execution.SessionContext;
+import org.apache.arrow.datafusion.logical_expr.Expr;
+import org.apache.arrow.datafusion.logical_expr.Operator;
 import org.apache.arrow.vector.types.FloatingPointPrecision;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.Field;

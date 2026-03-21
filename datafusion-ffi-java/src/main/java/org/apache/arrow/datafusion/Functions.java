@@ -1,6 +1,11 @@
 package org.apache.arrow.datafusion;
 
 import java.util.List;
+import org.apache.arrow.datafusion.common.Column;
+import org.apache.arrow.datafusion.common.ScalarValue;
+import org.apache.arrow.datafusion.common.TableReference;
+import org.apache.arrow.datafusion.logical_expr.CaseBuilder;
+import org.apache.arrow.datafusion.logical_expr.Expr;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 
 /**

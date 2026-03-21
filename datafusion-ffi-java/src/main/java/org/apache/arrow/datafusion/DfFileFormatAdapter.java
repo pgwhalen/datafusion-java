@@ -2,18 +2,20 @@ package org.apache.arrow.datafusion;
 
 import java.lang.foreign.MemorySegment;
 import java.nio.charset.StandardCharsets;
+import org.apache.arrow.datafusion.datasource.FileFormat;
+import org.apache.arrow.datafusion.datasource.FileSource;
 import org.apache.arrow.memory.BufferAllocator;
 
 /**
  * Adapts a user-implemented {@link FileFormat} to the Diplomat-generated {@link DfFileFormatTrait}
  * interface for FFI callbacks.
  */
-final class DfFileFormatAdapter implements DfFileFormatTrait {
+public final class DfFileFormatAdapter implements DfFileFormatTrait {
   private final FileFormat format;
   private final BufferAllocator allocator;
   private final boolean fullStackTrace;
 
-  DfFileFormatAdapter(FileFormat format, BufferAllocator allocator, boolean fullStackTrace) {
+  public DfFileFormatAdapter(FileFormat format, BufferAllocator allocator, boolean fullStackTrace) {
     this.format = format;
     this.allocator = allocator;
     this.fullStackTrace = fullStackTrace;

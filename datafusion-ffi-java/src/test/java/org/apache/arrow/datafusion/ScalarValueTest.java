@@ -10,6 +10,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.Period;
+import org.apache.arrow.datafusion.common.ScalarValue;
 import org.apache.arrow.vector.PeriodDuration;
 import org.junit.jupiter.api.Test;
 

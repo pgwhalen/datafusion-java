@@ -50,7 +50,7 @@ public final class CsvOptions {
   }
 
   /** Encodes the options as protobuf bytes (CsvOptions proto). */
-  byte[] encodeOptions() {
+  public byte[] encodeOptions() {
     org.apache.arrow.datafusion.proto.CsvOptions.Builder b =
         org.apache.arrow.datafusion.proto.CsvOptions.newBuilder();
     b.setHasHeader(ByteString.copyFrom(new byte[] {(byte) (hasHeader ? 1 : 0)}));

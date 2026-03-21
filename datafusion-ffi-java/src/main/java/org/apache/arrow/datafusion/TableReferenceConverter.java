@@ -1,6 +1,8 @@
 package org.apache.arrow.datafusion;
 
 import com.google.protobuf.InvalidProtocolBufferException;
+import org.apache.arrow.datafusion.common.TableReference;
+import org.apache.arrow.datafusion.physical_expr.LiteralGuaranteeBridge;
 
 /**
  * Utilities for converting between Java {@link TableReference} and protobuf representations.
@@ -9,7 +11,7 @@ import com.google.protobuf.InvalidProtocolBufferException;
  * ExprProtoConverter} for expression serialization and by {@link LiteralGuaranteeBridge} for
  * guarantee deserialization.
  */
-final class TableReferenceConverter {
+public final class TableReferenceConverter {
 
   private TableReferenceConverter() {}
 

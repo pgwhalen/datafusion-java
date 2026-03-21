@@ -61,7 +61,7 @@ public final class ParquetOptions {
   }
 
   /** Encodes the options as protobuf bytes (TableParquetOptions proto). */
-  byte[] encodeOptions() {
+  public byte[] encodeOptions() {
     org.apache.arrow.datafusion.proto.ParquetOptions.Builder global =
         org.apache.arrow.datafusion.proto.ParquetOptions.newBuilder();
 

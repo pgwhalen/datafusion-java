@@ -22,7 +22,7 @@ public final class JsonOptions {
   }
 
   /** Encodes the options as protobuf bytes (JsonOptions proto). */
-  byte[] encodeOptions() {
+  public byte[] encodeOptions() {
     org.apache.arrow.datafusion.proto.JsonOptions.Builder b =
         org.apache.arrow.datafusion.proto.JsonOptions.newBuilder();
     // Compression is UNCOMPRESSED by default (enum value 4)

@@ -2,6 +2,18 @@ package org.apache.arrow.datafusion;
 
 import java.util.ArrayList;
 import java.util.List;
+import org.apache.arrow.datafusion.common.Column;
+import org.apache.arrow.datafusion.common.DataFusionError;
+import org.apache.arrow.datafusion.common.TableReference;
+import org.apache.arrow.datafusion.logical_expr.Expr;
+import org.apache.arrow.datafusion.logical_expr.GroupingSet;
+import org.apache.arrow.datafusion.logical_expr.NullTreatment;
+import org.apache.arrow.datafusion.logical_expr.Operator;
+import org.apache.arrow.datafusion.logical_expr.SortExpr;
+import org.apache.arrow.datafusion.logical_expr.WhenThen;
+import org.apache.arrow.datafusion.logical_expr.WindowFrame;
+import org.apache.arrow.datafusion.logical_expr.WindowFrameBound;
+import org.apache.arrow.datafusion.logical_expr.WindowFrameUnits;
 import org.apache.arrow.datafusion.proto.AggregateUDFExprNode;
 import org.apache.arrow.datafusion.proto.AliasNode;
 import org.apache.arrow.datafusion.proto.BetweenNode;
@@ -31,11 +43,11 @@ import org.apache.arrow.datafusion.proto.WindowExprNode;
  * <p>The proto wire format matches what {@code datafusion-proto} produces, so these bytes can be
  * decoded directly in Java without a Rust round-trip.
  */
-final class ExprProtoConverter {
+public final class ExprProtoConverter {
   private ExprProtoConverter() {}
 
   /** Decode a proto-encoded {@code LogicalExprList} into a list of {@link Expr}. */
-  static List<Expr> fromProtoBytes(byte[] bytes) {
+  public static List<Expr> fromProtoBytes(byte[] bytes) {
     try {
       LogicalExprList list = LogicalExprList.parseFrom(bytes);
       List<Expr> result = new ArrayList<>(list.getExprCount());
@@ -49,7 +61,7 @@ final class ExprProtoConverter {
   }
 
   /** Encode a list of {@link Expr} into proto bytes ({@code LogicalExprList}). */
-  static byte[] toProtoBytes(List<Expr> exprs) {
+  public static byte[] toProtoBytes(List<Expr> exprs) {
     LogicalExprList.Builder builder = LogicalExprList.newBuilder();
     for (Expr expr : exprs) {
       builder.addExpr(toProto(expr));
@@ -264,7 +276,7 @@ final class ExprProtoConverter {
   }
 
   /** Convert a Java {@link Expr} back to a proto {@code LogicalExprNode}. */
-  static LogicalExprNode toProto(Expr expr) {
+  public static LogicalExprNode toProto(Expr expr) {
     LogicalExprNode.Builder builder = LogicalExprNode.newBuilder();
     switch (expr) {
       case Expr.ColumnExpr e -> {

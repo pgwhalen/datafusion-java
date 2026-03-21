@@ -3,6 +3,10 @@ package org.apache.arrow.datafusion;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.Arrays;
+import org.apache.arrow.datafusion.common.DataFusionError;
+import org.apache.arrow.datafusion.execution.SessionContext;
+import org.apache.arrow.datafusion.execution.SessionState;
+import org.apache.arrow.datafusion.logical_expr.LogicalPlan;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.BigIntVector;

@@ -2,18 +2,21 @@ package org.apache.arrow.datafusion;
 
 import java.util.List;
 import java.util.Optional;
+import org.apache.arrow.datafusion.catalog.CatalogProvider;
+import org.apache.arrow.datafusion.catalog.SchemaProvider;
 import org.apache.arrow.memory.BufferAllocator;
 
 /**
  * Adapts a user-implemented {@link CatalogProvider} to the Diplomat-generated {@link
  * DfCatalogTrait} interface for FFI callbacks.
  */
-final class DfCatalogAdapter implements DfCatalogTrait {
+public final class DfCatalogAdapter implements DfCatalogTrait {
   private final CatalogProvider catalog;
   private final BufferAllocator allocator;
   private final boolean fullStackTrace;
 
-  DfCatalogAdapter(CatalogProvider catalog, BufferAllocator allocator, boolean fullStackTrace) {
+  public DfCatalogAdapter(
+      CatalogProvider catalog, BufferAllocator allocator, boolean fullStackTrace) {
     this.catalog = catalog;
     this.allocator = allocator;
     this.fullStackTrace = fullStackTrace;

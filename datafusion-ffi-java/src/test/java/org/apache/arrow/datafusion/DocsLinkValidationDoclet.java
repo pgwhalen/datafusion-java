@@ -38,11 +38,32 @@ public class DocsLinkValidationDoclet implements Doclet {
               + "(?:(?:struct|trait|enum|fn|type)\\.[\\w]+\\.html|index\\.html)"
               + "(?:(?:#method|#structfield|#tymethod)\\.[\\w_]+)?");
 
-  /** The only package we validate — excludes protobuf-generated and other packages. */
+  /** The base package — used as prefix for validated packages. */
   private static final String VALIDATED_PACKAGE = "org.apache.arrow.datafusion";
+
+  /** Validated subpackages (in addition to the base package). */
+  private static final Set<String> VALIDATED_SUBPACKAGES =
+      Set.of(
+          "common",
+          "logical_expr",
+          "physical_plan",
+          "physical_expr",
+          "catalog",
+          "datasource",
+          "dataframe",
+          "execution");
 
   /** Classes whose methods map to Rust free functions (fn.X.html), not struct/trait methods. */
   private static final Set<String> FREE_FUNCTION_CLASSES = Set.of("Functions");
+
+  /** Checks if a package should be validated (base package or a listed subpackage). */
+  private static boolean isValidatedPackage(String packageName) {
+    if (packageName.equals(VALIDATED_PACKAGE)) return true;
+    for (String sub : VALIDATED_SUBPACKAGES) {
+      if (packageName.equals(VALIDATED_PACKAGE + "." + sub)) return true;
+    }
+    return false;
+  }
 
   /** Internal class name patterns - these never need @see links. */
   private static boolean isInternalClass(String name) {
@@ -56,7 +77,8 @@ public class DocsLinkValidationDoclet implements Doclet {
         || name.equals("NativeUtil")
         || name.equals("NativeLoader")
         || name.equals("Errors")
-        || name.equals("DiplomatLib");
+        || name.equals("DiplomatLib")
+        || name.equals("OwnedSlice");
   }
 
   /**
@@ -66,6 +88,8 @@ public class DocsLinkValidationDoclet implements Doclet {
   private static final Set<String> NO_SEE_LINK_REQUIRED =
       Set.of(
           "WhenThen",
+          // Implementation detail of ScalarUDF.simple()
+          "SimpleScalarUDF",
           // RecordBatchReader maps to arrow::record_batch::RecordBatch (Arrow, not DataFusion)
           "RecordBatchReader");
 
@@ -132,7 +156,42 @@ public class DocsLinkValidationDoclet implements Doclet {
               "Spans",
               Set.of(
                   // Rust Spans is a newtype wrapper, no named field
-                  "spans")));
+                  "spans")),
+          Map.entry(
+              "CsvReadOptions",
+              Set.of(
+                  // Java-only proto serialization helper
+                  "encodeOptions")),
+          Map.entry(
+              "ParquetReadOptions",
+              Set.of(
+                  // Java-only proto serialization helper
+                  "encodeOptions")),
+          Map.entry(
+              "NdJsonReadOptions",
+              Set.of(
+                  // Java-only proto serialization helper
+                  "encodeOptions")),
+          Map.entry(
+              "CsvOptions",
+              Set.of(
+                  // Java-only proto serialization helper
+                  "encodeOptions")),
+          Map.entry(
+              "JsonOptions",
+              Set.of(
+                  // Java-only proto serialization helper
+                  "encodeOptions")),
+          Map.entry(
+              "PhysicalExpr",
+              Set.of(
+                  // Java-only bridge accessor
+                  "bridge")),
+          Map.entry(
+              "ParquetOptions",
+              Set.of(
+                  // Java-only proto serialization helper
+                  "encodeOptions")));
 
   /** Types whose method-level @see validation is deferred (links not yet added). */
   private static final Set<String> METHOD_VALIDATION_DEFERRED = Set.of();
@@ -213,7 +272,7 @@ public class DocsLinkValidationDoclet implements Doclet {
     for (TypeElement type : ElementFilter.typesIn(docEnv.getIncludedElements())) {
       String packageName =
           docEnv.getElementUtils().getPackageOf(type).getQualifiedName().toString();
-      if (!VALIDATED_PACKAGE.equals(packageName)) continue;
+      if (!isValidatedPackage(packageName)) continue;
       if (type.getEnclosingElement().getKind() != ElementKind.PACKAGE) continue;
 
       String typeName = type.getSimpleName().toString();
@@ -282,8 +341,7 @@ public class DocsLinkValidationDoclet implements Doclet {
     for (Map.Entry<String, Set<String>> entry : CLASS_METHOD_EXCLUSIONS.entrySet()) {
       String typeName = entry.getKey();
       if (!allTypeNames.contains(typeName)) {
-        failures.add(
-            "Stale CLASS_METHOD_EXCLUSIONS key: \"" + typeName + "\" is not a known type");
+        failures.add("Stale CLASS_METHOD_EXCLUSIONS key: \"" + typeName + "\" is not a known type");
         continue;
       }
       Set<String> actualMethods = allPublicMethods.getOrDefault(typeName, Set.of());

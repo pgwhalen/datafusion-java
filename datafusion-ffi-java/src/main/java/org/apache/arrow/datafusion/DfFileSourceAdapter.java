@@ -8,6 +8,9 @@ import java.util.Collections;
 import java.util.List;
 import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
+import org.apache.arrow.datafusion.datasource.FileOpener;
+import org.apache.arrow.datafusion.datasource.FileScanConfig;
+import org.apache.arrow.datafusion.datasource.FileSource;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.types.pojo.Schema;
 

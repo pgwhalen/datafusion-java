@@ -7,13 +7,18 @@ import java.util.Collections;
 import java.util.List;
 import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
+import org.apache.arrow.datafusion.catalog.Session;
+import org.apache.arrow.datafusion.catalog.TableProvider;
+import org.apache.arrow.datafusion.logical_expr.Expr;
+import org.apache.arrow.datafusion.logical_expr.TableProviderFilterPushDown;
+import org.apache.arrow.datafusion.physical_plan.ExecutionPlan;
 import org.apache.arrow.memory.BufferAllocator;
 
 /**
  * Adapts a user-implemented {@link TableProvider} to the Diplomat-generated {@link DfTableTrait}
  * interface for FFI callbacks.
  */
-final class DfTableAdapter implements DfTableTrait {
+public final class DfTableAdapter implements DfTableTrait {
   private final TableProvider provider;
   private final BufferAllocator allocator;
   private final boolean fullStackTrace;
@@ -22,7 +27,7 @@ final class DfTableAdapter implements DfTableTrait {
   private final ArrowSchema ffiSchema;
   private final long schemaAddr;
 
-  DfTableAdapter(TableProvider provider, BufferAllocator allocator, boolean fullStackTrace) {
+  public DfTableAdapter(TableProvider provider, BufferAllocator allocator, boolean fullStackTrace) {
     this.provider = provider;
     this.allocator = allocator;
     this.fullStackTrace = fullStackTrace;
@@ -38,7 +43,7 @@ final class DfTableAdapter implements DfTableTrait {
   }
 
   /** Close the cached FFI schema after Rust has imported it (call after createRaw). */
-  void closeFfiSchema() {
+  public void closeFfiSchema() {
     ffiSchema.release(); // Free exported schema data (format strings, children, etc.)
     ffiSchema.close(); // Free the 72-byte struct allocation
   }

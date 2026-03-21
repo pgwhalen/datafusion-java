@@ -4,6 +4,7 @@ import com.google.protobuf.ByteString;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import org.apache.arrow.datafusion.common.ScalarValue;
 
 /**
  * Converts between proto {@code ScalarValue} messages and Java {@link ScalarValue} records.
@@ -11,10 +12,10 @@ import java.nio.ByteOrder;
  * <p>Handles all primitive types, strings, binary, dates, times, timestamps, durations, intervals,
  * and decimals. Complex types (List, Struct, Map, etc.) are not supported and will throw.
  */
-final class ScalarValueProtoConverter {
+public final class ScalarValueProtoConverter {
   private ScalarValueProtoConverter() {}
 
-  static ScalarValue fromProto(org.apache.arrow.datafusion.proto.ScalarValue proto) {
+  public static ScalarValue fromProto(org.apache.arrow.datafusion.proto.ScalarValue proto) {
     if (proto == null
         || proto.getValueCase()
             == org.apache.arrow.datafusion.proto.ScalarValue.ValueCase.VALUE_NOT_SET) {

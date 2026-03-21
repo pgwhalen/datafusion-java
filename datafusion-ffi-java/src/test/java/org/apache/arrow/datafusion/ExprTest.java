@@ -4,6 +4,12 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.math.BigInteger;
 import java.util.List;
+import org.apache.arrow.datafusion.common.Column;
+import org.apache.arrow.datafusion.common.ScalarValue;
+import org.apache.arrow.datafusion.common.TableReference;
+import org.apache.arrow.datafusion.logical_expr.Expr;
+import org.apache.arrow.datafusion.logical_expr.Operator;
+import org.apache.arrow.datafusion.logical_expr.WhenThen;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.junit.jupiter.api.Test;
 

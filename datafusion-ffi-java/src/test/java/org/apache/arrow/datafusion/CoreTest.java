@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.time.Duration;
 import java.time.Instant;
+import org.apache.arrow.datafusion.execution.SessionContext;
 import org.junit.jupiter.api.Test;
 
 /** Core functionality tests for the DataFusion FFI Java bindings. */

@@ -11,6 +11,16 @@ import java.util.List;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Stream;
+import org.apache.arrow.datafusion.common.Column;
+import org.apache.arrow.datafusion.dataframe.DataFrame;
+import org.apache.arrow.datafusion.dataframe.DataFrameWriteOptions;
+import org.apache.arrow.datafusion.datasource.CsvReadOptions;
+import org.apache.arrow.datafusion.execution.SessionContext;
+import org.apache.arrow.datafusion.logical_expr.Expr;
+import org.apache.arrow.datafusion.logical_expr.JoinType;
+import org.apache.arrow.datafusion.logical_expr.Operator;
+import org.apache.arrow.datafusion.logical_expr.SortExpr;
+import org.apache.arrow.datafusion.physical_plan.SendableRecordBatchStream;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.BigIntVector;
@@ -1213,8 +1223,7 @@ public class DataFrameTest {
       registerEmployees(ctx, allocator);
 
       try (DataFrame df =
-              ctx.sql("SELECT * FROM employees")
-                  .withColumn("bonus", col("salary").mul(lit(0.1)));
+              ctx.sql("SELECT * FROM employees").withColumn("bonus", col("salary").mul(lit(0.1)));
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
         Schema schema = stream.getVectorSchemaRoot().getSchema();
         // Original 4 + bonus = 5 columns

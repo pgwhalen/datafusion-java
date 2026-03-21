@@ -8,6 +8,7 @@ import java.util.List;
 import org.apache.arrow.c.ArrowArray;
 import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
+import org.apache.arrow.datafusion.logical_expr.ScalarUDF;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.FieldVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
@@ -18,7 +19,7 @@ import org.apache.arrow.vector.types.pojo.Schema;
  * Adapts a user-implemented {@link ScalarUDF} to the Diplomat-generated {@link DfScalarUdfTrait}
  * interface for FFI callbacks.
  */
-final class DfScalarUDFAdapter implements DfScalarUdfTrait {
+public final class DfScalarUDFAdapter implements DfScalarUdfTrait {
   private static final long ARROW_SCHEMA_SIZE = 72;
   private static final long ARROW_ARRAY_SIZE = 80;
   // (FFI_ArrowArray, FFI_ArrowSchema) pair size
@@ -28,7 +29,7 @@ final class DfScalarUDFAdapter implements DfScalarUdfTrait {
   private final BufferAllocator allocator;
   private final boolean fullStackTrace;
 
-  DfScalarUDFAdapter(ScalarUDF udf, BufferAllocator allocator, boolean fullStackTrace) {
+  public DfScalarUDFAdapter(ScalarUDF udf, BufferAllocator allocator, boolean fullStackTrace) {
     this.udf = udf;
     this.allocator = allocator;
     this.fullStackTrace = fullStackTrace;

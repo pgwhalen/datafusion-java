@@ -3,7 +3,17 @@ package org.apache.arrow.datafusion;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.*;
+import org.apache.arrow.datafusion.catalog.CatalogProvider;
+import org.apache.arrow.datafusion.catalog.SchemaProvider;
+import org.apache.arrow.datafusion.catalog.Session;
+import org.apache.arrow.datafusion.catalog.TableProvider;
 import org.apache.arrow.datafusion.config.ConfigOptions;
+import org.apache.arrow.datafusion.dataframe.DataFrame;
+import org.apache.arrow.datafusion.execution.SessionContext;
+import org.apache.arrow.datafusion.logical_expr.Expr;
+import org.apache.arrow.datafusion.physical_plan.ExecutionPlan;
+import org.apache.arrow.datafusion.physical_plan.RecordBatchReader;
+import org.apache.arrow.datafusion.physical_plan.SendableRecordBatchStream;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;

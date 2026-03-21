@@ -12,7 +12,7 @@ import org.apache.arrow.vector.types.pojo.ArrowType;
  * <p>Used by {@link ExprProtoConverter} for Cast/TryCast/Placeholder data types, and by {@link
  * ScalarValueProtoConverter} for typed scalars.
  */
-final class ArrowTypeProtoConverter {
+public final class ArrowTypeProtoConverter {
   private ArrowTypeProtoConverter() {}
 
   static ArrowType fromProto(org.apache.arrow.datafusion.proto.ArrowType proto) {

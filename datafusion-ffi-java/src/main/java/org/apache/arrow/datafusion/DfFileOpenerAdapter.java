@@ -1,5 +1,8 @@
 package org.apache.arrow.datafusion;
 
+import org.apache.arrow.datafusion.datasource.FileOpener;
+import org.apache.arrow.datafusion.datasource.PartitionedFile;
+import org.apache.arrow.datafusion.physical_plan.RecordBatchReader;
 import org.apache.arrow.memory.BufferAllocator;
 
 /**
