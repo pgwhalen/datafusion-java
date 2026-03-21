@@ -86,7 +86,7 @@ Write-Host "[INFO] Creating test program..."
 @'
 import org.apache.arrow.datafusion.SessionContext;
 import org.apache.arrow.datafusion.DataFrame;
-import org.apache.arrow.datafusion.RecordBatchStream;
+import org.apache.arrow.datafusion.SendableRecordBatchStream;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
@@ -99,7 +99,7 @@ public class JarValidationTest {
             System.out.println("Created SessionContext successfully");
             DataFrame df = ctx.sql("SELECT 1 + 1 AS result");
             System.out.println("Executed SQL successfully");
-            try (RecordBatchStream stream = df.executeStream(allocator)) {
+            try (SendableRecordBatchStream stream = df.executeStream(allocator)) {
                 VectorSchemaRoot root = stream.getVectorSchemaRoot();
                 while (stream.loadNextBatch()) {
                     System.out.println("Got " + root.getRowCount() + " rows");
