@@ -80,40 +80,10 @@ foreach ($url in $deps) {
     }
 }
 
-# Create test program
+# Copy shared test program
 Write-Host "[INFO] Creating test program..."
 
-@'
-import org.apache.arrow.datafusion.SessionContext;
-import org.apache.arrow.datafusion.DataFrame;
-import org.apache.arrow.datafusion.SendableRecordBatchStream;
-import org.apache.arrow.memory.BufferAllocator;
-import org.apache.arrow.memory.RootAllocator;
-import org.apache.arrow.vector.VectorSchemaRoot;
-
-public class JarValidationTest {
-    public static void main(String[] args) {
-        System.out.println("Starting JAR validation test...");
-        try (BufferAllocator allocator = new RootAllocator();
-             SessionContext ctx = new SessionContext()) {
-            System.out.println("Created SessionContext successfully");
-            DataFrame df = ctx.sql("SELECT 1 + 1 AS result");
-            System.out.println("Executed SQL successfully");
-            try (SendableRecordBatchStream stream = df.executeStream(allocator)) {
-                VectorSchemaRoot root = stream.getVectorSchemaRoot();
-                while (stream.loadNextBatch()) {
-                    System.out.println("Got " + root.getRowCount() + " rows");
-                }
-            }
-            System.out.println("[SUCCESS] JAR validation test passed!");
-        } catch (Exception e) {
-            System.err.println("[FAILURE] JAR validation test failed!");
-            e.printStackTrace();
-            System.exit(1);
-        }
-    }
-}
-'@ | Out-File -FilePath "$TestDir/src/JarValidationTest.java" -Encoding UTF8
+Copy-Item -Path "$PSScriptRoot/JarValidationTest.java" -Destination "$TestDir/src/JarValidationTest.java"
 
 # Build classpath
 $depJars = Get-ChildItem -Path $depDir -Filter "*.jar" | ForEach-Object { $_.FullName }
