@@ -197,7 +197,7 @@ run_test() {
     cat > "$TEST_DIR/src/JarValidationTest.java" << 'EOF'
 import org.apache.arrow.datafusion.SessionContext;
 import org.apache.arrow.datafusion.DataFrame;
-import org.apache.arrow.datafusion.RecordBatchStream;
+import org.apache.arrow.datafusion.SendableRecordBatchStream;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
@@ -216,7 +216,7 @@ public class JarValidationTest {
             System.out.println("Executed SQL successfully");
 
             // Execute and stream results
-            try (RecordBatchStream stream = df.executeStream(allocator)) {
+            try (SendableRecordBatchStream stream = df.executeStream(allocator)) {
                 VectorSchemaRoot root = stream.getVectorSchemaRoot();
                 System.out.println("Schema: " + root.getSchema());
 
