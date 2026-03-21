@@ -36,6 +36,9 @@ public interface SchemaProvider {
    * Returns the names of all tables in this schema.
    *
    * @return List of table names
+   * @see <a
+   *     href="https://docs.rs/datafusion-catalog/52.1.0/datafusion_catalog/trait.SchemaProvider.html#method.table_names">Rust
+   *     DataFusion: SchemaProvider::table_names</a>
    */
   List<String> tableNames();
 
@@ -44,6 +47,9 @@ public interface SchemaProvider {
    *
    * @param name The table name
    * @return The table provider, or null if the table doesn't exist
+   * @see <a
+   *     href="https://docs.rs/datafusion-catalog/52.1.0/datafusion_catalog/trait.SchemaProvider.html#method.table">Rust
+   *     DataFusion: SchemaProvider::table</a>
    */
   Optional<TableProvider> table(String name);
 
@@ -58,6 +64,9 @@ public interface SchemaProvider {
    * @param table The table provider to register
    * @return The previously registered table with the same name, if any
    * @throws UnsupportedOperationException if this schema does not support registering tables
+   * @see <a
+   *     href="https://docs.rs/datafusion-catalog/52.1.0/datafusion_catalog/trait.SchemaProvider.html#method.register_table">Rust
+   *     DataFusion: SchemaProvider::register_table</a>
    */
   default Optional<TableProvider> registerTable(String name, TableProvider table) {
     throw new UnsupportedOperationException("schema provider does not support registering tables");
@@ -74,6 +83,9 @@ public interface SchemaProvider {
    * @param name The table name
    * @return The previously registered table, if any
    * @throws UnsupportedOperationException if this schema does not support deregistering tables
+   * @see <a
+   *     href="https://docs.rs/datafusion-catalog/52.1.0/datafusion_catalog/trait.SchemaProvider.html#method.deregister_table">Rust
+   *     DataFusion: SchemaProvider::deregister_table</a>
    */
   default Optional<TableProvider> deregisterTable(String name) {
     throw new UnsupportedOperationException(
@@ -87,6 +99,9 @@ public interface SchemaProvider {
    *
    * @param name The table name
    * @return true if the table exists
+   * @see <a
+   *     href="https://docs.rs/datafusion-catalog/52.1.0/datafusion_catalog/trait.SchemaProvider.html#method.table_exist">Rust
+   *     DataFusion: SchemaProvider::table_exist</a>
    */
   default boolean tableExists(String name) {
     return table(name).isPresent();

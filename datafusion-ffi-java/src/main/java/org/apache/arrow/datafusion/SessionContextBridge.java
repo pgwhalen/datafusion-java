@@ -247,7 +247,7 @@ final class SessionContextBridge implements AutoCloseable {
 
       // Build URL bytes (null-separated)
       List<ListingTableUrl> tablePaths = table.tablePaths();
-      String[] urlStrs = tablePaths.stream().map(ListingTableUrl::url).toArray(String[]::new);
+      String[] urlStrs = tablePaths.stream().map(ListingTableUrl::getUrl).toArray(String[]::new);
       byte[] urlBytes = encodeNullSeparated(urlStrs);
       String extension = table.options().fileExtension();
 

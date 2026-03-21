@@ -48,6 +48,9 @@ public class SessionContext implements AutoCloseable {
    * <p>Equivalent to {@code new SessionContext()}.
    *
    * @return a new SessionContext
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.new">Rust
+   *     DataFusion: SessionContext::new</a>
    */
   public static SessionContext create() {
     return new SessionContext();
@@ -60,6 +63,9 @@ public class SessionContext implements AutoCloseable {
    *
    * @param config the session configuration
    * @return a new SessionContext
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.new_with_config">Rust
+   *     DataFusion: SessionContext::new_with_config</a>
    */
   public static SessionContext newWithConfig(ConfigOptions config) {
     return new SessionContext(config);
@@ -89,6 +95,9 @@ public class SessionContext implements AutoCloseable {
    * @param runtimeEnv the runtime environment (e.g., with memory pool configuration)
    * @return a new SessionContext
    * @throws DataFusionError if context creation fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.new_with_config_rt">Rust
+   *     DataFusion: SessionContext::new_with_config_rt</a>
    */
   public static SessionContext newWithConfigRt(ConfigOptions config, RuntimeEnv runtimeEnv) {
     return new SessionContext(new SessionContextBridge(config, runtimeEnv.bridge.dfRuntimeEnv()));
@@ -104,6 +113,9 @@ public class SessionContext implements AutoCloseable {
    * @param root The VectorSchemaRoot containing the data
    * @param allocator The buffer allocator
    * @throws DataFusionError if registration fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.register_batch">Rust
+   *     DataFusion: SessionContext::register_batch</a>
    */
   public void registerBatch(String name, VectorSchemaRoot root, BufferAllocator allocator) {
     registerBatch(name, root, null, allocator);
@@ -120,6 +132,9 @@ public class SessionContext implements AutoCloseable {
    * @param provider The DictionaryProvider for dictionary-encoded columns (may be null)
    * @param allocator The buffer allocator
    * @throws DataFusionError if registration fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.register_batch">Rust
+   *     DataFusion: SessionContext::register_batch</a>
    */
   public void registerBatch(
       String name, VectorSchemaRoot root, DictionaryProvider provider, BufferAllocator allocator) {
@@ -137,6 +152,9 @@ public class SessionContext implements AutoCloseable {
    * @param provider The table provider implementation
    * @param allocator The buffer allocator to use for Arrow data transfers
    * @throws DataFusionError if registration fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.register_table">Rust
+   *     DataFusion: SessionContext::register_table</a>
    */
   public void registerTable(String name, TableProvider provider, BufferAllocator allocator) {
     checkNotClosed();
@@ -149,6 +167,9 @@ public class SessionContext implements AutoCloseable {
    * @param name The table name
    * @return true if a table was previously registered with this name
    * @throws DataFusionError if deregistration fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.deregister_table">Rust
+   *     DataFusion: SessionContext::deregister_table</a>
    */
   public boolean deregisterTable(String name) {
     checkNotClosed();
@@ -161,6 +182,9 @@ public class SessionContext implements AutoCloseable {
    * @param query The SQL query to execute
    * @return A DataFrame representing the query result
    * @throws DataFusionError if query execution fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.sql">Rust
+   *     DataFusion: SessionContext::sql</a>
    */
   public DataFrame sql(String query) {
     checkNotClosed();
@@ -182,6 +206,9 @@ public class SessionContext implements AutoCloseable {
    * @param catalog The catalog provider implementation
    * @param allocator The buffer allocator to use for Arrow data transfers
    * @throws DataFusionError if registration fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.register_catalog">Rust
+   *     DataFusion: SessionContext::register_catalog</a>
    */
   public void registerCatalog(String name, CatalogProvider catalog, BufferAllocator allocator) {
     checkNotClosed();
@@ -206,6 +233,9 @@ public class SessionContext implements AutoCloseable {
    * @param udf The scalar UDF implementation
    * @param allocator The buffer allocator to use for Arrow data transfers
    * @throws DataFusionError if registration fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.register_udf">Rust
+   *     DataFusion: SessionContext::register_udf</a>
    */
   public void registerUdf(ScalarUDF udf, BufferAllocator allocator) {
     checkNotClosed();
@@ -232,6 +262,9 @@ public class SessionContext implements AutoCloseable {
    * @param table The listing table configuration
    * @param allocator The buffer allocator to use for Arrow data transfers
    * @throws DataFusionError if registration fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.register_listing_table">Rust
+   *     DataFusion: SessionContext::register_listing_table</a>
    */
   public void registerListingTable(String name, ListingTable table, BufferAllocator allocator) {
     checkNotClosed();
@@ -246,6 +279,9 @@ public class SessionContext implements AutoCloseable {
    * @param options CSV read options
    * @param allocator The buffer allocator
    * @throws DataFusionError if registration fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.register_csv">Rust
+   *     DataFusion: SessionContext::register_csv</a>
    */
   public void registerCsv(
       String name, String path, CsvReadOptions options, BufferAllocator allocator) {
@@ -261,6 +297,9 @@ public class SessionContext implements AutoCloseable {
    * @param options Parquet read options
    * @param allocator The buffer allocator
    * @throws DataFusionError if registration fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.register_parquet">Rust
+   *     DataFusion: SessionContext::register_parquet</a>
    */
   public void registerParquet(
       String name, String path, ParquetReadOptions options, BufferAllocator allocator) {
@@ -276,6 +315,9 @@ public class SessionContext implements AutoCloseable {
    * @param options JSON read options
    * @param allocator The buffer allocator
    * @throws DataFusionError if registration fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.register_json">Rust
+   *     DataFusion: SessionContext::register_json</a>
    */
   public void registerJson(
       String name, String path, NdJsonReadOptions options, BufferAllocator allocator) {
@@ -289,6 +331,9 @@ public class SessionContext implements AutoCloseable {
    * @param name The table name
    * @return true if the table exists, false otherwise
    * @throws DataFusionError if the existence check fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.table_exist">Rust
+   *     DataFusion: SessionContext::table_exist</a>
    */
   public boolean tableExist(String name) {
     checkNotClosed();
@@ -303,6 +348,9 @@ public class SessionContext implements AutoCloseable {
    * @param name The table name
    * @return An Optional containing a DataFrame for the specified table, or empty if not found
    * @throws DataFusionError if there is an error other than the table not being found
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.table">Rust
+   *     DataFusion: SessionContext::table</a>
    */
   public Optional<DataFrame> table(String name) {
     checkNotClosed();
@@ -315,6 +363,9 @@ public class SessionContext implements AutoCloseable {
    * @param path The file or directory path
    * @return A DataFrame for the Parquet data
    * @throws DataFusionError if reading fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.read_parquet">Rust
+   *     DataFusion: SessionContext::read_parquet</a>
    */
   public DataFrame readParquet(String path) {
     checkNotClosed();
@@ -329,6 +380,9 @@ public class SessionContext implements AutoCloseable {
    * @param allocator The buffer allocator (needed if schema is specified in options)
    * @return A DataFrame for the Parquet data
    * @throws DataFusionError if reading fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.read_parquet">Rust
+   *     DataFusion: SessionContext::read_parquet</a>
    */
   public DataFrame readParquet(String path, ParquetReadOptions options, BufferAllocator allocator) {
     checkNotClosed();
@@ -341,6 +395,9 @@ public class SessionContext implements AutoCloseable {
    * @param path The file or directory path
    * @return A DataFrame for the CSV data
    * @throws DataFusionError if reading fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.read_csv">Rust
+   *     DataFusion: SessionContext::read_csv</a>
    */
   public DataFrame readCsv(String path) {
     checkNotClosed();
@@ -355,6 +412,9 @@ public class SessionContext implements AutoCloseable {
    * @param allocator The buffer allocator (needed if schema is specified in options)
    * @return A DataFrame for the CSV data
    * @throws DataFusionError if reading fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.read_csv">Rust
+   *     DataFusion: SessionContext::read_csv</a>
    */
   public DataFrame readCsv(String path, CsvReadOptions options, BufferAllocator allocator) {
     checkNotClosed();
@@ -367,6 +427,9 @@ public class SessionContext implements AutoCloseable {
    * @param path The file or directory path
    * @return A DataFrame for the JSON data
    * @throws DataFusionError if reading fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.read_json">Rust
+   *     DataFusion: SessionContext::read_json</a>
    */
   public DataFrame readJson(String path) {
     checkNotClosed();
@@ -381,6 +444,9 @@ public class SessionContext implements AutoCloseable {
    * @param allocator The buffer allocator (needed if schema is specified in options)
    * @return A DataFrame for the JSON data
    * @throws DataFusionError if reading fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.read_json">Rust
+   *     DataFusion: SessionContext::read_json</a>
    */
   public DataFrame readJson(String path, NdJsonReadOptions options, BufferAllocator allocator) {
     checkNotClosed();
@@ -391,6 +457,9 @@ public class SessionContext implements AutoCloseable {
    * Returns the names of all registered catalogs.
    *
    * @return list of catalog names
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.catalog_names">Rust
+   *     DataFusion: SessionContext::catalog_names</a>
    */
   public List<String> catalogNames() {
     checkNotClosed();
@@ -406,6 +475,9 @@ public class SessionContext implements AutoCloseable {
    *
    * @param name The catalog name
    * @return An Optional containing the catalog provider, or empty if not found
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.catalog">Rust
+   *     DataFusion: SessionContext::catalog</a>
    */
   public Optional<CatalogProvider> catalog(String name) {
     checkNotClosed();
@@ -423,6 +495,9 @@ public class SessionContext implements AutoCloseable {
    *
    * @return a new SessionState
    * @throws DataFusionError if the state cannot be created
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.state">Rust
+   *     DataFusion: SessionContext::state</a>
    */
   public SessionState state() {
     checkNotClosed();
@@ -446,6 +521,9 @@ public class SessionContext implements AutoCloseable {
    * @param schema the Arrow schema describing the available columns
    * @return the parsed expression
    * @throws DataFusionError if the expression cannot be parsed
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.parse_sql_expr">Rust
+   *     DataFusion: SessionContext::parse_sql_expr</a>
    */
   public Expr parseSqlExpr(String sql, Schema schema) {
     checkNotClosed();
@@ -457,6 +535,9 @@ public class SessionContext implements AutoCloseable {
    *
    * @return the session ID string
    * @throws DataFusionError if the call fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.session_id">Rust
+   *     DataFusion: SessionContext::session_id</a>
    */
   public String sessionId() {
     checkNotClosed();
@@ -468,6 +549,9 @@ public class SessionContext implements AutoCloseable {
    *
    * @return the session start time as an {@link Instant}
    * @throws DataFusionError if the call fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.session_start_time">Rust
+   *     DataFusion: SessionContext::session_start_time</a>
    */
   public Instant sessionStartTime() {
     checkNotClosed();

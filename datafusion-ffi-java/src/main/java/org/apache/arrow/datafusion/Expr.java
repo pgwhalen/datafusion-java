@@ -30,168 +30,373 @@ public sealed interface Expr {
 
   // ── Comparison ──
 
-  /** Equality: this = other */
+  /**
+   * Equality: this = other.
+   *
+   * @param other the expression to compare
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.eq">Rust
+   *     DataFusion: Expr::eq</a>
+   */
   default Expr eq(Expr other) {
     return new BinaryExpr(this, Operator.Eq, other);
   }
 
-  /** Not equal: this != other */
+  /**
+   * Not equal: this != other.
+   *
+   * @param other the expression to compare
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.not_eq">Rust
+   *     DataFusion: Expr::not_eq</a>
+   */
   default Expr notEq(Expr other) {
     return new BinaryExpr(this, Operator.NotEq, other);
   }
 
-  /** Less than: this &lt; other */
+  /**
+   * Less than: this &lt; other.
+   *
+   * @param other the expression to compare
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.lt">Rust
+   *     DataFusion: Expr::lt</a>
+   */
   default Expr lt(Expr other) {
     return new BinaryExpr(this, Operator.Lt, other);
   }
 
-  /** Less than or equal: this &lt;= other */
+  /**
+   * Less than or equal: this &lt;= other.
+   *
+   * @param other the expression to compare
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.lt_eq">Rust
+   *     DataFusion: Expr::lt_eq</a>
+   */
   default Expr ltEq(Expr other) {
     return new BinaryExpr(this, Operator.LtEq, other);
   }
 
-  /** Greater than: this &gt; other */
+  /**
+   * Greater than: this &gt; other.
+   *
+   * @param other the expression to compare
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.gt">Rust
+   *     DataFusion: Expr::gt</a>
+   */
   default Expr gt(Expr other) {
     return new BinaryExpr(this, Operator.Gt, other);
   }
 
-  /** Greater than or equal: this &gt;= other */
+  /**
+   * Greater than or equal: this &gt;= other.
+   *
+   * @param other the expression to compare
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.gt_eq">Rust
+   *     DataFusion: Expr::gt_eq</a>
+   */
   default Expr gtEq(Expr other) {
     return new BinaryExpr(this, Operator.GtEq, other);
   }
 
   // ── Logical ──
 
-  /** Logical AND: this AND other */
+  /**
+   * Logical AND: this AND other.
+   *
+   * @param other the expression to combine
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.and">Rust
+   *     DataFusion: Expr::and</a>
+   */
   default Expr and(Expr other) {
     return new BinaryExpr(this, Operator.And, other);
   }
 
-  /** Logical OR: this OR other */
+  /**
+   * Logical OR: this OR other.
+   *
+   * @param other the expression to combine
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.or">Rust
+   *     DataFusion: Expr::or</a>
+   */
   default Expr or(Expr other) {
     return new BinaryExpr(this, Operator.Or, other);
   }
 
-  /** Logical NOT: NOT this */
+  /**
+   * Logical NOT: NOT this.
+   *
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.not">Rust
+   *     DataFusion: Expr::not</a>
+   */
   default Expr not() {
     return new NotExpr(this);
   }
 
   // ── Arithmetic ──
 
-  /** Addition: this + other */
-  default Expr plus(Expr other) {
+  /**
+   * Addition: this + other.
+   *
+   * @param other the expression to add
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.add">Rust
+   *     DataFusion: Expr::add</a>
+   */
+  default Expr add(Expr other) {
     return new BinaryExpr(this, Operator.Plus, other);
   }
 
-  /** Subtraction: this - other */
-  default Expr minus(Expr other) {
+  /**
+   * Subtraction: this - other.
+   *
+   * @param other the expression to subtract
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.sub">Rust
+   *     DataFusion: Expr::sub</a>
+   */
+  default Expr sub(Expr other) {
     return new BinaryExpr(this, Operator.Minus, other);
   }
 
-  /** Multiplication: this * other */
-  default Expr multiply(Expr other) {
+  /**
+   * Multiplication: this * other.
+   *
+   * @param other the expression to multiply by
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.mul">Rust
+   *     DataFusion: Expr::mul</a>
+   */
+  default Expr mul(Expr other) {
     return new BinaryExpr(this, Operator.Multiply, other);
   }
 
-  /** Division: this / other */
-  default Expr divide(Expr other) {
+  /**
+   * Division: this / other.
+   *
+   * @param other the expression to divide by
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.div">Rust
+   *     DataFusion: Expr::div</a>
+   */
+  default Expr div(Expr other) {
     return new BinaryExpr(this, Operator.Divide, other);
   }
 
-  /** Modulo: this % other */
-  default Expr modulo(Expr other) {
+  /**
+   * Modulo: this % other.
+   *
+   * @param other the expression to divide by
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.rem">Rust
+   *     DataFusion: Expr::rem</a>
+   */
+  default Expr rem(Expr other) {
     return new BinaryExpr(this, Operator.Modulo, other);
   }
 
-  /** Unary negation: -this */
-  default Expr negate() {
+  /**
+   * Unary negation: -this.
+   *
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.neg">Rust
+   *     DataFusion: Expr::neg</a>
+   */
+  default Expr neg() {
     return new NegativeExpr(this);
   }
 
   // ── Pattern matching ──
 
-  /** SQL LIKE pattern match */
+  /**
+   * SQL LIKE pattern match.
+   *
+   * @param pattern the pattern expression
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.like">Rust
+   *     DataFusion: Expr::like</a>
+   */
   default Expr like(Expr pattern) {
     return new LikeExpr(false, this, pattern, null, false);
   }
 
-  /** SQL NOT LIKE pattern match */
+  /**
+   * SQL NOT LIKE pattern match.
+   *
+   * @param pattern the pattern expression
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.not_like">Rust
+   *     DataFusion: Expr::not_like</a>
+   */
   default Expr notLike(Expr pattern) {
     return new LikeExpr(true, this, pattern, null, false);
   }
 
-  /** Case-insensitive LIKE (ILIKE) */
+  /**
+   * Case-insensitive LIKE (ILIKE).
+   *
+   * @param pattern the pattern expression
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.ilike">Rust
+   *     DataFusion: Expr::ilike</a>
+   */
   default Expr ilike(Expr pattern) {
     return new LikeExpr(false, this, pattern, null, true);
   }
 
   // ── NULL checks ──
 
-  /** IS NULL */
+  /**
+   * IS NULL.
+   *
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.is_null">Rust
+   *     DataFusion: Expr::is_null</a>
+   */
   default Expr isNull() {
     return new IsNullExpr(this);
   }
 
-  /** IS NOT NULL */
+  /**
+   * IS NOT NULL.
+   *
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.is_not_null">Rust
+   *     DataFusion: Expr::is_not_null</a>
+   */
   default Expr isNotNull() {
     return new IsNotNullExpr(this);
   }
 
-  /** IS TRUE */
+  /**
+   * IS TRUE.
+   *
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.is_true">Rust
+   *     DataFusion: Expr::is_true</a>
+   */
   default Expr isTrue() {
     return new IsTrueExpr(this);
   }
 
-  /** IS FALSE */
+  /**
+   * IS FALSE.
+   *
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.is_false">Rust
+   *     DataFusion: Expr::is_false</a>
+   */
   default Expr isFalse() {
     return new IsFalseExpr(this);
   }
 
   // ── IN list ──
 
-  /** IN (value1, value2, ...) */
+  /**
+   * IN (value1, value2, ...).
+   *
+   * @param values the list of values
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.in_list">Rust
+   *     DataFusion: Expr::in_list</a>
+   */
   default Expr inList(List<Expr> values) {
     return new InListExpr(this, values, false);
   }
 
-  /** NOT IN (value1, value2, ...) */
+  /**
+   * NOT IN (value1, value2, ...).
+   *
+   * @param values the list of values
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.in_list">Rust
+   *     DataFusion: Expr::in_list</a>
+   */
   default Expr notInList(List<Expr> values) {
     return new InListExpr(this, values, true);
   }
 
   // ── BETWEEN ──
 
-  /** BETWEEN low AND high */
+  /**
+   * BETWEEN low AND high.
+   *
+   * @param low the lower bound
+   * @param high the upper bound
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.between">Rust
+   *     DataFusion: Expr::between</a>
+   */
   default Expr between(Expr low, Expr high) {
     return new BetweenExpr(this, false, low, high);
   }
 
-  /** NOT BETWEEN low AND high */
+  /**
+   * NOT BETWEEN low AND high.
+   *
+   * @param low the lower bound
+   * @param high the upper bound
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.not_between">Rust
+   *     DataFusion: Expr::not_between</a>
+   */
   default Expr notBetween(Expr low, Expr high) {
     return new BetweenExpr(this, true, low, high);
   }
 
   // ── Aliasing ──
 
-  /** Alias this expression: expr AS name */
+  /**
+   * Alias this expression: expr AS name.
+   *
+   * @param name the alias name
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.alias">Rust
+   *     DataFusion: Expr::alias</a>
+   */
   default Expr alias(String name) {
     return new AliasExpr(this, name, List.of());
   }
 
   // ── Sorting ──
 
-  /** Sort ascending, nulls last (default) */
+  /**
+   * Sort ascending, nulls last (default).
+   *
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.sort">Rust
+   *     DataFusion: Expr::sort</a>
+   */
   default SortExpr sortAsc() {
     return new SortExpr(this, true, false);
   }
 
-  /** Sort descending, nulls first (default) */
+  /**
+   * Sort descending, nulls first (default).
+   *
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.sort">Rust
+   *     DataFusion: Expr::sort</a>
+   */
   default SortExpr sortDesc() {
     return new SortExpr(this, false, true);
   }
 
-  /** Sort with explicit control */
+  /**
+   * Sort with explicit control over direction and null ordering.
+   *
+   * @param asc true for ascending, false for descending
+   * @param nullsFirst true to sort nulls first
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.sort">Rust
+   *     DataFusion: Expr::sort</a>
+   */
   default SortExpr sort(boolean asc, boolean nullsFirst) {
     return new SortExpr(this, asc, nullsFirst);
   }

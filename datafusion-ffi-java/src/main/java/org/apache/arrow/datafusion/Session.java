@@ -34,6 +34,9 @@ public class Session {
    * @param filters the filter expressions to compile (borrowed, from the scan callback)
    * @return a physical expression representing the conjunction of all filters
    * @throws DataFusionError if the physical expression cannot be created
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/catalog/trait.Session.html#tymethod.create_physical_expr">Rust
+   *     DataFusion: Session::create_physical_expr</a>
    */
   public PhysicalExpr createPhysicalExpr(Schema tableSchema, List<Expr> filters) {
     if (filters.isEmpty()) {

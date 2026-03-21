@@ -44,6 +44,9 @@ public final class RuntimeEnvBuilder {
    *     inclusive)
    * @return this builder
    * @throws IllegalArgumentException if maxMemory is not positive or memoryFraction is out of range
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/runtime_env/struct.RuntimeEnvBuilder.html#method.with_memory_limit">Rust
+   *     DataFusion: RuntimeEnvBuilder::with_memory_limit</a>
    */
   public RuntimeEnvBuilder withMemoryLimit(long maxMemory, double memoryFraction) {
     if (maxMemory <= 0) {
@@ -63,6 +66,9 @@ public final class RuntimeEnvBuilder {
    *
    * @return a new RuntimeEnv
    * @throws DataFusionError if the native RuntimeEnv cannot be created
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/runtime_env/struct.RuntimeEnvBuilder.html#method.build">Rust
+   *     DataFusion: RuntimeEnvBuilder::build</a>
    */
   public RuntimeEnv build() {
     return new RuntimeEnv(new RuntimeEnvBridge(maxMemory, memoryFraction));

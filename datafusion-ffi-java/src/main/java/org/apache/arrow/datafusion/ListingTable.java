@@ -72,17 +72,35 @@ public class ListingTable {
     return new Builder(tablePaths);
   }
 
-  /** Returns the table paths. Mirrors Rust's {@code ListingTableConfig.table_paths}. */
+  /**
+   * Returns the table paths. Mirrors Rust's {@code ListingTableConfig.table_paths}.
+   *
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingTable.html#method.table_paths">Rust
+   *     DataFusion: ListingTable::table_paths</a>
+   */
   public List<ListingTableUrl> tablePaths() {
     return tablePaths;
   }
 
-  /** Returns the listing options. */
+  /**
+   * Returns the listing options.
+   *
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingTable.html#method.options">Rust
+   *     DataFusion: ListingTable::options</a>
+   */
   public ListingOptions options() {
     return options;
   }
 
-  /** Returns the table schema. */
+  /**
+   * Returns the table schema.
+   *
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingTable.html#method.schema">Rust
+   *     DataFusion: ListingTable::schema</a>
+   */
   public Schema schema() {
     return schema;
   }

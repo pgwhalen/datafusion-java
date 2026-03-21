@@ -13,4 +13,17 @@ package org.apache.arrow.datafusion;
  *     href="https://docs.rs/datafusion-datasource/52.1.0/datafusion_datasource/struct.PartitionedFile.html">Rust
  *     DataFusion: PartitionedFile</a>
  */
-public record PartitionedFile(String path, long size, Long rangeStart, Long rangeEnd) {}
+public record PartitionedFile(String path, long size, Long rangeStart, Long rangeEnd) {
+
+  /**
+   * Returns the absolute path to the file.
+   *
+   * @return the file path
+   * @see <a
+   *     href="https://docs.rs/datafusion-datasource/52.1.0/datafusion_datasource/struct.PartitionedFile.html#method.path">Rust
+   *     DataFusion: PartitionedFile::path</a>
+   */
+  public String path() {
+    return path;
+  }
+}

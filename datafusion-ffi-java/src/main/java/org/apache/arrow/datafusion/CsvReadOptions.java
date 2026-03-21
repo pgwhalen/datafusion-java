@@ -44,7 +44,13 @@ public final class CsvReadOptions {
     return new Builder();
   }
 
-  /** Returns the schema, or null if not set. */
+  /**
+   * Returns the schema, or null if not set.
+   *
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/file_format/options/struct.CsvReadOptions.html#method.schema">Rust
+   *     DataFusion: CsvReadOptions::schema</a>
+   */
   public Schema schema() {
     return schema;
   }

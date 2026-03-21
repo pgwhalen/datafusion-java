@@ -146,6 +146,9 @@ jobs:
       - name: Build JAR with all native libraries
         run: ./gradlew :datafusion-ffi-java:jarWithAllLibs :datafusion-ffi-java:sourcesJar :datafusion-ffi-java:javadocJar -PskipDiplomatGeneration
 
+      - name: Validate docs.rs links (HTTP)
+        run: ./gradlew :datafusion-ffi-java:verifyDocsLinksHttp -PskipDiplomatGeneration
+
       - name: Verify JAR contents
         run: ./scripts/verify-jar-contents.sh
 

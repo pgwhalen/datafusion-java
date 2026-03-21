@@ -70,12 +70,12 @@ public class DataFrameTest {
     Expr a = col("a");
     Expr b = col("b");
 
-    assertEquals(Operator.Plus, ((Expr.BinaryExpr) a.plus(b)).op());
-    assertEquals(Operator.Minus, ((Expr.BinaryExpr) a.minus(b)).op());
-    assertEquals(Operator.Multiply, ((Expr.BinaryExpr) a.multiply(b)).op());
-    assertEquals(Operator.Divide, ((Expr.BinaryExpr) a.divide(b)).op());
-    assertEquals(Operator.Modulo, ((Expr.BinaryExpr) a.modulo(b)).op());
-    assertInstanceOf(Expr.NegativeExpr.class, a.negate());
+    assertEquals(Operator.Plus, ((Expr.BinaryExpr) a.add(b)).op());
+    assertEquals(Operator.Minus, ((Expr.BinaryExpr) a.sub(b)).op());
+    assertEquals(Operator.Multiply, ((Expr.BinaryExpr) a.mul(b)).op());
+    assertEquals(Operator.Divide, ((Expr.BinaryExpr) a.div(b)).op());
+    assertEquals(Operator.Modulo, ((Expr.BinaryExpr) a.rem(b)).op());
+    assertInstanceOf(Expr.NegativeExpr.class, a.neg());
   }
 
   @Test
@@ -1214,7 +1214,7 @@ public class DataFrameTest {
 
       try (DataFrame df =
               ctx.sql("SELECT * FROM employees")
-                  .withColumn("bonus", col("salary").multiply(lit(0.1)));
+                  .withColumn("bonus", col("salary").mul(lit(0.1)));
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
         Schema schema = stream.getVectorSchemaRoot().getSchema();
         // Original 4 + bonus = 5 columns
@@ -1425,8 +1425,8 @@ public class DataFrameTest {
               ctx.sql("SELECT * FROM employees")
                   .select(
                       col("name"),
-                      col("salary").multiply(lit(12)).alias("annual_salary"),
-                      col("age").plus(lit(1)).alias("next_age"))
+                      col("salary").mul(lit(12)).alias("annual_salary"),
+                      col("age").add(lit(1)).alias("next_age"))
                   .sort(col("name").sortAsc());
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());

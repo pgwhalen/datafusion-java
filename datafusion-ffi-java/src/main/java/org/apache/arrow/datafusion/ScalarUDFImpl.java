@@ -23,6 +23,9 @@ public interface ScalarUDFImpl {
    * @param numRows the number of rows to process
    * @param allocator the buffer allocator for creating the result vector
    * @return the result vector
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/trait.ScalarUDFImpl.html#method.invoke_with_args">Rust
+   *     DataFusion: ScalarUDFImpl::invoke_with_args</a>
    */
   FieldVector invoke(List<FieldVector> args, int numRows, BufferAllocator allocator);
 }

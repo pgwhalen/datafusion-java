@@ -23,6 +23,42 @@ public record LiteralGuarantee(Column column, Guarantee guarantee, Set<ScalarVal
   }
 
   /**
+   * Returns the column this guarantee applies to.
+   *
+   * @return the column
+   * @see <a
+   *     href="https://docs.rs/datafusion-physical-expr/52.1.0/datafusion_physical_expr/utils/struct.LiteralGuarantee.html#structfield.column">Rust
+   *     DataFusion: LiteralGuarantee::column</a>
+   */
+  public Column column() {
+    return column;
+  }
+
+  /**
+   * Returns the type of guarantee (IN or NOT_IN).
+   *
+   * @return the guarantee type
+   * @see <a
+   *     href="https://docs.rs/datafusion-physical-expr/52.1.0/datafusion_physical_expr/utils/struct.LiteralGuarantee.html#structfield.guarantee">Rust
+   *     DataFusion: LiteralGuarantee::guarantee</a>
+   */
+  public Guarantee guarantee() {
+    return guarantee;
+  }
+
+  /**
+   * Returns the set of literal values in the guarantee.
+   *
+   * @return the literal values
+   * @see <a
+   *     href="https://docs.rs/datafusion-physical-expr/52.1.0/datafusion_physical_expr/utils/struct.LiteralGuarantee.html#structfield.literals">Rust
+   *     DataFusion: LiteralGuarantee::literals</a>
+   */
+  public Set<ScalarValue> literals() {
+    return literals;
+  }
+
+  /**
    * Analyzes a physical expression to extract literal guarantees.
    *
    * <p>This mirrors DataFusion's {@code LiteralGuarantee::analyze()} function.
@@ -30,6 +66,9 @@ public record LiteralGuarantee(Column column, Guarantee guarantee, Set<ScalarVal
    * @param expr the physical expression to analyze
    * @return the list of literal guarantees extracted from the expression
    * @throws DataFusionError if analysis fails
+   * @see <a
+   *     href="https://docs.rs/datafusion-physical-expr/52.1.0/datafusion_physical_expr/utils/struct.LiteralGuarantee.html#method.analyze">Rust
+   *     DataFusion: LiteralGuarantee::analyze</a>
    */
   public static List<LiteralGuarantee> analyze(PhysicalExpr expr) {
     return LiteralGuaranteeBridge.analyze(expr.bridge());

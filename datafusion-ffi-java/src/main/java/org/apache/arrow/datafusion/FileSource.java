@@ -43,6 +43,9 @@ public interface FileSource {
    * @param allocator allocator for Arrow vectors
    * @param scanConfig scan configuration with projection, limit, batch size, and partition info
    * @return a FileOpener that can parse file content into record batches
+   * @see <a
+   *     href="https://docs.rs/datafusion-datasource/52.1.0/datafusion_datasource/file/trait.FileSource.html#method.create_file_opener">Rust
+   *     DataFusion: FileSource::create_file_opener</a>
    */
   FileOpener createFileOpener(Schema schema, BufferAllocator allocator, FileScanConfig scanConfig);
 
@@ -53,6 +56,9 @@ public interface FileSource {
    * names like "csv", "json", "parquet", etc.
    *
    * @return the file type identifier
+   * @see <a
+   *     href="https://docs.rs/datafusion-datasource/52.1.0/datafusion_datasource/file/trait.FileSource.html#method.file_type">Rust
+   *     DataFusion: FileSource::file_type</a>
    */
   String fileType();
 }

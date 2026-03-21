@@ -25,7 +25,13 @@ public final class NdJsonReadOptions {
     return new Builder();
   }
 
-  /** Returns the schema, or null if not set. */
+  /**
+   * Returns the schema, or null if not set.
+   *
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/file_format/options/struct.NdJsonReadOptions.html#method.schema">Rust
+   *     DataFusion: NdJsonReadOptions::schema</a>
+   */
   public Schema schema() {
     return schema;
   }

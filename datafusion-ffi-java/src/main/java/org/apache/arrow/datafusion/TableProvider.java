@@ -39,6 +39,9 @@ public interface TableProvider {
    * Returns the schema of this table.
    *
    * @return The Arrow schema describing the table's columns
+   * @see <a
+   *     href="https://docs.rs/datafusion-catalog/52.1.0/datafusion_catalog/trait.TableProvider.html#method.schema">Rust
+   *     DataFusion: TableProvider::schema</a>
    */
   Schema schema();
 
@@ -48,6 +51,9 @@ public interface TableProvider {
    * <p>Default implementation returns {@link TableType#BASE}.
    *
    * @return The table type
+   * @see <a
+   *     href="https://docs.rs/datafusion-catalog/52.1.0/datafusion_catalog/trait.TableProvider.html#method.table_type">Rust
+   *     DataFusion: TableProvider::table_type</a>
    */
   default TableType tableType() {
     return TableType.BASE;
@@ -77,6 +83,9 @@ public interface TableProvider {
    * @param limit Maximum number of rows, or null for no limit
    * @return An execution plan that produces the requested data
    * @throws DataFusionError if creating the scan fails
+   * @see <a
+   *     href="https://docs.rs/datafusion-catalog/52.1.0/datafusion_catalog/trait.TableProvider.html#method.scan">Rust
+   *     DataFusion: TableProvider::scan</a>
    */
   ExecutionPlan scan(Session session, List<Expr> filters, List<Integer> projection, Long limit);
 
@@ -93,6 +102,9 @@ public interface TableProvider {
    *
    * @param filters the filter expressions to evaluate (borrowed, valid only during this call)
    * @return a list of pushdown support values, one per filter
+   * @see <a
+   *     href="https://docs.rs/datafusion-catalog/52.1.0/datafusion_catalog/trait.TableProvider.html#method.supports_filters_pushdown">Rust
+   *     DataFusion: TableProvider::supports_filters_pushdown</a>
    */
   default List<TableProviderFilterPushDown> supportsFiltersPushdown(List<Expr> filters) {
     return Collections.nCopies(filters.size(), TableProviderFilterPushDown.INEXACT);

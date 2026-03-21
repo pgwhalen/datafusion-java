@@ -27,7 +27,13 @@ public final class ParquetReadOptions {
     return new Builder();
   }
 
-  /** Returns the schema, or null if not set. */
+  /**
+   * Returns the schema, or null if not set.
+   *
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/file_format/options/struct.ParquetReadOptions.html#method.schema">Rust
+   *     DataFusion: ParquetReadOptions::schema</a>
+   */
   public Schema schema() {
     return schema;
   }

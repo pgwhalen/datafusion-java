@@ -49,6 +49,10 @@ public class DataFrame implements AutoCloseable {
    * Select expressions. Equivalent to Rust's {@code df.select(vec![...])}.
    *
    * <p>Consumes this DataFrame. The source must not be used after this call.
+   *
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.select">Rust
+   *     DataFusion: DataFrame::select</a>
    */
   public DataFrame select(Expr... exprs) {
     return select(List.of(exprs));
@@ -58,6 +62,10 @@ public class DataFrame implements AutoCloseable {
    * Select expressions from a list.
    *
    * <p>Consumes this DataFrame. The source must not be used after this call.
+   *
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.select">Rust
+   *     DataFusion: DataFrame::select</a>
    */
   public DataFrame select(List<Expr> exprs) {
     DataFrameBridge result = bridge.select(exprs);
@@ -69,6 +77,10 @@ public class DataFrame implements AutoCloseable {
    * Select columns by name. Equivalent to Rust's {@code df.select_columns(&[...])}.
    *
    * <p>Consumes this DataFrame. The source must not be used after this call.
+   *
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.select_columns">Rust
+   *     DataFusion: DataFrame::select_columns</a>
    */
   public DataFrame selectColumns(String... columns) {
     List<Expr> exprs = Arrays.stream(columns).map(Functions::col).collect(Collectors.toList());
@@ -81,6 +93,10 @@ public class DataFrame implements AutoCloseable {
    * Filter rows matching a predicate. Equivalent to Rust's {@code df.filter(expr)}.
    *
    * <p>Consumes this DataFrame. The source must not be used after this call.
+   *
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.filter">Rust
+   *     DataFusion: DataFrame::filter</a>
    */
   public DataFrame filter(Expr predicate) {
     DataFrameBridge result = bridge.filter(predicate);
@@ -94,6 +110,10 @@ public class DataFrame implements AutoCloseable {
    * Sort by expressions with explicit sort parameters.
    *
    * <p>Consumes this DataFrame. The source must not be used after this call.
+   *
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.sort">Rust
+   *     DataFusion: DataFrame::sort</a>
    */
   public DataFrame sort(SortExpr... sortExprs) {
     return sort(List.of(sortExprs));
@@ -103,6 +123,10 @@ public class DataFrame implements AutoCloseable {
    * Sort by expressions with explicit sort parameters.
    *
    * <p>Consumes this DataFrame. The source must not be used after this call.
+   *
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.sort">Rust
+   *     DataFusion: DataFrame::sort</a>
    */
   public DataFrame sort(List<SortExpr> sortExprs) {
     DataFrameBridge result = bridge.sort(sortExprs);
@@ -119,6 +143,9 @@ public class DataFrame implements AutoCloseable {
    *
    * @param skip number of rows to skip
    * @param fetch maximum number of rows to return, or null for no limit
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.limit">Rust
+   *     DataFusion: DataFrame::limit</a>
    */
   public DataFrame limit(int skip, Integer fetch) {
     long fetchValue = (fetch == null) ? -1L : fetch.longValue();
@@ -136,6 +163,9 @@ public class DataFrame implements AutoCloseable {
    *
    * @param groupExprs GROUP BY expressions (empty list for global aggregation)
    * @param aggrExprs aggregate expressions (e.g., {@code avg(col("salary"))})
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.aggregate">Rust
+   *     DataFusion: DataFrame::aggregate</a>
    */
   public DataFrame aggregate(List<Expr> groupExprs, List<Expr> aggrExprs) {
     DataFrameBridge result = bridge.aggregate(groupExprs, aggrExprs);
@@ -155,6 +185,9 @@ public class DataFrame implements AutoCloseable {
    * @param joinType the join type
    * @param leftCols left join column names
    * @param rightCols right join column names
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.join">Rust
+   *     DataFusion: DataFrame::join</a>
    */
   public DataFrame join(
       DataFrame right, JoinType joinType, List<String> leftCols, List<String> rightCols) {
@@ -174,6 +207,9 @@ public class DataFrame implements AutoCloseable {
    * @param leftCols left join column names
    * @param rightCols right join column names
    * @param filter additional join filter expression
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.join">Rust
+   *     DataFusion: DataFrame::join</a>
    */
   public DataFrame join(
       DataFrame right,
@@ -195,6 +231,9 @@ public class DataFrame implements AutoCloseable {
    * @param right the right DataFrame
    * @param joinType the join type
    * @param onExprs join condition expressions
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.join_on">Rust
+   *     DataFusion: DataFrame::join_on</a>
    */
   public DataFrame joinOn(DataFrame right, JoinType joinType, List<Expr> onExprs) {
     DataFrameBridge result = bridge.joinOn(right.bridge, joinType, onExprs);
@@ -208,6 +247,10 @@ public class DataFrame implements AutoCloseable {
    * Union of this DataFrame and another.
    *
    * <p>Consumes this DataFrame. The source must not be used after this call.
+   *
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.union">Rust
+   *     DataFusion: DataFrame::union</a>
    */
   public DataFrame union(DataFrame other) {
     DataFrameBridge result = bridge.union(other.bridge);
@@ -219,6 +262,10 @@ public class DataFrame implements AutoCloseable {
    * Union distinct of this DataFrame and another.
    *
    * <p>Consumes this DataFrame. The source must not be used after this call.
+   *
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.union_distinct">Rust
+   *     DataFusion: DataFrame::union_distinct</a>
    */
   public DataFrame unionDistinct(DataFrame other) {
     DataFrameBridge result = bridge.unionDistinct(other.bridge);
@@ -230,6 +277,10 @@ public class DataFrame implements AutoCloseable {
    * Intersect of this DataFrame and another.
    *
    * <p>Consumes this DataFrame. The source must not be used after this call.
+   *
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.intersect">Rust
+   *     DataFusion: DataFrame::intersect</a>
    */
   public DataFrame intersect(DataFrame other) {
     DataFrameBridge result = bridge.intersect(other.bridge);
@@ -241,6 +292,10 @@ public class DataFrame implements AutoCloseable {
    * Set difference (EXCEPT) of this DataFrame and another.
    *
    * <p>Consumes this DataFrame. The source must not be used after this call.
+   *
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.except">Rust
+   *     DataFusion: DataFrame::except</a>
    */
   public DataFrame except(DataFrame other) {
     DataFrameBridge result = bridge.except(other.bridge);
@@ -254,6 +309,10 @@ public class DataFrame implements AutoCloseable {
    * Return distinct rows.
    *
    * <p>Consumes this DataFrame. The source must not be used after this call.
+   *
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.distinct">Rust
+   *     DataFusion: DataFrame::distinct</a>
    */
   public DataFrame distinct() {
     DataFrameBridge result = bridge.distinct();
@@ -270,6 +329,9 @@ public class DataFrame implements AutoCloseable {
    *
    * @param name column name
    * @param expr expression to compute the column value
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.with_column">Rust
+   *     DataFusion: DataFrame::with_column</a>
    */
   public DataFrame withColumn(String name, Expr expr) {
     DataFrameBridge result = bridge.withColumn(name, expr);
@@ -284,6 +346,9 @@ public class DataFrame implements AutoCloseable {
    *
    * @param oldName current column name
    * @param newName new column name
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.with_column_renamed">Rust
+   *     DataFusion: DataFrame::with_column_renamed</a>
    */
   public DataFrame withColumnRenamed(String oldName, String newName) {
     DataFrameBridge result = bridge.withColumnRenamed(oldName, newName);
@@ -297,6 +362,9 @@ public class DataFrame implements AutoCloseable {
    * <p>Consumes this DataFrame. The source must not be used after this call.
    *
    * @param columns column names to drop
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.drop_columns">Rust
+   *     DataFusion: DataFrame::drop_columns</a>
    */
   public DataFrame dropColumns(String... columns) {
     DataFrameBridge result = bridge.dropColumns(List.of(columns));
@@ -311,6 +379,9 @@ public class DataFrame implements AutoCloseable {
    *
    * @param path path to write the Parquet file to
    * @throws DataFusionError if writing fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.write_parquet">Rust
+   *     DataFusion: DataFrame::write_parquet</a>
    */
   public void writeParquet(String path) {
     bridge.writeParquet(path);
@@ -322,6 +393,9 @@ public class DataFrame implements AutoCloseable {
    * @param path path to write the Parquet file to
    * @param options write options controlling output behavior
    * @throws DataFusionError if writing fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.write_parquet">Rust
+   *     DataFusion: DataFrame::write_parquet</a>
    */
   public void writeParquet(String path, DataFrameWriteOptions options) {
     bridge.writeParquet(path, options, null);
@@ -334,6 +408,9 @@ public class DataFrame implements AutoCloseable {
    * @param options write options controlling output behavior
    * @param parquetOptions Parquet-specific format options
    * @throws DataFusionError if writing fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.write_parquet">Rust
+   *     DataFusion: DataFrame::write_parquet</a>
    */
   public void writeParquet(
       String path, DataFrameWriteOptions options, ParquetOptions parquetOptions) {
@@ -345,6 +422,9 @@ public class DataFrame implements AutoCloseable {
    *
    * @param path path to write the CSV file to
    * @throws DataFusionError if writing fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.write_csv">Rust
+   *     DataFusion: DataFrame::write_csv</a>
    */
   public void writeCsv(String path) {
     bridge.writeCsv(path);
@@ -356,6 +436,9 @@ public class DataFrame implements AutoCloseable {
    * @param path path to write the CSV file to
    * @param options write options controlling output behavior
    * @throws DataFusionError if writing fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.write_csv">Rust
+   *     DataFusion: DataFrame::write_csv</a>
    */
   public void writeCsv(String path, DataFrameWriteOptions options) {
     bridge.writeCsv(path, options, null);
@@ -368,6 +451,9 @@ public class DataFrame implements AutoCloseable {
    * @param options write options controlling output behavior
    * @param csvOptions CSV-specific format options
    * @throws DataFusionError if writing fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.write_csv">Rust
+   *     DataFusion: DataFrame::write_csv</a>
    */
   public void writeCsv(String path, DataFrameWriteOptions options, CsvOptions csvOptions) {
     bridge.writeCsv(path, options, csvOptions);
@@ -378,6 +464,9 @@ public class DataFrame implements AutoCloseable {
    *
    * @param path path to write the JSON file to
    * @throws DataFusionError if writing fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.write_json">Rust
+   *     DataFusion: DataFrame::write_json</a>
    */
   public void writeJson(String path) {
     bridge.writeJson(path);
@@ -389,6 +478,9 @@ public class DataFrame implements AutoCloseable {
    * @param path path to write the JSON file to
    * @param options write options controlling output behavior
    * @throws DataFusionError if writing fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.write_json">Rust
+   *     DataFusion: DataFrame::write_json</a>
    */
   public void writeJson(String path, DataFrameWriteOptions options) {
     bridge.writeJson(path, options, null);
@@ -401,6 +493,9 @@ public class DataFrame implements AutoCloseable {
    * @param options write options controlling output behavior
    * @param jsonOptions JSON-specific format options
    * @throws DataFusionError if writing fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.write_json">Rust
+   *     DataFusion: DataFrame::write_json</a>
    */
   public void writeJson(String path, DataFrameWriteOptions options, JsonOptions jsonOptions) {
     bridge.writeJson(path, options, jsonOptions);
@@ -414,6 +509,9 @@ public class DataFrame implements AutoCloseable {
    * @param allocator The buffer allocator for Arrow data
    * @return A SendableRecordBatchStream for iterating over results
    * @throws DataFusionError if execution fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.execute_stream">Rust
+   *     DataFusion: DataFrame::execute_stream</a>
    */
   public SendableRecordBatchStream executeStream(BufferAllocator allocator) {
     return bridge.executeStream(allocator);
@@ -429,6 +527,9 @@ public class DataFrame implements AutoCloseable {
    * @param allocator The buffer allocator for Arrow data
    * @return A SendableRecordBatchStream with all results materialized
    * @throws DataFusionError if execution fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.collect">Rust
+   *     DataFusion: DataFrame::collect</a>
    */
   public SendableRecordBatchStream collect(BufferAllocator allocator) {
     return bridge.collect(allocator);
@@ -438,6 +539,9 @@ public class DataFrame implements AutoCloseable {
    * Execute and print results to stdout.
    *
    * @throws DataFusionError if execution fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.show">Rust
+   *     DataFusion: DataFrame::show</a>
    */
   public void show() {
     bridge.show();
@@ -448,6 +552,9 @@ public class DataFrame implements AutoCloseable {
    *
    * @return the number of rows
    * @throws DataFusionError if execution fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.count">Rust
+   *     DataFusion: DataFrame::count</a>
    */
   public long count() {
     return bridge.count();
@@ -458,6 +565,9 @@ public class DataFrame implements AutoCloseable {
    *
    * @return the Arrow schema
    * @throws DataFusionError if the schema cannot be retrieved
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.schema">Rust
+   *     DataFusion: DataFrame::schema</a>
    */
   public Schema schema() {
     return bridge.schema();

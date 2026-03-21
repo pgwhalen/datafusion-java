@@ -20,4 +20,41 @@ public record FileScanConfig(
     Long limit,
     Long batchSize,
     boolean partitionedByFileGroup,
-    int partition) {}
+    int partition) {
+
+  /**
+   * Returns the maximum number of rows to return, or {@code null} for no limit.
+   *
+   * @return the row limit, or null
+   * @see <a
+   *     href="https://docs.rs/datafusion-datasource/52.1.0/datafusion_datasource/file_scan_config/struct.FileScanConfig.html#structfield.limit">Rust
+   *     DataFusion: FileScanConfig::limit</a>
+   */
+  public Long limit() {
+    return limit;
+  }
+
+  /**
+   * Returns the batch size for reading, or {@code null} for the DataFusion default.
+   *
+   * @return the batch size, or null
+   * @see <a
+   *     href="https://docs.rs/datafusion-datasource/52.1.0/datafusion_datasource/file_scan_config/struct.FileScanConfig.html#structfield.batch_size">Rust
+   *     DataFusion: FileScanConfig::batch_size</a>
+   */
+  public Long batchSize() {
+    return batchSize;
+  }
+
+  /**
+   * Returns whether the scan is partitioned by file group.
+   *
+   * @return true if partitioned by file group
+   * @see <a
+   *     href="https://docs.rs/datafusion-datasource/52.1.0/datafusion_datasource/file_scan_config/struct.FileScanConfig.html#structfield.partitioned_by_file_group">Rust
+   *     DataFusion: FileScanConfig::partitioned_by_file_group</a>
+   */
+  public boolean partitionedByFileGroup() {
+    return partitionedByFileGroup;
+  }
+}

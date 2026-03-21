@@ -131,7 +131,7 @@ tasks.register('copyDevLibrary', Sync) {
 }
 
 test {
-    dependsOn copyDevLibrary
+    dependsOn copyDevLibrary, 'verifyDocsLinks'
     def libPath = layout.buildDirectory.dir("ffi_libs/dev").get().asFile.path
     jvmArgs += [
         "--enable-native-access=ALL-UNNAMED",
@@ -139,6 +139,31 @@ test {
         '--add-opens=java.base/java.nio=ALL-UNNAMED'
     ]
     useJUnitPlatform()
+}
+
+// Validates @see docs.rs links using the DocsLinkValidationDoclet (presence + format, offline)
+tasks.register('verifyDocsLinks', Javadoc) {
+    dependsOn testClasses
+    source = sourceSets.main.allJava
+    classpath = sourceSets.main.compileClasspath
+    destinationDir = layout.buildDirectory.dir("tmp/docsLinkValidation").get().asFile
+    options {
+        doclet = 'org.apache.arrow.datafusion.DocsLinkValidationDoclet'
+        docletpath = sourceSets.test.output.classesDirs.files.toList()
+    }
+}
+
+// Additionally validates each docs.rs URL returns HTTP 200 (requires internet)
+tasks.register('verifyDocsLinksHttp', Javadoc) {
+    dependsOn testClasses
+    source = sourceSets.main.allJava
+    classpath = sourceSets.main.compileClasspath
+    destinationDir = layout.buildDirectory.dir("tmp/docsLinkValidationHttp").get().asFile
+    options {
+        doclet = 'org.apache.arrow.datafusion.DocsLinkValidationDoclet'
+        docletpath = sourceSets.test.output.classesDirs.files.toList()
+        jFlags('-DverifyHttp=true')
+    }
 }
 
 // Copy release library to JAR resources for current platform

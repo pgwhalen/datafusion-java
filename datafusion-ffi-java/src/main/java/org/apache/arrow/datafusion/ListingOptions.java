@@ -33,22 +33,46 @@ public class ListingOptions {
     return new Builder(format);
   }
 
-  /** Returns the file format. */
+  /**
+   * Returns the file format.
+   *
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingOptions.html#structfield.format">Rust
+   *     DataFusion: ListingOptions::format</a>
+   */
   public FileFormat format() {
     return format;
   }
 
-  /** Returns the file extension filter. */
+  /**
+   * Returns the file extension filter.
+   *
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingOptions.html#structfield.file_extension">Rust
+   *     DataFusion: ListingOptions::file_extension</a>
+   */
   public String fileExtension() {
     return fileExtension;
   }
 
-  /** Returns whether to collect file statistics. */
+  /**
+   * Returns whether to collect file statistics.
+   *
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingOptions.html#structfield.collect_stat">Rust
+   *     DataFusion: ListingOptions::collect_stat</a>
+   */
   public boolean collectStat() {
     return collectStat;
   }
 
-  /** Returns the target number of partitions. */
+  /**
+   * Returns the target number of partitions.
+   *
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingOptions.html#structfield.target_partitions">Rust
+   *     DataFusion: ListingOptions::target_partitions</a>
+   */
   public int targetPartitions() {
     return targetPartitions;
   }

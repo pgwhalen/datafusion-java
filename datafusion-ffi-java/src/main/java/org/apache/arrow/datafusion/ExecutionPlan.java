@@ -38,6 +38,9 @@ public interface ExecutionPlan {
    * Returns the schema of the data produced by this plan.
    *
    * @return The Arrow schema
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/physical_plan/trait.ExecutionPlan.html#method.schema">Rust
+   *     DataFusion: ExecutionPlan::schema</a>
    */
   Schema schema();
 
@@ -47,6 +50,9 @@ public interface ExecutionPlan {
    * <p>Default implementation returns 1 (single partition).
    *
    * @return The number of partitions
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/physical_plan/trait.ExecutionPlan.html#method.output_partitioning">Rust
+   *     DataFusion: ExecutionPlan::output_partitioning</a>
    */
   default int outputPartitioning() {
     return 1;
@@ -59,6 +65,9 @@ public interface ExecutionPlan {
    * bounded input. Override this method to customize emission type and boundedness.
    *
    * @return The plan properties
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/physical_plan/trait.ExecutionPlan.html#method.properties">Rust
+   *     DataFusion: ExecutionPlan::properties</a>
    */
   default PlanProperties properties() {
     return new PlanProperties(outputPartitioning(), EmissionType.INCREMENTAL, Boundedness.BOUNDED);
@@ -74,6 +83,9 @@ public interface ExecutionPlan {
    * @param allocator The buffer allocator to use for Arrow memory
    * @return A reader that produces record batches for this partition
    * @throws DataFusionError if execution fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/physical_plan/trait.ExecutionPlan.html#method.execute">Rust
+   *     DataFusion: ExecutionPlan::execute</a>
    */
   RecordBatchReader execute(int partition, BufferAllocator allocator);
 }

@@ -30,6 +30,9 @@ public interface FileFormat {
    * Returns the file extension including dot (e.g., ".tsv", ".csv").
    *
    * @return the file extension
+   * @see <a
+   *     href="https://docs.rs/datafusion-datasource/52.1.0/datafusion_datasource/file_format/trait.FileFormat.html#tymethod.get_ext">Rust
+   *     DataFusion: FileFormat::get_ext</a>
    */
   String getExtension();
 
@@ -37,6 +40,9 @@ public interface FileFormat {
    * Creates a FileSource that can produce FileOpeners for this format.
    *
    * @return a FileSource for this format
+   * @see <a
+   *     href="https://docs.rs/datafusion-datasource/52.1.0/datafusion_datasource/file_format/trait.FileFormat.html#method.file_source">Rust
+   *     DataFusion: FileFormat::file_source</a>
    */
   FileSource fileSource();
 }

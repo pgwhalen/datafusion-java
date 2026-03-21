@@ -25,6 +25,9 @@ public class SessionState implements AutoCloseable {
    * @param sql the SQL query to parse into a logical plan
    * @return a LogicalPlan representing the parsed query
    * @throws DataFusionError if the SQL is invalid or planning fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/session_state/struct.SessionState.html#method.create_logical_plan">Rust
+   *     DataFusion: SessionState::create_logical_plan</a>
    */
   public LogicalPlan createLogicalPlan(String sql) {
     return new LogicalPlan(bridge.createLogicalPlan(sql));

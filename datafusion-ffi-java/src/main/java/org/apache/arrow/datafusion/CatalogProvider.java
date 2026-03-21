@@ -36,6 +36,9 @@ public interface CatalogProvider {
    * Returns the names of all schemas in this catalog.
    *
    * @return List of schema names
+   * @see <a
+   *     href="https://docs.rs/datafusion-catalog/52.1.0/datafusion_catalog/trait.CatalogProvider.html#method.schema_names">Rust
+   *     DataFusion: CatalogProvider::schema_names</a>
    */
   List<String> schemaNames();
 
@@ -44,6 +47,9 @@ public interface CatalogProvider {
    *
    * @param name The schema name
    * @return The schema provider, or null if the schema doesn't exist
+   * @see <a
+   *     href="https://docs.rs/datafusion-catalog/52.1.0/datafusion_catalog/trait.CatalogProvider.html#method.schema">Rust
+   *     DataFusion: CatalogProvider::schema</a>
    */
   Optional<SchemaProvider> schema(String name);
 }
