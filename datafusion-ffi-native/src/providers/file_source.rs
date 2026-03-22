@@ -84,15 +84,4 @@ impl<T: DfFileSourceTrait + 'static> FileSourceBridge for ForeignDfFileSource<T>
         Ok(boxed.0)
     }
 
-    fn file_type(&self) -> String {
-        let cap: usize = 1024;
-        let mut buf = vec![0u8; cap];
-        let buf_addr = buf.as_mut_ptr() as usize;
-        let written = self.inner.file_type_to(buf_addr, cap);
-        if written > 0 {
-            String::from_utf8_lossy(&buf[..written as usize]).to_string()
-        } else {
-            "java".to_string()
-        }
-    }
 }

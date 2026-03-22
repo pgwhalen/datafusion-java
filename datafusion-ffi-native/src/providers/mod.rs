@@ -46,7 +46,6 @@ pub trait FileSourceBridge: Send + Sync {
         limit: Option<usize>,
         batch_size: Option<usize>,
     ) -> Result<Box<dyn FileOpenerBridge>, DataFusionError>;
-    fn file_type(&self) -> String;
 }
 
 pub trait FileOpenerBridge: Send + Sync {

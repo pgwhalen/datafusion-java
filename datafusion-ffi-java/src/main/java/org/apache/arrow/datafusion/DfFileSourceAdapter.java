@@ -2,7 +2,6 @@ package org.apache.arrow.datafusion;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -29,20 +28,6 @@ final class DfFileSourceAdapter implements DfFileSourceTrait {
     this.source = source;
     this.allocator = allocator;
     this.fullStackTrace = fullStackTrace;
-  }
-
-  @Override
-  public long fileTypeTo(long bufAddr, long bufCap) {
-    try {
-      byte[] bytes = source.fileType().getBytes(StandardCharsets.UTF_8);
-      int len = (int) Math.min(bytes.length, bufCap);
-      MemorySegment.ofAddress(bufAddr)
-          .reinterpret(bufCap)
-          .copyFrom(MemorySegment.ofArray(bytes).asSlice(0, len));
-      return len;
-    } catch (Exception e) {
-      return -1;
-    }
   }
 
   @Override

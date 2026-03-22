@@ -70,6 +70,7 @@ pub mod ffi {
     // ============================================================================
 
     /// Join type for DataFrame join operations.
+    #[allow(dead_code)] // Variants constructed from Java via Diplomat FFI
     pub enum DfJoinType {
         Inner,
         Left,
@@ -82,6 +83,7 @@ pub mod ffi {
     }
 
     /// Insert operation mode for DataFrame write operations.
+    #[allow(dead_code)] // Variants constructed from Java via Diplomat FFI
     pub enum DfInsertOp {
         Append,
         Overwrite,
@@ -183,8 +185,6 @@ pub mod ffi {
 
     /// File format trait: creates file sources.
     pub trait DfFileFormatTrait {
-        /// Write file extension to buf. Returns bytes written.
-        fn extension_to(&self, buf_addr: usize, buf_cap: usize) -> i64;
         /// Create a file source. schema_addr is FFI_ArrowSchema address.
         /// Returns DfFileSource raw ptr, or 0 on error (check error buffer).
         fn file_source(
@@ -197,8 +197,6 @@ pub mod ffi {
 
     /// File source trait: creates file openers.
     pub trait DfFileSourceTrait {
-        /// Write file type identifier to buf. Returns bytes written.
-        fn file_type_to(&self, buf_addr: usize, buf_cap: usize) -> i64;
         /// Create a file opener with scan parameters.
         /// Returns DfFileOpener raw ptr, or 0 on error (check error buffer).
         fn create_file_opener(
