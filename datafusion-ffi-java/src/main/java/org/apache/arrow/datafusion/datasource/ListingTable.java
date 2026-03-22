@@ -1,36 +1,24 @@
 package org.apache.arrow.datafusion.datasource;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import org.apache.arrow.vector.types.pojo.Schema;
 
 /**
- * Configuration for a file-backed listing table.
+ * A file-backed listing table.
  *
- * <p>Mirrors Rust's {@code ListingTableConfig}. A listing table scans files in one or more
- * directories, parsing them using a {@link FileFormat}. Use {@link #builder(ListingTableUrl)} or
- * {@link #builderWithMultiPaths(List)} to create a new configuration.
+ * <p>Created from a {@link ListingTableConfig} that specifies the paths, options, and schema. A
+ * listing table scans files in one or more directories, parsing them using a {@link FileFormat}.
  *
- * <p>Example (single path):
+ * <p>Example:
  *
  * <pre>{@code
  * ListingTableUrl url = ListingTableUrl.parse("/path/to/data/");
  * ListingOptions options = ListingOptions.builder(myFormat).build();
- * ListingTable table = ListingTable.builder(url)
+ * ListingTableConfig config = new ListingTableConfig(url)
  *     .withListingOptions(options)
- *     .withSchema(mySchema)
- *     .build();
+ *     .withSchema(mySchema);
+ * ListingTable table = new ListingTable(config);
  * ctx.registerListingTable("my_table", table, allocator);
- * }</pre>
- *
- * <p>Example (multiple paths):
- *
- * <pre>{@code
- * ListingTable table = ListingTable.builderWithMultiPaths(List.of(url1, url2))
- *     .withListingOptions(options)
- *     .withSchema(mySchema)
- *     .build();
  * }</pre>
  *
  * @see <a
@@ -38,49 +26,38 @@ import org.apache.arrow.vector.types.pojo.Schema;
  *     DataFusion: ListingTable</a>
  */
 public class ListingTable {
-  private final List<ListingTableUrl> tablePaths;
-  private final ListingOptions options;
-  private final Schema schema;
-
-  private ListingTable(List<ListingTableUrl> tablePaths, ListingOptions options, Schema schema) {
-    this.tablePaths = Collections.unmodifiableList(new ArrayList<>(tablePaths));
-    this.options = options;
-    this.schema = schema;
-  }
+  private final ListingTableConfig config;
 
   /**
-   * Creates a builder for a single table path.
+   * Creates a listing table from the given config.
    *
-   * <p>Mirrors Rust's {@code ListingTableConfig::new(table_path)}.
+   * <p>The config must have listing options and schema set.
    *
-   * @param tablePath the directory URL
-   * @return a new builder
+   * @param config the listing table configuration
+   * @throws IllegalStateException if options or schema are not set on the config
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingTable.html#method.try_new">Rust
+   *     DataFusion: ListingTable::try_new</a>
    */
-  public static Builder builder(ListingTableUrl tablePath) {
-    return new Builder(List.of(tablePath));
+  public ListingTable(ListingTableConfig config) {
+    if (config.listingOptions() == null) {
+      throw new IllegalStateException("ListingOptions is required (call withListingOptions)");
+    }
+    if (config.schema() == null) {
+      throw new IllegalStateException("Schema is required (call withSchema)");
+    }
+    this.config = config;
   }
 
   /**
-   * Creates a builder for multiple table paths.
-   *
-   * <p>Mirrors Rust's {@code ListingTableConfig::new_with_multi_paths(table_paths)}.
-   *
-   * @param tablePaths the directory URLs
-   * @return a new builder
-   */
-  public static Builder builderWithMultiPaths(List<ListingTableUrl> tablePaths) {
-    return new Builder(tablePaths);
-  }
-
-  /**
-   * Returns the table paths. Mirrors Rust's {@code ListingTableConfig.table_paths}.
+   * Returns the table paths. Mirrors Rust's {@code ListingTable.table_paths}.
    *
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingTable.html#method.table_paths">Rust
    *     DataFusion: ListingTable::table_paths</a>
    */
   public List<ListingTableUrl> tablePaths() {
-    return tablePaths;
+    return config.tablePaths();
   }
 
   /**
@@ -91,7 +68,7 @@ public class ListingTable {
    *     DataFusion: ListingTable::options</a>
    */
   public ListingOptions options() {
-    return options;
+    return config.listingOptions();
   }
 
   /**
@@ -102,57 +79,6 @@ public class ListingTable {
    *     DataFusion: ListingTable::schema</a>
    */
   public Schema schema() {
-    return schema;
-  }
-
-  /** Builder for ListingTable, mirroring the fluent API of Rust's {@code ListingTableConfig}. */
-  public static final class Builder {
-    private final List<ListingTableUrl> tablePaths;
-    private ListingOptions options;
-    private Schema schema;
-
-    private Builder(List<ListingTableUrl> tablePaths) {
-      this.tablePaths = tablePaths;
-    }
-
-    /**
-     * Sets the listing options.
-     *
-     * <p>Mirrors Rust's {@code ListingTableConfig::with_listing_options(options)}.
-     *
-     * @param options the listing options
-     * @return this builder
-     */
-    public Builder withListingOptions(ListingOptions options) {
-      this.options = options;
-      return this;
-    }
-
-    /**
-     * Sets the table schema.
-     *
-     * <p>Mirrors Rust's {@code ListingTableConfig::with_schema(schema)}.
-     *
-     * @param schema the Arrow schema
-     * @return this builder
-     */
-    public Builder withSchema(Schema schema) {
-      this.schema = schema;
-      return this;
-    }
-
-    /** Builds the ListingTable. */
-    public ListingTable build() {
-      if (tablePaths == null || tablePaths.isEmpty()) {
-        throw new IllegalStateException("At least one table path is required");
-      }
-      if (options == null) {
-        throw new IllegalStateException("ListingOptions is required (call withListingOptions)");
-      }
-      if (schema == null) {
-        throw new IllegalStateException("Schema is required (call withSchema)");
-      }
-      return new ListingTable(tablePaths, options, schema);
-    }
+    return config.schema();
   }
 }

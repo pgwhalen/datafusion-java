@@ -263,10 +263,10 @@ public class SessionContext implements AutoCloseable {
    * <pre>{@code
    * ListingTableUrl url = ListingTableUrl.parse("/path/to/data/");
    * ListingOptions options = ListingOptions.builder(myFormat).build();
-   * ListingTable table = ListingTable.builder(url)
+   * ListingTableConfig config = new ListingTableConfig(url)
    *     .withListingOptions(options)
-   *     .withSchema(mySchema)
-   *     .build();
+   *     .withSchema(mySchema);
+   * ListingTable table = new ListingTable(config);
    * ctx.registerListingTable("my_table", table, allocator);
    * }</pre>
    *

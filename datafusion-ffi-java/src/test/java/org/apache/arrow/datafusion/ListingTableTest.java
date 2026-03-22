@@ -21,6 +21,7 @@ import org.apache.arrow.datafusion.datasource.FileScanConfig;
 import org.apache.arrow.datafusion.datasource.FileSource;
 import org.apache.arrow.datafusion.datasource.ListingOptions;
 import org.apache.arrow.datafusion.datasource.ListingTable;
+import org.apache.arrow.datafusion.datasource.ListingTableConfig;
 import org.apache.arrow.datafusion.datasource.ListingTableUrl;
 import org.apache.arrow.datafusion.datasource.PartitionedFile;
 import org.apache.arrow.datafusion.execution.SessionContext;
@@ -277,7 +278,8 @@ public class ListingTableTest {
         ListingOptions options = ListingOptions.builder(format).fileExtension(".tsv").build();
         ListingTableUrl url = ListingTableUrl.parse(tempDir.toUri().toString());
         ListingTable table =
-            ListingTable.builder(url).withListingOptions(options).withSchema(schema).build();
+            new ListingTable(
+                new ListingTableConfig(url).withListingOptions(options).withSchema(schema));
 
         ctx.registerListingTable("tsv_data", table, allocator);
 
@@ -333,7 +335,8 @@ public class ListingTableTest {
         ListingOptions options = ListingOptions.builder(format).fileExtension(".tsv").build();
         ListingTableUrl url = ListingTableUrl.parse(tempDir.toUri().toString());
         ListingTable table =
-            ListingTable.builder(url).withListingOptions(options).withSchema(schema).build();
+            new ListingTable(
+                new ListingTableConfig(url).withListingOptions(options).withSchema(schema));
 
         ctx.registerListingTable("multi_data", table, allocator);
 
@@ -387,14 +390,14 @@ public class ListingTableTest {
         TsvFormat format = new TsvFormat();
         ListingOptions options = ListingOptions.builder(format).fileExtension(".tsv").build();
 
-        // Use builderWithMultiPaths to register multiple directories
+        // Use multi-path constructor to register multiple directories
         ListingTableUrl url1 = ListingTableUrl.parse(dir1.toUri().toString());
         ListingTableUrl url2 = ListingTableUrl.parse(dir2.toUri().toString());
         ListingTable table =
-            ListingTable.builderWithMultiPaths(List.of(url1, url2))
-                .withListingOptions(options)
-                .withSchema(schema)
-                .build();
+            new ListingTable(
+                new ListingTableConfig(List.of(url1, url2))
+                    .withListingOptions(options)
+                    .withSchema(schema));
 
         ctx.registerListingTable("multi_path_data", table, allocator);
 
@@ -475,7 +478,8 @@ public class ListingTableTest {
         ListingOptions options = ListingOptions.builder(format).fileExtension(".tsv").build();
         ListingTableUrl url = ListingTableUrl.parse(tempDir.toUri().toString());
         ListingTable table =
-            ListingTable.builder(url).withListingOptions(options).withSchema(schema).build();
+            new ListingTable(
+                new ListingTableConfig(url).withListingOptions(options).withSchema(schema));
 
         ctx.registerListingTable("ctx_data", table, allocator);
 
@@ -550,7 +554,8 @@ public class ListingTableTest {
         ListingOptions options = ListingOptions.builder(format).fileExtension(".tsv").build();
         ListingTableUrl url = ListingTableUrl.parse(tempDir.toUri().toString());
         ListingTable table =
-            ListingTable.builder(url).withListingOptions(options).withSchema(schema).build();
+            new ListingTable(
+                new ListingTableConfig(url).withListingOptions(options).withSchema(schema));
 
         ctx.registerListingTable("limit_data", table, allocator);
 
@@ -631,7 +636,8 @@ public class ListingTableTest {
         ListingOptions options = ListingOptions.builder(format).fileExtension(".tsv").build();
         ListingTableUrl url = ListingTableUrl.parse(tempDir.toUri().toString());
         ListingTable table =
-            ListingTable.builder(url).withListingOptions(options).withSchema(schema).build();
+            new ListingTable(
+                new ListingTableConfig(url).withListingOptions(options).withSchema(schema));
 
         ctx.registerListingTable("batch_data", table, allocator);
 
@@ -697,7 +703,8 @@ public class ListingTableTest {
         ListingOptions options = ListingOptions.builder(format).fileExtension(".tsv").build();
         ListingTableUrl url = ListingTableUrl.parse(tempDir.toUri().toString());
         ListingTable table =
-            ListingTable.builder(url).withListingOptions(options).withSchema(schema).build();
+            new ListingTable(
+                new ListingTableConfig(url).withListingOptions(options).withSchema(schema));
 
         ctx.registerListingTable("custom_type_data", table, allocator);
 

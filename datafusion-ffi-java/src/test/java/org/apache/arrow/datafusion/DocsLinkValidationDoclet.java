@@ -148,11 +148,6 @@ public class DocsLinkValidationDoclet implements Doclet {
                   // No Rust equivalent
                   "qualifier")),
           Map.entry(
-              "ListingTable",
-              Set.of(
-                  // Java-only factory
-                  "builderWithMultiPaths")),
-          Map.entry(
               "Spans",
               Set.of(
                   // Rust Spans is a newtype wrapper, no named field
