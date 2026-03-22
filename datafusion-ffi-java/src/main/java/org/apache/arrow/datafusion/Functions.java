@@ -6,6 +6,11 @@ import org.apache.arrow.datafusion.common.ScalarValue;
 import org.apache.arrow.datafusion.common.TableReference;
 import org.apache.arrow.datafusion.logical_expr.CaseBuilder;
 import org.apache.arrow.datafusion.logical_expr.Expr;
+import org.apache.arrow.datafusion.logical_expr.ScalarUDF;
+import org.apache.arrow.datafusion.logical_expr.ScalarUDFImpl;
+import org.apache.arrow.datafusion.logical_expr.Signature;
+import org.apache.arrow.datafusion.logical_expr.SimpleScalarUDF;
+import org.apache.arrow.datafusion.logical_expr.Volatility;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 
 /**
@@ -301,6 +306,29 @@ public final class Functions {
    */
   public static Expr not(Expr expr) {
     return new Expr.NotExpr(expr);
+  }
+
+  // ── UDF creation ──
+
+  /**
+   * Creates a simple scalar UDF with fixed input and output types.
+   *
+   * @param name the function name
+   * @param volatility the function volatility
+   * @param inputTypes the expected input Arrow types
+   * @param outputType the output Arrow type
+   * @param fn the function implementation
+   * @return a new ScalarUDF
+   * @see <a href="https://docs.rs/datafusion/52.1.0/datafusion/prelude/fn.create_udf.html">Rust
+   *     DataFusion: create_udf</a>
+   */
+  public static ScalarUDF createUdf(
+      String name,
+      Volatility volatility,
+      List<ArrowType> inputTypes,
+      ArrowType outputType,
+      ScalarUDFImpl fn) {
+    return new SimpleScalarUDF(name, new Signature(volatility), inputTypes, outputType, fn);
   }
 
   // ── Private helpers ──

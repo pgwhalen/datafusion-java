@@ -1,22 +1,24 @@
 package org.apache.arrow.datafusion.logical_expr;
 
 import java.util.List;
+import org.apache.arrow.datafusion.Functions;
 import org.apache.arrow.datafusion.execution.SessionContext;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.FieldVector;
-import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.Field;
 
 /**
  * A user-defined scalar function that can be registered with a {@link SessionContext}.
  *
  * <p>Implement this interface to create custom scalar functions usable in SQL queries. For simple
- * fixed-type UDFs, use the {@link #simple} factory method instead.
+ * fixed-type UDFs, use {@link Functions#createUdf} instead.
  *
  * <p>Example usage:
  *
  * <pre>{@code
- * ScalarUDF pow = ScalarUDF.simple("pow", Volatility.IMMUTABLE,
+ * import static org.apache.arrow.datafusion.Functions.*;
+ *
+ * ScalarUDF pow = createUdf("pow", Volatility.IMMUTABLE,
  *     List.of(ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE),
  *             ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE)),
  *     ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE),
@@ -49,8 +51,14 @@ public interface ScalarUDF {
    */
   String name();
 
-  /** Returns the volatility of this function. */
-  Volatility volatility();
+  /**
+   * Returns the signature of this function, including its volatility.
+   *
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/struct.ScalarUDF.html#method.signature">Rust
+   *     DataFusion: ScalarUDF::signature</a>
+   */
+  Signature signature();
 
   /**
    * Determines the return field (name + type) given the argument fields.
@@ -95,24 +103,5 @@ public interface ScalarUDF {
    */
   default List<Field> coerceTypes(List<Field> argFields) {
     return argFields;
-  }
-
-  /**
-   * Creates a simple scalar UDF with fixed input and output types.
-   *
-   * @param name the function name
-   * @param volatility the function volatility
-   * @param inputTypes the expected input Arrow types
-   * @param outputType the output Arrow type
-   * @param fn the function implementation
-   * @return a new ScalarUDF
-   */
-  static ScalarUDF simple(
-      String name,
-      Volatility volatility,
-      List<ArrowType> inputTypes,
-      ArrowType outputType,
-      ScalarUDFImpl fn) {
-    return new SimpleScalarUDF(name, volatility, inputTypes, outputType, fn);
   }
 }

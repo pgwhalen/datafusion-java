@@ -1,5 +1,6 @@
 package org.apache.arrow.datafusion;
 
+import static org.apache.arrow.datafusion.Functions.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.Arrays;
@@ -7,6 +8,7 @@ import java.util.List;
 import org.apache.arrow.datafusion.dataframe.DataFrame;
 import org.apache.arrow.datafusion.execution.SessionContext;
 import org.apache.arrow.datafusion.logical_expr.ScalarUDF;
+import org.apache.arrow.datafusion.logical_expr.Signature;
 import org.apache.arrow.datafusion.logical_expr.Volatility;
 import org.apache.arrow.datafusion.physical_plan.SendableRecordBatchStream;
 import org.apache.arrow.memory.BufferAllocator;
@@ -43,8 +45,8 @@ class ScalarUDFTest {
             }
 
             @Override
-            public Volatility volatility() {
-              return Volatility.IMMUTABLE;
+            public Signature signature() {
+              return new Signature(Volatility.IMMUTABLE);
             }
 
             @Override
@@ -119,7 +121,7 @@ class ScalarUDFTest {
 
       // Create a simple "double_it" UDF using the factory
       ScalarUDF doubleIt =
-          ScalarUDF.simple(
+          createUdf(
               "double_it",
               Volatility.IMMUTABLE,
               List.of(new ArrowType.Int(64, true)),
@@ -166,7 +168,7 @@ class ScalarUDFTest {
 
           // Create a UDF that always throws
           ScalarUDF failingUdf =
-              ScalarUDF.simple(
+              createUdf(
                   "fail_udf",
                   Volatility.VOLATILE,
                   List.of(new ArrowType.Int(64, true)),

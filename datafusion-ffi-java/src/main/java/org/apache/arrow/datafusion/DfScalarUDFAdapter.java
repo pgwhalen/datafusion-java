@@ -51,7 +51,7 @@ public final class DfScalarUDFAdapter implements DfScalarUdfTrait {
 
   @Override
   public int volatility() {
-    return switch (udf.volatility()) {
+    return switch (udf.signature().volatility()) {
       case IMMUTABLE -> 0;
       case STABLE -> 1;
       case VOLATILE -> 2;

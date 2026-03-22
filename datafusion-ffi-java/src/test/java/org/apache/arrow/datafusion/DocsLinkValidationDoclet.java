@@ -89,8 +89,6 @@ public class DocsLinkValidationDoclet implements Doclet {
   private static final Set<String> NO_SEE_LINK_REQUIRED =
       Set.of(
           "WhenThen",
-          // Implementation detail of ScalarUDF.simple()
-          "SimpleScalarUDF",
           // RecordBatchReader maps to arrow::record_batch::RecordBatch (Arrow, not DataFusion)
           "RecordBatchReader");
 
@@ -124,10 +122,10 @@ public class DocsLinkValidationDoclet implements Doclet {
                   // Java Arrow iteration patterns, no Rust equivalent
                   "getVectorSchemaRoot", "loadNextBatch", "lookup", "getDictionaryIds")),
           Map.entry(
-              "ScalarUDF",
+              "SimpleScalarUDF",
               Set.of(
-                  // No direct method on ScalarUDF struct
-                  "volatility", "simple")),
+                  // Inherited from ScalarUDF interface, documented there
+                  "name", "signature", "returnField", "invoke", "coerceTypes")),
           Map.entry(
               "PlanProperties",
               Set.of(
