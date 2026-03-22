@@ -31,10 +31,11 @@ public class DocsLinkValidationDoclet implements Doclet {
   private Reporter reporter;
   private final List<String> failures = new ArrayList<>();
 
-  // Valid docs.rs URL pattern - allows struct, trait, enum, fn, type, and index.html
+  // Valid docs.rs URL pattern - allows struct, trait, enum, fn, type, and index.html.
+  // Accepts any crate (datafusion-*, object_store, etc.) to support cross-crate references.
   private static final Pattern VALID_DOCS_URL =
       Pattern.compile(
-          "https://docs\\.rs/datafusion[\\w-]*/\\d+\\.\\d+\\.\\d+/.*"
+          "https://docs\\.rs/[\\w-]+/\\d+\\.\\d+\\.\\d+/.*"
               + "(?:(?:struct|trait|enum|fn|type)\\.[\\w]+\\.html|index\\.html)"
               + "(?:(?:#method|#structfield|#tymethod)\\.[\\w_]+)?");
 
@@ -137,11 +138,6 @@ public class DocsLinkValidationDoclet implements Doclet {
               Set.of(
                   // No Rust equivalent
                   "projection", "partition")),
-          Map.entry(
-              "PartitionedFile",
-              Set.of(
-                  // No Rust equivalent
-                  "size", "rangeStart", "rangeEnd")),
           Map.entry(
               "Spans",
               Set.of(
@@ -488,12 +484,15 @@ public class DocsLinkValidationDoclet implements Doclet {
     if (url == null) return null;
 
     String label = labelBuilder.toString().replaceAll("\\s+", " ").trim();
-    // Parse "Rust DataFusion: Label" from the anchor text
-    String prefix = "Rust DataFusion: ";
+    // Parse "Rust {crate}: Label" from the anchor text (e.g., "Rust DataFusion: Foo" or
+    // "Rust object_store: Bar"). The label after the colon is used for name matching.
+    String prefix = "Rust ";
     if (label.startsWith(prefix)) {
-      String rustName = label.substring(prefix.length()).trim();
+      int colonIdx = label.indexOf(": ", prefix.length());
+      if (colonIdx < 0) return null;
+      String rustName = label.substring(colonIdx + 2).trim();
       // For method links like "Type::method", extract just the type part for class-level,
-      // but keep the full label for the caller to interpret
+      // but keep the full label for the caller to interpret.
       return new SeeLink(url, rustName);
     }
 

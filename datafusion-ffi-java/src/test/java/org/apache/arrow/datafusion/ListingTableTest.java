@@ -58,9 +58,9 @@ public class ListingTableTest {
     public RecordBatchReader open(PartitionedFile file) {
       String text;
       try {
-        text = Files.readString(Path.of(file.path()));
+        text = Files.readString(Path.of(file.objectMeta().location()));
       } catch (IOException e) {
-        throw new RuntimeException("Failed to read file: " + file.path(), e);
+        throw new RuntimeException("Failed to read file: " + file.objectMeta().location(), e);
       }
       String[] lines = text.split("\n");
 
@@ -130,9 +130,9 @@ public class ListingTableTest {
     public RecordBatchReader open(PartitionedFile file) {
       String text;
       try {
-        text = Files.readString(Path.of(file.path()));
+        text = Files.readString(Path.of(file.objectMeta().location()));
       } catch (IOException e) {
-        throw new RuntimeException("Failed to read file: " + file.path(), e);
+        throw new RuntimeException("Failed to read file: " + file.objectMeta().location(), e);
       }
       String[] lines = text.split("\n");
 

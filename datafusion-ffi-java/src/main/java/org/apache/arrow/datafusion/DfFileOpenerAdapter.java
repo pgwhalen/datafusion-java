@@ -1,6 +1,8 @@
 package org.apache.arrow.datafusion;
 
 import org.apache.arrow.datafusion.datasource.FileOpener;
+import org.apache.arrow.datafusion.datasource.FileRange;
+import org.apache.arrow.datafusion.datasource.ObjectMeta;
 import org.apache.arrow.datafusion.datasource.PartitionedFile;
 import org.apache.arrow.datafusion.physical_plan.RecordBatchReader;
 import org.apache.arrow.memory.BufferAllocator;
@@ -31,10 +33,11 @@ final class DfFileOpenerAdapter implements DfFileOpenerTrait {
       long errorCap) {
     try {
       String pathStr = NativeUtil.readString(pathAddr, pathLen);
+      ObjectMeta meta = new ObjectMeta(pathStr, fileSize);
       // (0, 0) means no range (zero-length range is nonsensical)
-      Long rangeStartObj = (rangeStart == 0 && rangeEnd == 0) ? null : rangeStart;
-      Long rangeEndObj = (rangeStart == 0 && rangeEnd == 0) ? null : rangeEnd;
-      PartitionedFile file = new PartitionedFile(pathStr, fileSize, rangeStartObj, rangeEndObj);
+      FileRange range =
+          (rangeStart == 0 && rangeEnd == 0) ? null : new FileRange(rangeStart, rangeEnd);
+      PartitionedFile file = new PartitionedFile(meta, range);
 
       RecordBatchReader reader = opener.open(file);
 
