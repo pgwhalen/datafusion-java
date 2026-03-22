@@ -95,7 +95,7 @@ find_jar() {
 
     if [ -z "$jar" ]; then
         log_error "No JAR file found in $JAR_DIR"
-        log_info "Run './gradlew :datafusion-ffi-java:jarWithLocalLib' or ':jarWithAllLibs' first"
+        log_info "Run './gradlew :datafusion-ffi-java:jarWithLocalLib' or ':jar' first"
         exit 1
     fi
 

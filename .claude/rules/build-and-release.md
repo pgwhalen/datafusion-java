@@ -66,8 +66,8 @@ Platform directory names follow native-lib-loader convention: `{os}_{arch}` wher
 |------|-------------|
 | `copyReleaseLibraryForJar` | Copy release library to JAR resources for current platform |
 | `copyAllNativeLibraries` | Copy all platform artifacts from CI build directory |
+| `jar` | Default JAR — includes native libraries when `copyAllNativeLibraries` has source |
 | `jarWithLocalLib` | Create JAR with only local platform's native library |
-| `jarWithAllLibs` | Create JAR with all platform native libraries |
 
 ### Publishing Tasks
 
@@ -130,7 +130,7 @@ Each platform uploads its native library as an artifact.
 
 1. Downloads all 5 native artifacts
 2. Organizes them into `build/native-artifacts/{platform}/`
-3. Runs `copyAllNativeLibraries` and `jarWithAllLibs`
+3. Runs `copyAllNativeLibraries` and `jar`
 4. Uploads the combined JAR
 
 ### Job 3: test-jar

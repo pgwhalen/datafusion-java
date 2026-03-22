@@ -30,7 +30,7 @@ $jar = Get-ChildItem -Path $JarDir -Filter "datafusion-ffi-java-*.jar" |
 
 if (-not $jar) {
     Write-Error "No JAR file found in $JarDir"
-    Write-Host "[INFO] Run './gradlew :datafusion-ffi-java:jarWithLocalLib' or ':jarWithAllLibs' first"
+    Write-Host "[INFO] Run './gradlew :datafusion-ffi-java:jarWithLocalLib' or ':jar' first"
     exit 1
 }
 

@@ -164,6 +164,16 @@ tasks.register('copyAllNativeLibraries', Copy) {
     into layout.buildDirectory.dir("resources/main/natives")
 }
 
+// Native libraries are copied into build/resources/main/natives/, which is part of
+// sourceSets.main.output. Making jar depend on copyAllNativeLibraries ensures the default
+// jar (used by `from components.java` in the publication) includes native libraries when
+// they are available in build/native-artifacts/. When no artifacts are present (local dev),
+// copyAllNativeLibraries is NO-SOURCE and the jar is built without natives.
+jar {
+    dependsOn copyAllNativeLibraries
+    mustRunAfter copyReleaseLibraryForJar
+}
+
 // Javadoc shares build/resources/main with native library copy tasks.
 // dependsOn satisfies Gradle's implicit-dependency validation (mustRunAfter alone is not enough).
 javadoc {
@@ -178,17 +188,6 @@ javadoc {
 tasks.register('jarWithLocalLib', Jar) {
     dependsOn copyReleaseLibraryForJar, classes
     archiveClassifier = 'local'
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-    from sourceSets.main.output
-    from(layout.buildDirectory.dir("resources/main")) {
-        include "natives/**"
-    }
-}
-
-// JAR with all platform native libraries (for release)
-tasks.register('jarWithAllLibs', Jar) {
-    dependsOn copyAllNativeLibraries, classes
-    archiveClassifier = ''
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     from sourceSets.main.output
     from(layout.buildDirectory.dir("resources/main")) {

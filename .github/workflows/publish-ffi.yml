@@ -167,7 +167,7 @@ jobs:
         run: ./scripts/organize-native-libs.sh
 
       - name: Build JAR with all native libraries
-        run: ./gradlew :datafusion-ffi-java:jarWithAllLibs :datafusion-ffi-java:sourcesJar :datafusion-ffi-java:javadocJar -PskipDiplomatGeneration
+        run: ./gradlew :datafusion-ffi-java:jar :datafusion-ffi-java:sourcesJar :datafusion-ffi-java:javadocJar -PskipDiplomatGeneration
 
       - name: Verify JAR contents
         run: ./scripts/verify-jar-contents.sh
@@ -228,17 +228,21 @@ jobs:
           java-version: '22'
           distribution: 'temurin'
 
-      - name: Download JAR artifacts
+      - name: Download all native artifacts
         uses: actions/download-artifact@v4
         with:
-          name: datafusion-ffi-java-jars
-          path: datafusion-ffi-java/build/libs
+          path: datafusion-ffi-java/build/native-artifacts
+          pattern: native-*
+          merge-multiple: false
 
       - name: Download Diplomat-generated sources
         uses: actions/download-artifact@v4
         with:
           name: diplomat-generated
           path: datafusion-ffi-java/build/diplomat-generated
+
+      - name: Organize native libraries
+        run: ./scripts/organize-native-libs.sh
 
       - name: Publish to GitHub Packages
         run: ./gradlew :datafusion-ffi-java:publish -PskipDiplomatGeneration
