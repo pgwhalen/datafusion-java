@@ -18,13 +18,19 @@ public class PhysicalExpr implements AutoCloseable {
 
   private final PhysicalExprBridge bridge;
 
+  /**
+   * @apiNote This constructor is an implementation detail. The {@link PhysicalExprBridge} parameter
+   *     type is package-private and not usable by external consumers.
+   */
   public PhysicalExpr(PhysicalExprBridge bridge) {
     this.bridge = bridge;
   }
 
   /**
-   * Returns the internal bridge for use by other bridge classes.
+   * Returns the internal bridge for cross-package bridge access.
    *
+   * @apiNote This method is an implementation detail. The return type {@link PhysicalExprBridge} is
+   *     package-private and not usable by external consumers.
    * @return the bridge
    */
   public PhysicalExprBridge bridge() {

@@ -49,9 +49,7 @@ public record PlanProperties(
     return boundedness;
   }
 
-  /**
-   * Creates a PlanProperties with default values: 1 partition, incremental emission, bounded.
-   */
+  /** Creates a PlanProperties with default values: 1 partition, incremental emission, bounded. */
   public PlanProperties() {
     this(1, EmissionType.INCREMENTAL, Boundedness.BOUNDED);
   }
