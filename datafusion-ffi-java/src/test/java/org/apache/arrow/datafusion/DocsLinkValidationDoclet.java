@@ -127,11 +127,6 @@ public class DocsLinkValidationDoclet implements Doclet {
                   // Inherited from ScalarUDF interface, documented there
                   "name", "signature", "returnField", "invoke", "coerceTypes")),
           Map.entry(
-              "PlanProperties",
-              Set.of(
-                  // Java-only factory
-                  "defaults")),
-          Map.entry(
               "FileScanConfig",
               Set.of(
                   // No Rust equivalent
