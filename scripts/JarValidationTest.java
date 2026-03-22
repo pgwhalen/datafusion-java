@@ -1,6 +1,6 @@
-import org.apache.arrow.datafusion.SessionContext;
-import org.apache.arrow.datafusion.DataFrame;
-import org.apache.arrow.datafusion.SendableRecordBatchStream;
+import org.apache.arrow.datafusion.execution.SessionContext;
+import org.apache.arrow.datafusion.dataframe.DataFrame;
+import org.apache.arrow.datafusion.physical_plan.SendableRecordBatchStream;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
