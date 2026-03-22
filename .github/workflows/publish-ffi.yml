@@ -16,6 +16,40 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # Fast checks that don't need native libraries — runs in parallel with build-native
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 22
+        uses: actions/setup-java@v4
+        with:
+          java-version: '22'
+          distribution: 'temurin'
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            datafusion-ffi-native/target
+          key: ${{ runner.os }}-${{ runner.arch }}-cargo-check-${{ hashFiles('**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-cargo-check-
+            ${{ runner.os }}-${{ runner.arch }}-cargo-
+
+      - name: Generate Diplomat bindings (cargo check)
+        run: cargo check
+        working-directory: datafusion-ffi-native
+
+      - name: Run spotlessCheck and verifyDocsLinksHttp
+        run: ./gradlew :datafusion-ffi-java:spotlessCheck :datafusion-ffi-java:verifyDocsLinksHttp -PskipDiplomatGeneration
+
   # Build native libraries on all platforms
   build-native:
     strategy:
@@ -102,7 +136,7 @@ jobs:
 
   # Build JAR with all native libraries
   build-jar:
-    needs: build-native
+    needs: [build-native, checks]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -134,9 +168,6 @@ jobs:
 
       - name: Build JAR with all native libraries
         run: ./gradlew :datafusion-ffi-java:jarWithAllLibs :datafusion-ffi-java:sourcesJar :datafusion-ffi-java:javadocJar -PskipDiplomatGeneration
-
-      - name: Validate docs.rs links (HTTP)
-        run: ./gradlew :datafusion-ffi-java:verifyDocsLinksHttp -PskipDiplomatGeneration
 
       - name: Verify JAR contents
         run: ./scripts/verify-jar-contents.sh
