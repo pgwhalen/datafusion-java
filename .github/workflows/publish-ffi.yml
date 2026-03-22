@@ -228,24 +228,14 @@ jobs:
           java-version: '22'
           distribution: 'temurin'
 
-      - name: Download all native artifacts
+      - name: Download pre-built JAR artifacts
         uses: actions/download-artifact@v4
         with:
-          path: datafusion-ffi-java/build/native-artifacts
-          pattern: native-*
-          merge-multiple: false
-
-      - name: Download Diplomat-generated sources
-        uses: actions/download-artifact@v4
-        with:
-          name: diplomat-generated
-          path: datafusion-ffi-java/build/diplomat-generated
-
-      - name: Organize native libraries
-        run: ./scripts/organize-native-libs.sh
+          name: datafusion-ffi-java-jars
+          path: datafusion-ffi-java/build/libs
 
       - name: Publish to GitHub Packages
-        run: ./gradlew :datafusion-ffi-java:publish -PskipDiplomatGeneration
+        run: ./gradlew :datafusion-ffi-java:publish -PpublishPrebuiltJars -PskipDiplomatGeneration
         env:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

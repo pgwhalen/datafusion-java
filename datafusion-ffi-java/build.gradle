@@ -198,9 +198,46 @@ tasks.register('jarWithLocalLib', Jar) {
 publishing {
     publications {
         maven(MavenPublication) {
-            from components.java
+            if (project.hasProperty('publishPrebuiltJars')) {
+                // CI publish mode: publish the exact pre-built JARs that were tested,
+                // rather than rebuilding from scratch. This guarantees the published
+                // artifact is identical to what test-jar validated.
+                def jarDir = layout.buildDirectory.dir("libs").get().asFile
+                artifact(new File(jarDir, "${project.name}-${project.version}.jar"))
+                artifact(new File(jarDir, "${project.name}-${project.version}-sources.jar")) {
+                    classifier = 'sources'
+                }
+                artifact(new File(jarDir, "${project.name}-${project.version}-javadoc.jar")) {
+                    classifier = 'javadoc'
+                }
+            } else {
+                from components.java
+            }
 
             pom {
+                // When using explicit artifacts (publishPrebuiltJars), `from components.java`
+                // isn't used so Gradle won't auto-populate dependencies. Add them from the
+                // project's dependency configurations.
+                withXml {
+                    if (project.hasProperty('publishPrebuiltJars')) {
+                        def depsNode = asNode().appendNode('dependencies')
+                        // Map Gradle configuration scopes to Maven POM scopes
+                        def scopeMapping = [
+                            'api': 'compile',
+                            'implementation': 'runtime',
+                            'runtimeOnly': 'runtime'
+                        ]
+                        scopeMapping.each { configName, mavenScope ->
+                            configurations.findByName(configName)?.dependencies?.each { dep ->
+                                def depNode = depsNode.appendNode('dependency')
+                                depNode.appendNode('groupId', dep.group)
+                                depNode.appendNode('artifactId', dep.name)
+                                depNode.appendNode('version', dep.version)
+                                depNode.appendNode('scope', mavenScope)
+                            }
+                        }
+                    }
+                }
                 name = 'DataFusion FFI Java'
                 description = 'Java bindings for Apache DataFusion using the Foreign Function & Memory API'
                 url = 'https://github.com/pgwhalen/datafusion-java'
