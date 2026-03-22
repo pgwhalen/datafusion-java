@@ -16,6 +16,40 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # Fast checks that don't need native libraries — runs in parallel with build-native
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 22
+        uses: actions/setup-java@v4
+        with:
+          java-version: '22'
+          distribution: 'temurin'
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            datafusion-ffi-native/target
+          key: ${{ runner.os }}-${{ runner.arch }}-cargo-check-${{ hashFiles('**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-cargo-check-
+            ${{ runner.os }}-${{ runner.arch }}-cargo-
+
+      - name: Generate Diplomat bindings (cargo check)
+        run: cargo check
+        working-directory: datafusion-ffi-native
+
+      - name: Run spotlessCheck and verifyDocsLinksHttp
+        run: ./gradlew :datafusion-ffi-java:spotlessCheck :datafusion-ffi-java:verifyDocsLinksHttp -PskipDiplomatGeneration
+
   # Build native libraries on all platforms
   build-native:
     strategy:
@@ -28,6 +62,8 @@ jobs:
           - os: ubuntu-24.04-arm
             platform: linux_arm64
             lib_name: libdatafusion_ffi_native.so
+            cargo_flags: '-j 2'  # Limit parallelism to avoid OOM on ARM runners
+            cargo_profile: 'ci-arm'  # Use reduced-memory profile (no LTO)
           - os: macos-14
             platform: osx_64
             rust_target: x86_64-apple-darwin
@@ -52,7 +88,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             datafusion-ffi-native/target
-          key: ${{ runner.os }}-${{ runner.arch }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-cargo-${{ hashFiles('**/Cargo.toml') }}
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-cargo-
 
@@ -62,7 +98,7 @@ jobs:
 
       - name: Build release library
         if: ${{ !matrix.rust_target }}
-        run: cargo build --release
+        run: cargo build --profile ${{ matrix.cargo_profile || 'release' }} ${{ matrix.cargo_flags || '' }}
         working-directory: datafusion-ffi-native
 
       - name: Build release library (cross-compile)
@@ -70,12 +106,22 @@ jobs:
         run: cargo build --release --target ${{ matrix.rust_target }}
         working-directory: datafusion-ffi-native
 
+      # On linux_64: upload Diplomat-generated Java bindings for build-jar
+      - name: Upload Diplomat-generated sources
+        if: matrix.platform == 'linux_64'
+        uses: actions/upload-artifact@v4
+        with:
+          name: diplomat-generated
+          path: datafusion-ffi-java/build/diplomat-generated/
+          retention-days: 7
+          if-no-files-found: error
+
       - name: Upload native library
         if: ${{ !matrix.rust_target }}
         uses: actions/upload-artifact@v4
         with:
           name: native-${{ matrix.platform }}
-          path: datafusion-ffi-native/target/release/${{ matrix.lib_name }}
+          path: datafusion-ffi-native/target/${{ matrix.cargo_profile || 'release' }}/${{ matrix.lib_name }}
           retention-days: 7
           if-no-files-found: error
 
@@ -90,7 +136,7 @@ jobs:
 
   # Build JAR with all native libraries
   build-jar:
-    needs: build-native
+    needs: [build-native, checks]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -111,11 +157,17 @@ jobs:
           pattern: native-*
           merge-multiple: false
 
+      - name: Download Diplomat-generated sources
+        uses: actions/download-artifact@v4
+        with:
+          name: diplomat-generated
+          path: datafusion-ffi-java/build/diplomat-generated
+
       - name: Organize native libraries
         run: ./scripts/organize-native-libs.sh
 
       - name: Build JAR with all native libraries
-        run: ./gradlew :datafusion-ffi-java:jarWithAllLibs :datafusion-ffi-java:sourcesJar :datafusion-ffi-java:javadocJar
+        run: ./gradlew :datafusion-ffi-java:jarWithAllLibs :datafusion-ffi-java:sourcesJar :datafusion-ffi-java:javadocJar -PskipDiplomatGeneration
 
       - name: Verify JAR contents
         run: ./scripts/verify-jar-contents.sh
@@ -163,7 +215,7 @@ jobs:
   publish:
     needs: test-jar
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')))
     permissions:
       contents: read
       packages: write
@@ -182,8 +234,14 @@ jobs:
           name: datafusion-ffi-java-jars
           path: datafusion-ffi-java/build/libs
 
+      - name: Download Diplomat-generated sources
+        uses: actions/download-artifact@v4
+        with:
+          name: diplomat-generated
+          path: datafusion-ffi-java/build/diplomat-generated
+
       - name: Publish to GitHub Packages
-        run: ./gradlew :datafusion-ffi-java:publish
+        run: ./gradlew :datafusion-ffi-java:publish -PskipDiplomatGeneration
         env:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
