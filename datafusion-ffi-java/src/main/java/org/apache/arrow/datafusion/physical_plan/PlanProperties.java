@@ -51,10 +51,8 @@ public record PlanProperties(
 
   /**
    * Creates a PlanProperties with default values: 1 partition, incremental emission, bounded.
-   *
-   * @return The default PlanProperties
    */
-  public static PlanProperties defaults() {
-    return new PlanProperties(1, EmissionType.INCREMENTAL, Boundedness.BOUNDED);
+  public PlanProperties() {
+    this(1, EmissionType.INCREMENTAL, Boundedness.BOUNDED);
   }
 }

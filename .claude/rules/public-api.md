@@ -23,6 +23,7 @@ Java packages map directly to Rust DataFusion module paths:
 - `snake_case` methods/fields -> `camelCase` (e.g., `with_column_renamed` -> `withColumnRenamed`)
 - Rust enum variants stay `SCREAMING_SNAKE_CASE` in Java enums (e.g., `JoinType::LeftSemi` -> `JoinType.LEFT_SEMI`)
 - Rust `new()` / `new_with_*()` -> Java static factory methods (e.g., `SessionContext.create()`, `SessionContext.newWithConfig()`)
+- Rust `Default` trait -> Java default (no-arg) constructor for records, or no-arg static factory for classes. Do not create a `defaults()` static method -- use the language's native default construction instead.
 
 ## Type Mappings
 
