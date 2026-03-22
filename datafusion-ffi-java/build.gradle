@@ -47,34 +47,15 @@ spotless {
 
 // --- Diplomat code generation ---
 // build.rs in datafusion-ffi-native generates Java bindings during cargo build.
-// postProcessDiplomatBindings makes them package-private and wires NativeLoader.
+// diplomat-config.toml's clib_initializer wires NativeLoader directly in generated code.
 // Use -PskipDiplomatGeneration in CI when pre-generated sources are provided as artifacts.
 
 def diplomatGeneratedDir = layout.buildDirectory.dir("diplomat-generated/src/main/java")
 sourceSets.main.java.srcDir diplomatGeneratedDir
 
-tasks.register('postProcessDiplomatBindings') {
-    if (!project.hasProperty('skipDiplomatGeneration')) {
-        dependsOn 'cargoDevBuild'  // cargo build generates Diplomat bindings via build.rs
-    }
-    def genDir = layout.buildDirectory.dir("diplomat-generated").get().asFile
-
-    doLast {
-        genDir.eachFileRecurse { f ->
-            if (f.name.endsWith('.java')) {
-                def text = f.text
-                // Replace library loading with NativeLoader
-                text = text.replaceAll(
-                    /System\.loadLibrary\("[^"]+"\);\s*\n\s*LIB = SymbolLookup\.loaderLookup\(\);/,
-                    'LIB = org.apache.arrow.datafusion.NativeLoader.get();'
-                )
-                f.text = text
-            }
-        }
-    }
+if (!project.hasProperty('skipDiplomatGeneration')) {
+    compileJava.dependsOn 'cargoDevBuild'
 }
-
-compileJava.dependsOn 'postProcessDiplomatBindings'
 
 def cargoBinary = "${System.getProperty('user.home')}/.cargo/bin/cargo"
 

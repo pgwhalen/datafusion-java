@@ -181,21 +181,17 @@ Contains only adapter helpers and Diplomat slice readers:
 ### Build Process
 
 ```bash
-# 1. Build Rust library (includes bridge.rs → Diplomat proc-macros)
+# 1. Build Rust library (includes bridge.rs → Diplomat proc-macros, generates Java bindings)
 ./gradlew :datafusion-ffi-java:cargoDevBuild
 
-# 2. Generate Java bindings from Diplomat annotations
-./gradlew :datafusion-ffi-java:generateDiplomatBindings
-
-# 3. Post-process: make Diplomat classes package-private, wire NativeLoader
-./gradlew :datafusion-ffi-java:postProcessDiplomatBindings
-
-# 4. Compile Java (includes hand-written + generated code)
+# 2. Compile Java (includes hand-written + generated code)
 ./gradlew :datafusion-ffi-java:compileJava
 
-# 5. Run tests
+# 3. Run tests
 ./gradlew :datafusion-ffi-java:test
 ```
+
+NativeLoader wiring is handled by `clib_initializer` in `diplomat-config.toml` — no post-processing needed.
 
 ## Arrow Data Passing
 

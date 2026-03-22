@@ -72,18 +72,7 @@ jobs:
         run: cargo build --release --target ${{ matrix.rust_target }}
         working-directory: datafusion-ffi-native
 
-      # On linux_64: generate and post-process Diplomat Java bindings for build-jar
-      - name: Set up JDK 22
-        if: matrix.platform == 'linux_64'
-        uses: actions/setup-java@v4
-        with:
-          java-version: '22'
-          distribution: 'temurin'
-
-      - name: Post-process Diplomat Java bindings
-        if: matrix.platform == 'linux_64'
-        run: ./gradlew :datafusion-ffi-java:postProcessDiplomatBindings -PskipDiplomatGeneration
-
+      # On linux_64: upload Diplomat-generated Java bindings for build-jar
       - name: Upload Diplomat-generated sources
         if: matrix.platform == 'linux_64'
         uses: actions/upload-artifact@v4
