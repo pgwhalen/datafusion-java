@@ -10,7 +10,11 @@ package org.apache.arrow.datafusion.common;
  */
 public sealed interface TableReference {
 
-  /** An unqualified table reference consisting of only a table name. */
+  /**
+   * An unqualified table reference consisting of only a table name.
+   *
+   * @param table the table name
+   */
   record Bare(String table) implements TableReference {
 
     /**
@@ -26,7 +30,12 @@ public sealed interface TableReference {
     }
   }
 
-  /** A partially qualified table reference consisting of a schema and table name. */
+  /**
+   * A partially qualified table reference consisting of a schema and table name.
+   *
+   * @param schema the schema name
+   * @param table the table name
+   */
   record Partial(String schema, String table) implements TableReference {
 
     /**
@@ -54,7 +63,13 @@ public sealed interface TableReference {
     }
   }
 
-  /** A fully qualified table reference consisting of a catalog, schema, and table name. */
+  /**
+   * A fully qualified table reference consisting of a catalog, schema, and table name.
+   *
+   * @param catalog the catalog name
+   * @param schema the schema name
+   * @param table the table name
+   */
   record Full(String catalog, String schema, String table) implements TableReference {
 
     /**

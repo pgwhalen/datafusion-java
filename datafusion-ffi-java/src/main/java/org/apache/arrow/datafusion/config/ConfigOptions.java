@@ -85,12 +85,20 @@ public final class ConfigOptions {
     this.rawOptions = Collections.unmodifiableMap(new LinkedHashMap<>(rawOptions));
   }
 
-  /** Returns the default configuration (reads from environment variables). */
+  /**
+   * Returns the default configuration (reads from environment variables).
+   *
+   * @return the default configuration
+   */
   public static ConfigOptions defaults() {
     return new Builder().build();
   }
 
-  /** Returns a builder for creating custom configurations. */
+  /**
+   * Returns a builder for creating custom configurations.
+   *
+   * @return a new builder
+   */
   public static Builder builder() {
     return new Builder();
   }
@@ -111,6 +119,8 @@ public final class ConfigOptions {
   /**
    * When true, exceptions in FFI callbacks include the full Java stack trace. Defaults to the value
    * of the FULL_JAVA_STACK_TRACE environment variable.
+   *
+   * @return true if full stack traces are enabled
    */
   public boolean fullStackTrace() {
     return fullStackTrace;
@@ -119,6 +129,8 @@ public final class ConfigOptions {
   /**
    * Returns true if any DataFusion config options have been set (either via typed builders, raw
    * options, or additional options).
+   *
+   * @return true if any options have been set
    */
   public boolean hasOptions() {
     if (rawOptions != null && !rawOptions.isEmpty()) {
@@ -280,7 +292,11 @@ public final class ConfigOptions {
       return this;
     }
 
-    /** Builds the ConfigOptions. */
+    /**
+     * Builds the ConfigOptions.
+     *
+     * @return the built options
+     */
     public ConfigOptions build() {
       return new ConfigOptions(this);
     }

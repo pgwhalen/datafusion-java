@@ -15,6 +15,13 @@ public final class DfCatalogAdapter implements DfCatalogTrait {
   private final BufferAllocator allocator;
   private final boolean fullStackTrace;
 
+  /**
+   * Creates a new adapter wrapping the given catalog provider.
+   *
+   * @param catalog the catalog provider to adapt
+   * @param allocator the buffer allocator
+   * @param fullStackTrace whether to include full stack traces in errors
+   */
   public DfCatalogAdapter(
       CatalogProvider catalog, BufferAllocator allocator, boolean fullStackTrace) {
     this.catalog = catalog;

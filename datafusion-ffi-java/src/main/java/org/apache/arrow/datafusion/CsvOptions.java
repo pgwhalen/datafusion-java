@@ -44,12 +44,20 @@ public final class CsvOptions {
     this.compressionLevel = builder.compressionLevel;
   }
 
-  /** Creates a new builder with default values. */
+  /**
+   * Creates a new builder with default values.
+   *
+   * @return a new builder
+   */
   public static Builder builder() {
     return new Builder();
   }
 
-  /** Encodes the options as protobuf bytes (CsvOptions proto). */
+  /**
+   * Encodes the options as protobuf bytes (CsvOptions proto).
+   *
+   * @return the serialized protobuf bytes
+   */
   public byte[] encodeOptions() {
     org.apache.arrow.datafusion.proto.CsvOptions.Builder b =
         org.apache.arrow.datafusion.proto.CsvOptions.newBuilder();
@@ -109,76 +117,165 @@ public final class CsvOptions {
 
     private Builder() {}
 
+    /**
+     * Sets whether the CSV has a header row.
+     *
+     * @param hasHeader true if CSV has a header
+     * @return this builder
+     */
     public Builder hasHeader(boolean hasHeader) {
       this.hasHeader = hasHeader;
       return this;
     }
 
+    /**
+     * Sets the field delimiter byte.
+     *
+     * @param delimiter the delimiter byte
+     * @return this builder
+     */
     public Builder delimiter(byte delimiter) {
       this.delimiter = delimiter;
       return this;
     }
 
+    /**
+     * Sets the quote character byte.
+     *
+     * @param quote the quote byte
+     * @return this builder
+     */
     public Builder quote(byte quote) {
       this.quote = quote;
       return this;
     }
 
+    /**
+     * Sets the escape character byte.
+     *
+     * @param escape the escape byte, or null for no escape
+     * @return this builder
+     */
     public Builder escape(Byte escape) {
       this.escape = escape;
       return this;
     }
 
+    /**
+     * Sets the line terminator byte.
+     *
+     * @param terminator the terminator byte, or null for default
+     * @return this builder
+     */
     public Builder terminator(Byte terminator) {
       this.terminator = terminator;
       return this;
     }
 
+    /**
+     * Sets whether to use double quotes for escaping.
+     *
+     * @param doubleQuote true to use double quotes
+     * @return this builder
+     */
     public Builder doubleQuote(boolean doubleQuote) {
       this.doubleQuote = doubleQuote;
       return this;
     }
 
+    /**
+     * Sets whether newlines in values are supported.
+     *
+     * @param newlinesInValues true to support newlines in values
+     * @return this builder
+     */
     public Builder newlinesInValues(boolean newlinesInValues) {
       this.newlinesInValues = newlinesInValues;
       return this;
     }
 
+    /**
+     * Sets the date format string.
+     *
+     * @param dateFormat the date format
+     * @return this builder
+     */
     public Builder dateFormat(String dateFormat) {
       this.dateFormat = dateFormat;
       return this;
     }
 
+    /**
+     * Sets the datetime format string.
+     *
+     * @param datetimeFormat the datetime format
+     * @return this builder
+     */
     public Builder datetimeFormat(String datetimeFormat) {
       this.datetimeFormat = datetimeFormat;
       return this;
     }
 
+    /**
+     * Sets the timestamp format string.
+     *
+     * @param timestampFormat the timestamp format
+     * @return this builder
+     */
     public Builder timestampFormat(String timestampFormat) {
       this.timestampFormat = timestampFormat;
       return this;
     }
 
+    /**
+     * Sets the timestamp with timezone format string.
+     *
+     * @param timestampTzFormat the timestamp with timezone format
+     * @return this builder
+     */
     public Builder timestampTzFormat(String timestampTzFormat) {
       this.timestampTzFormat = timestampTzFormat;
       return this;
     }
 
+    /**
+     * Sets the time format string.
+     *
+     * @param timeFormat the time format
+     * @return this builder
+     */
     public Builder timeFormat(String timeFormat) {
       this.timeFormat = timeFormat;
       return this;
     }
 
+    /**
+     * Sets the null value representation string.
+     *
+     * @param nullValue the null value string
+     * @return this builder
+     */
     public Builder nullValue(String nullValue) {
       this.nullValue = nullValue;
       return this;
     }
 
+    /**
+     * Sets the compression level.
+     *
+     * @param compressionLevel the compression level, or null for default
+     * @return this builder
+     */
     public Builder compressionLevel(Integer compressionLevel) {
       this.compressionLevel = compressionLevel;
       return this;
     }
 
+    /**
+     * Builds the {@link CsvOptions}.
+     *
+     * @return the built options
+     */
     public CsvOptions build() {
       return new CsvOptions(this);
     }

@@ -179,7 +179,20 @@ public final class ParquetOptions {
     return table.build().toByteArray();
   }
 
-  /** Per-column Parquet options. */
+  /**
+   * Per-column Parquet options.
+   *
+   * @param compression the compression codec name, or {@code null} to use the default
+   * @param encoding the encoding name, or {@code null} to use the default
+   * @param dictionaryEnabled whether dictionary encoding is enabled, or {@code null} to use the
+   *     default
+   * @param statisticsEnabled the statistics level, or {@code null} to use the default
+   * @param bloomFilterEnabled whether bloom filters are enabled, or {@code null} to use the default
+   * @param bloomFilterFpp the bloom filter false positive probability, or {@code null} to use the
+   *     default
+   * @param bloomFilterNdv the bloom filter number of distinct values, or {@code null} to use the
+   *     default
+   */
   public record ParquetColumnOptions(
       String compression,
       String encoding,

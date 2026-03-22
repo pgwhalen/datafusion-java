@@ -42,6 +42,11 @@ public final class DataFrameBridge implements AutoCloseable {
   private final DfDataFrame dfDf;
   private volatile boolean closed = false;
 
+  /**
+   * Creates a new bridge wrapping the given Diplomat-generated DataFrame.
+   *
+   * @param dfDf the Diplomat-generated DataFrame
+   */
   public DataFrameBridge(DfDataFrame dfDf) {
     this.dfDf = dfDf;
   }

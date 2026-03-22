@@ -33,7 +33,11 @@ public record CatalogOptions(
 
   private static final String PREFIX = "datafusion.catalog.";
 
-  /** Returns a new builder. */
+  /**
+   * Returns a new builder.
+   *
+   * @return a new builder
+   */
   public static Builder builder() {
     return new Builder();
   }
@@ -157,7 +161,11 @@ public record CatalogOptions(
       return this;
     }
 
-    /** Builds the {@link CatalogOptions}. */
+    /**
+     * Builds the {@link CatalogOptions}.
+     *
+     * @return the built options
+     */
     public CatalogOptions build() {
       return new CatalogOptions(
           createDefaultCatalogAndSchema,

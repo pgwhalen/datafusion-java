@@ -169,6 +169,9 @@ tasks.register('copyAllNativeLibraries', Copy) {
 javadoc {
     dependsOn copyAllNativeLibraries
     mustRunAfter copyReleaseLibraryForJar
+    // Exclude generated protobuf and diplomat sources — they have no javadoc comments
+    exclude '**/proto/**'
+    source = sourceSets.main.allJava.matching { exclude { it.file.path.contains('diplomat-generated') } }
 }
 
 // JAR with only the local platform's native library (for development)

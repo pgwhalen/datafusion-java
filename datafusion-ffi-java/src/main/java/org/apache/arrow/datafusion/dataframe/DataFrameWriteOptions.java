@@ -25,7 +25,11 @@ public final class DataFrameWriteOptions {
     this.partitionBy = Collections.unmodifiableList(new ArrayList<>(builder.partitionBy));
   }
 
-  /** Creates a new builder with default values. */
+  /**
+   * Creates a new builder with default values.
+   *
+   * @return a new builder
+   */
   public static Builder builder() {
     return new Builder();
   }
@@ -53,24 +57,42 @@ public final class DataFrameWriteOptions {
     /**
      * Set whether to write a single file. When true, an output file is always created even if the
      * DataFrame is empty. Default: true.
+     *
+     * @param singleFileOutput true to write a single file
+     * @return this builder
      */
     public Builder singleFileOutput(boolean singleFileOutput) {
       this.singleFileOutput = singleFileOutput;
       return this;
     }
 
-    /** Set the insert operation mode. Default: {@link InsertOp#APPEND}. */
+    /**
+     * Set the insert operation mode. Default: {@link InsertOp#APPEND}.
+     *
+     * @param insertOp the insert operation mode
+     * @return this builder
+     */
     public Builder insertOp(InsertOp insertOp) {
       this.insertOp = insertOp;
       return this;
     }
 
-    /** Set columns to partition by. Default: empty (no partitioning). */
+    /**
+     * Set columns to partition by. Default: empty (no partitioning).
+     *
+     * @param partitionBy the column names to partition by
+     * @return this builder
+     */
     public Builder partitionBy(List<String> partitionBy) {
       this.partitionBy = new ArrayList<>(partitionBy);
       return this;
     }
 
+    /**
+     * Builds the {@link DataFrameWriteOptions}.
+     *
+     * @return the built options
+     */
     public DataFrameWriteOptions build() {
       return new DataFrameWriteOptions(this);
     }

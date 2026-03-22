@@ -10,10 +10,21 @@ package org.apache.arrow.datafusion.common;
  *     DataFusion: DataFusionError</a>
  */
 public class DataFusionError extends RuntimeException {
+  /**
+   * Creates a new DataFusionError with the specified message.
+   *
+   * @param message the error message
+   */
   public DataFusionError(String message) {
     super(message);
   }
 
+  /**
+   * Creates a new DataFusionError with the specified message and cause.
+   *
+   * @param message the error message
+   * @param cause the underlying cause
+   */
   public DataFusionError(String message, Throwable cause) {
     super(message, cause);
   }

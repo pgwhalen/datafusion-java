@@ -48,6 +48,11 @@ import org.apache.arrow.vector.types.pojo.Schema;
 public class DataFrame implements AutoCloseable {
   private final DataFrameBridge bridge;
 
+  /**
+   * Creates a new DataFrame backed by the given bridge.
+   *
+   * @param bridge the native bridge
+   */
   public DataFrame(DataFrameBridge bridge) {
     this.bridge = bridge;
   }
@@ -59,6 +64,8 @@ public class DataFrame implements AutoCloseable {
    *
    * <p>Consumes this DataFrame. The source must not be used after this call.
    *
+   * @param exprs the expressions to select
+   * @return a new DataFrame with the selected columns
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.select">Rust
    *     DataFusion: DataFrame::select</a>
@@ -72,6 +79,8 @@ public class DataFrame implements AutoCloseable {
    *
    * <p>Consumes this DataFrame. The source must not be used after this call.
    *
+   * @param exprs the expressions to select
+   * @return a new DataFrame with the selected columns
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.select">Rust
    *     DataFusion: DataFrame::select</a>
@@ -87,6 +96,8 @@ public class DataFrame implements AutoCloseable {
    *
    * <p>Consumes this DataFrame. The source must not be used after this call.
    *
+   * @param columns the column names to select
+   * @return a new DataFrame with the selected columns
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.select_columns">Rust
    *     DataFusion: DataFrame::select_columns</a>
@@ -103,6 +114,8 @@ public class DataFrame implements AutoCloseable {
    *
    * <p>Consumes this DataFrame. The source must not be used after this call.
    *
+   * @param predicate the filter expression
+   * @return a new DataFrame with matching rows
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.filter">Rust
    *     DataFusion: DataFrame::filter</a>
@@ -120,6 +133,8 @@ public class DataFrame implements AutoCloseable {
    *
    * <p>Consumes this DataFrame. The source must not be used after this call.
    *
+   * @param sortExprs the sort expressions
+   * @return a new sorted DataFrame
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.sort">Rust
    *     DataFusion: DataFrame::sort</a>
@@ -133,6 +148,8 @@ public class DataFrame implements AutoCloseable {
    *
    * <p>Consumes this DataFrame. The source must not be used after this call.
    *
+   * @param sortExprs the sort expressions
+   * @return a new sorted DataFrame
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.sort">Rust
    *     DataFusion: DataFrame::sort</a>
@@ -152,6 +169,7 @@ public class DataFrame implements AutoCloseable {
    *
    * @param skip number of rows to skip
    * @param fetch maximum number of rows to return, or null for no limit
+   * @return a new DataFrame with the limit applied
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.limit">Rust
    *     DataFusion: DataFrame::limit</a>
@@ -172,6 +190,7 @@ public class DataFrame implements AutoCloseable {
    *
    * @param groupExprs GROUP BY expressions (empty list for global aggregation)
    * @param aggrExprs aggregate expressions (e.g., {@code avg(col("salary"))})
+   * @return a new aggregated DataFrame
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.aggregate">Rust
    *     DataFusion: DataFrame::aggregate</a>
@@ -194,6 +213,7 @@ public class DataFrame implements AutoCloseable {
    * @param joinType the join type
    * @param leftCols left join column names
    * @param rightCols right join column names
+   * @return a new joined DataFrame
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.join">Rust
    *     DataFusion: DataFrame::join</a>
@@ -216,6 +236,7 @@ public class DataFrame implements AutoCloseable {
    * @param leftCols left join column names
    * @param rightCols right join column names
    * @param filter additional join filter expression
+   * @return a new joined DataFrame
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.join">Rust
    *     DataFusion: DataFrame::join</a>
@@ -240,6 +261,7 @@ public class DataFrame implements AutoCloseable {
    * @param right the right DataFrame
    * @param joinType the join type
    * @param onExprs join condition expressions
+   * @return a new joined DataFrame
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.join_on">Rust
    *     DataFusion: DataFrame::join_on</a>
@@ -257,6 +279,8 @@ public class DataFrame implements AutoCloseable {
    *
    * <p>Consumes this DataFrame. The source must not be used after this call.
    *
+   * @param other the other DataFrame
+   * @return a new DataFrame containing all rows from both
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.union">Rust
    *     DataFusion: DataFrame::union</a>
@@ -272,6 +296,8 @@ public class DataFrame implements AutoCloseable {
    *
    * <p>Consumes this DataFrame. The source must not be used after this call.
    *
+   * @param other the other DataFrame
+   * @return a new DataFrame containing distinct rows from both
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.union_distinct">Rust
    *     DataFusion: DataFrame::union_distinct</a>
@@ -287,6 +313,8 @@ public class DataFrame implements AutoCloseable {
    *
    * <p>Consumes this DataFrame. The source must not be used after this call.
    *
+   * @param other the other DataFrame
+   * @return a new DataFrame containing rows present in both
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.intersect">Rust
    *     DataFusion: DataFrame::intersect</a>
@@ -302,6 +330,8 @@ public class DataFrame implements AutoCloseable {
    *
    * <p>Consumes this DataFrame. The source must not be used after this call.
    *
+   * @param other the other DataFrame
+   * @return a new DataFrame containing rows in this but not in other
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.except">Rust
    *     DataFusion: DataFrame::except</a>
@@ -319,6 +349,7 @@ public class DataFrame implements AutoCloseable {
    *
    * <p>Consumes this DataFrame. The source must not be used after this call.
    *
+   * @return a new DataFrame with duplicate rows removed
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.distinct">Rust
    *     DataFusion: DataFrame::distinct</a>
@@ -338,6 +369,7 @@ public class DataFrame implements AutoCloseable {
    *
    * @param name column name
    * @param expr expression to compute the column value
+   * @return a new DataFrame with the added or replaced column
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.with_column">Rust
    *     DataFusion: DataFrame::with_column</a>
@@ -355,6 +387,7 @@ public class DataFrame implements AutoCloseable {
    *
    * @param oldName current column name
    * @param newName new column name
+   * @return a new DataFrame with the renamed column
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.with_column_renamed">Rust
    *     DataFusion: DataFrame::with_column_renamed</a>
@@ -371,6 +404,7 @@ public class DataFrame implements AutoCloseable {
    * <p>Consumes this DataFrame. The source must not be used after this call.
    *
    * @param columns column names to drop
+   * @return a new DataFrame without the specified columns
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.drop_columns">Rust
    *     DataFusion: DataFrame::drop_columns</a>

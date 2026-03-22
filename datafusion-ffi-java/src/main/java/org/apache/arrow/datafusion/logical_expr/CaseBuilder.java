@@ -23,11 +23,15 @@ import java.util.List;
 public final class CaseBuilder {
   private final List<WhenThen> branches = new ArrayList<>();
 
+  /** Creates a new empty CaseBuilder. */
   public CaseBuilder() {}
 
   /**
    * Add a WHEN/THEN branch.
    *
+   * @param condition the condition expression
+   * @param then the result expression when condition is true
+   * @return this builder for chaining
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/conditional_expressions/struct.CaseBuilder.html#method.when">Rust
    *     DataFusion: CaseBuilder::when</a>
@@ -40,6 +44,8 @@ public final class CaseBuilder {
   /**
    * Terminal: build the CASE expression with an ELSE clause.
    *
+   * @param elseExpr the else expression
+   * @return the built CASE expression
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/conditional_expressions/struct.CaseBuilder.html#method.otherwise">Rust
    *     DataFusion: CaseBuilder::otherwise</a>
@@ -51,6 +57,7 @@ public final class CaseBuilder {
   /**
    * Terminal: build the CASE expression without an ELSE clause (result is NULL).
    *
+   * @return the built CASE expression
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/conditional_expressions/struct.CaseBuilder.html#method.end">Rust
    *     DataFusion: CaseBuilder::end</a>
