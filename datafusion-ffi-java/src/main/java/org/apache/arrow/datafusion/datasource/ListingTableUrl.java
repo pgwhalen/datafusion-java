@@ -3,12 +3,17 @@ package org.apache.arrow.datafusion.datasource;
 /**
  * A URL pointing to a directory of files for a listing table.
  *
- * @param getUrl the URL string (e.g., a local directory path or object store URL)
  * @see <a
  *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingTableUrl.html">Rust
  *     DataFusion: ListingTableUrl</a>
  */
-public record ListingTableUrl(String getUrl) {
+public final class ListingTableUrl {
+
+  private final String url;
+
+  private ListingTableUrl(String url) {
+    this.url = url;
+  }
 
   /**
    * Returns the URL string.
@@ -18,9 +23,8 @@ public record ListingTableUrl(String getUrl) {
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingTableUrl.html#method.get_url">Rust
    *     DataFusion: ListingTableUrl::get_url</a>
    */
-  @Override
   public String getUrl() {
-    return getUrl;
+    return url;
   }
 
   /**
