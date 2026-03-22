@@ -143,11 +143,6 @@ public class DocsLinkValidationDoclet implements Doclet {
                   // No Rust equivalent
                   "size", "rangeStart", "rangeEnd")),
           Map.entry(
-              "WildcardOptions",
-              Set.of(
-                  // No Rust equivalent
-                  "qualifier")),
-          Map.entry(
               "Spans",
               Set.of(
                   // Rust Spans is a newtype wrapper, no named field

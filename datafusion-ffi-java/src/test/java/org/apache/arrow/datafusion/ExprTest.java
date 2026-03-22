@@ -10,6 +10,7 @@ import org.apache.arrow.datafusion.common.TableReference;
 import org.apache.arrow.datafusion.logical_expr.Expr;
 import org.apache.arrow.datafusion.logical_expr.Operator;
 import org.apache.arrow.datafusion.logical_expr.WhenThen;
+import org.apache.arrow.datafusion.logical_expr.WildcardOptions;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.junit.jupiter.api.Test;
 
@@ -389,6 +390,25 @@ public class ExprTest {
     byte[] bytes = ExprProtoConverter.toProtoBytes(List.of());
     List<Expr> results = ExprProtoConverter.fromProtoBytes(bytes);
     assertEquals(0, results.size());
+  }
+
+  @Test
+  void testWildcardExprRoundTrip() {
+    Expr original = new Expr.WildcardExpr(null, WildcardOptions.EMPTY);
+    Expr result = roundTrip(original);
+    assertEquals(original, result);
+  }
+
+  @Test
+  void testWildcardExprWithQualifierRoundTrip() {
+    Expr original =
+        new Expr.WildcardExpr(new TableReference.Bare("my_table"), WildcardOptions.EMPTY);
+    Expr result = roundTrip(original);
+    assertInstanceOf(Expr.WildcardExpr.class, result);
+    Expr.WildcardExpr wildcard = (Expr.WildcardExpr) result;
+    assertInstanceOf(TableReference.Bare.class, wildcard.qualifier());
+    assertEquals("my_table", ((TableReference.Bare) wildcard.qualifier()).table());
+    assertEquals(WildcardOptions.EMPTY, wildcard.options());
   }
 
   /** Serializes an Expr to proto bytes and deserializes back. */

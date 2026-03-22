@@ -626,8 +626,9 @@ public sealed interface Expr {
    * A wildcard expression ({@code Expr::Wildcard}).
    *
    * @param qualifier the optional table qualifier
+   * @param options the wildcard options
    */
-  record WildcardExpr(TableReference qualifier) implements Expr {}
+  record WildcardExpr(TableReference qualifier, WildcardOptions options) implements Expr {}
 
   /**
    * A grouping set expression ({@code Expr::GroupingSet}).

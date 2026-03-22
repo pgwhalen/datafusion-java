@@ -11,6 +11,7 @@ import org.apache.arrow.datafusion.logical_expr.NullTreatment;
 import org.apache.arrow.datafusion.logical_expr.Operator;
 import org.apache.arrow.datafusion.logical_expr.SortExpr;
 import org.apache.arrow.datafusion.logical_expr.WhenThen;
+import org.apache.arrow.datafusion.logical_expr.WildcardOptions;
 import org.apache.arrow.datafusion.logical_expr.WindowFrame;
 import org.apache.arrow.datafusion.logical_expr.WindowFrameBound;
 import org.apache.arrow.datafusion.logical_expr.WindowFrameUnits;
@@ -227,7 +228,7 @@ public final class ExprProtoConverter {
         var w = proto.getWildcard();
         TableReference qualifier =
             w.hasQualifier() ? convertTableReference(w.getQualifier()) : null;
-        yield new Expr.WildcardExpr(qualifier);
+        yield new Expr.WildcardExpr(qualifier, WildcardOptions.EMPTY);
       }
       case GROUPING_SET -> {
         GroupingSetNode gs = proto.getGroupingSet();
