@@ -6,18 +6,18 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import org.apache.arrow.datafusion.CatalogProvider;
-import org.apache.arrow.datafusion.DataFrame;
-import org.apache.arrow.datafusion.ExecutionPlan;
-import org.apache.arrow.datafusion.RecordBatchReader;
-import org.apache.arrow.datafusion.RecordBatchStream;
-import org.apache.arrow.datafusion.SchemaProvider;
-import org.apache.arrow.datafusion.Session;
-import org.apache.arrow.datafusion.SessionContext;
-import org.apache.arrow.datafusion.SessionState;
-import org.apache.arrow.datafusion.config.SessionConfig;
-import org.apache.arrow.datafusion.Expr;
-import org.apache.arrow.datafusion.TableProvider;
+import org.apache.arrow.datafusion.catalog.CatalogProvider;
+import org.apache.arrow.datafusion.config.ConfigOptions;
+import org.apache.arrow.datafusion.dataframe.DataFrame;
+import org.apache.arrow.datafusion.physical_plan.ExecutionPlan;
+import org.apache.arrow.datafusion.physical_plan.RecordBatchReader;
+import org.apache.arrow.datafusion.physical_plan.SendableRecordBatchStream;
+import org.apache.arrow.datafusion.catalog.SchemaProvider;
+import org.apache.arrow.datafusion.catalog.Session;
+import org.apache.arrow.datafusion.execution.SessionContext;
+import org.apache.arrow.datafusion.execution.SessionState;
+import org.apache.arrow.datafusion.logical_expr.Expr;
+import org.apache.arrow.datafusion.catalog.TableProvider;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.BigIntVector;
@@ -102,7 +102,7 @@ public class GraalNativeImageTest {
     try (BufferAllocator allocator = new RootAllocator();
         SessionContext ctx = new SessionContext();
         DataFrame df = ctx.sql("SELECT 1 + 1 AS result");
-        RecordBatchStream stream = df.executeStream(allocator)) {
+        SendableRecordBatchStream stream = df.executeStream(allocator)) {
 
       VectorSchemaRoot root = stream.getVectorSchemaRoot();
       assertTrue(stream.loadNextBatch(), "should have at least one batch");
@@ -141,10 +141,10 @@ public class GraalNativeImageTest {
         nameVec.setValueCount(3);
         root.setRowCount(3);
 
-        ctx.registerTable("people", root, allocator);
+        ctx.registerBatch("people", root, allocator);
 
         try (DataFrame df = ctx.sql("SELECT id, name FROM people WHERE id >= 20 ORDER BY id");
-            RecordBatchStream stream = df.executeStream(allocator)) {
+            SendableRecordBatchStream stream = df.executeStream(allocator)) {
 
           VectorSchemaRoot result = stream.getVectorSchemaRoot();
           assertTrue(stream.loadNextBatch(), "should have results");
@@ -178,7 +178,7 @@ public class GraalNativeImageTest {
 
       try (DataFrame df =
               ctx.sql("SELECT * FROM graal_catalog.test_schema.test_table ORDER BY id");
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
 
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         assertTrue(stream.loadNextBatch(), "should have results from custom provider");
@@ -209,7 +209,7 @@ public class GraalNativeImageTest {
       sql.append(") AS t(num)");
 
       try (DataFrame df = ctx.sql(sql.toString());
-          RecordBatchStream stream = df.executeStream(allocator)) {
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
 
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
         int totalRows = 0;
@@ -251,7 +251,7 @@ public class GraalNativeImageTest {
   // ── Test 8: SessionContext with config ─────────────────────────────────────
 
   private void testSessionContextWithConfig() {
-    SessionConfig config = SessionConfig.builder()
+    ConfigOptions config = ConfigOptions.builder()
         .fullStackTrace(true)
         .build();
     try (SessionContext ctx = new SessionContext(config)) {
