@@ -80,12 +80,18 @@ public final class DfTableAdapter implements DfTableTrait {
               ? Collections.emptyList()
               : ExprProtoConverter.fromProtoBytes(filterBytes);
 
-      // Convert projection from raw u32 buffer
-      int[] projectionArr = NativeUtil.readU32s(projectionAddr, projectionLen);
+      // Convert projection from raw u32 buffer.
+      // projectionAddr == 0 means Rust None (no projection constraint, all columns) -> null.
+      // projectionAddr != 0 with projectionLen == 0 means Rust Some([]) (zero columns
+      // explicitly requested, e.g. for count(*)) -> empty list.
+      // projectionAddr != 0 with projectionLen > 0 means Rust Some([...]) -> list of indices.
       List<Integer> projectionList;
-      if (projectionArr.length == 0) {
+      if (projectionAddr == 0) {
+        projectionList = null;
+      } else if (projectionLen == 0) {
         projectionList = Collections.emptyList();
       } else {
+        int[] projectionArr = NativeUtil.readU32s(projectionAddr, projectionLen);
         projectionList = new ArrayList<>(projectionArr.length);
         for (int idx : projectionArr) {
           projectionList.add(idx);

@@ -77,8 +77,11 @@ public interface TableProvider {
    * down to this table provider. These can be analyzed for literal guarantees using {@link
    * LiteralGuarantee#analyze(PhysicalExpr)}.
    *
-   * <p>The projection parameter specifies which columns should be read. If empty, all columns
-   * should be included. The indices correspond to the column positions in the schema.
+   * <p>The projection parameter specifies which columns should be read. {@code null} means no
+   * projection constraint (all columns should be included). An empty list means DataFusion
+   * explicitly requests zero columns (e.g. for {@code count(*)}); the returned execution plan must
+   * have an empty schema in that case. A non-empty list contains the column indices to include. The
+   * indices correspond to the column positions in the schema.
    *
    * <p>The limit parameter specifies the maximum number of rows to return. If null, all rows should
    * be returned.
@@ -86,7 +89,7 @@ public interface TableProvider {
    * @param session The session context for this scan (borrowed, valid only during this call)
    * @param filters Filter expressions for potential pushdown (borrowed, valid only during this
    *     call)
-   * @param projection Column indices to include, or empty list for all columns
+   * @param projection null for all columns, empty list for zero columns, or specific column indices
    * @param limit Maximum number of rows, or null for no limit
    * @return An execution plan that produces the requested data
    * @throws DataFusionError if creating the scan fails

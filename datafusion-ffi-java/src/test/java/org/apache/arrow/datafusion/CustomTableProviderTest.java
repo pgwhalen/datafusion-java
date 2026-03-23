@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -408,6 +409,117 @@ public class CustomTableProviderTest {
 
       // Verify that no limit was passed (null)
       assertNull(capturedLimit.get(), "Limit should be null when no LIMIT clause is used");
+    }
+  }
+
+  @Test
+  void testProjectionSpecificColumns() {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+
+      Schema schema = createUsersSchema();
+
+      AtomicReference<List<Integer>> capturedProjection = new AtomicReference<>();
+      TableProvider projectionCapturingTable =
+          new TableProvider() {
+            @Override
+            public Schema schema() {
+              return schema;
+            }
+
+            @Override
+            public ExecutionPlan scan(
+                Session session, List<Expr> filters, List<Integer> projection, Long limit) {
+              capturedProjection.set(projection);
+              return new TestExecutionPlan(schema, List.of(usersDataBatch()));
+            }
+          };
+
+      SchemaProvider mySchema =
+          new SimpleSchemaProvider(Map.of("proj_test", projectionCapturingTable));
+      CatalogProvider myCatalog = new SimpleCatalogProvider(Map.of("test", mySchema));
+
+      ctx.registerCatalog("proj_specific_catalog", myCatalog, allocator);
+
+      // SELECT * resolves to explicit column indices via the optimizer
+      try (DataFrame df = ctx.sql("SELECT * FROM proj_specific_catalog.test.proj_test");
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
+
+        VectorSchemaRoot root = stream.getVectorSchemaRoot();
+        assertTrue(stream.loadNextBatch());
+        assertEquals(3, root.getRowCount());
+
+        BigIntVector idVector = (BigIntVector) root.getVector("id");
+        assertEquals(1, idVector.get(0));
+        assertEquals(2, idVector.get(1));
+        assertEquals(3, idVector.get(2));
+      }
+
+      List<Integer> projection = capturedProjection.get();
+      assertNotNull(projection, "Projection should be non-null (specific columns)");
+      assertFalse(projection.isEmpty(), "Projection should contain column indices");
+      assertTrue(projection.contains(0), "Projection should include column 0 (id)");
+      assertTrue(projection.contains(1), "Projection should include column 1 (name)");
+    }
+  }
+
+  @Test
+  void testProjectionEmptyForCountStar() {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+
+      Schema schema = createUsersSchema();
+      Schema emptySchema = new Schema(Collections.emptyList());
+
+      Object sentinel = new Object();
+      AtomicReference<Object> capturedProjection = new AtomicReference<>(sentinel);
+      TableProvider projectionCapturingTable =
+          new TableProvider() {
+            @Override
+            public Schema schema() {
+              return schema;
+            }
+
+            @Override
+            public ExecutionPlan scan(
+                Session session, List<Expr> filters, List<Integer> projection, Long limit) {
+              capturedProjection.set(projection);
+              // count(*) passes empty projection — return an execution plan with empty schema
+              Schema scanSchema =
+                  (projection != null && projection.isEmpty()) ? emptySchema : schema;
+              BatchPopulator emptyBatch = root -> root.setRowCount(3);
+              BatchPopulator fullBatch = usersDataBatch();
+              return new TestExecutionPlan(
+                  scanSchema,
+                  List.of((projection != null && projection.isEmpty()) ? emptyBatch : fullBatch));
+            }
+          };
+
+      SchemaProvider mySchema =
+          new SimpleSchemaProvider(Map.of("count_test", projectionCapturingTable));
+      CatalogProvider myCatalog = new SimpleCatalogProvider(Map.of("test", mySchema));
+
+      ctx.registerCatalog("proj_empty_catalog", myCatalog, allocator);
+
+      // count(*) should pass empty projection (zero columns explicitly requested)
+      try (DataFrame df = ctx.sql("SELECT count(*) FROM proj_empty_catalog.test.count_test");
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
+
+        VectorSchemaRoot root = stream.getVectorSchemaRoot();
+        assertTrue(stream.loadNextBatch());
+        assertEquals(1, root.getRowCount());
+
+        BigIntVector countVector = (BigIntVector) root.getVector(0);
+        assertEquals(3L, countVector.get(0));
+
+        assertFalse(stream.loadNextBatch());
+      }
+
+      assertNotSame(sentinel, capturedProjection.get(), "scan() should have been called");
+      @SuppressWarnings("unchecked")
+      List<Integer> projection = (List<Integer>) capturedProjection.get();
+      assertNotNull(projection, "count(*) should pass empty list, not null (null means all columns)");
+      assertTrue(projection.isEmpty(), "count(*) should pass empty projection (zero columns)");
     }
   }
 
