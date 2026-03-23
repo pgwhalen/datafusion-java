@@ -198,8 +198,10 @@ jar {
     mustRunAfter copyReleaseLibraryForJar
 }
 
-// Javadoc shares build/resources/main with native library copy tasks.
+// compileTestJava and javadoc share build/resources/main with native library copy tasks.
 // dependsOn satisfies Gradle's implicit-dependency validation (mustRunAfter alone is not enough).
+compileTestJava.dependsOn copyAllNativeLibraries
+
 javadoc {
     dependsOn copyAllNativeLibraries
     mustRunAfter copyReleaseLibraryForJar
