@@ -9,6 +9,8 @@ import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
 import org.apache.arrow.datafusion.catalog.Session;
 import org.apache.arrow.datafusion.catalog.TableProvider;
+import org.apache.arrow.datafusion.generated.DfExecutionPlan;
+import org.apache.arrow.datafusion.generated.DfTableTrait;
 import org.apache.arrow.datafusion.logical_expr.Expr;
 import org.apache.arrow.datafusion.logical_expr.TableProviderFilterPushDown;
 import org.apache.arrow.datafusion.physical_plan.ExecutionPlan;

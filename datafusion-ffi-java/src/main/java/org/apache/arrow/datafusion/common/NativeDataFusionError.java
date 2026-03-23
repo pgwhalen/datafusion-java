@@ -1,6 +1,6 @@
 package org.apache.arrow.datafusion.common;
 
-import org.apache.arrow.datafusion.DfError;
+import org.apache.arrow.datafusion.generated.DfError;
 
 /**
  * Exception indicating an error originating from the native DataFusion library.

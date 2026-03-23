@@ -2,6 +2,8 @@ package org.apache.arrow.datafusion;
 
 import org.apache.arrow.datafusion.datasource.FileFormat;
 import org.apache.arrow.datafusion.datasource.FileSource;
+import org.apache.arrow.datafusion.generated.DfFileFormatTrait;
+import org.apache.arrow.datafusion.generated.DfFileSource;
 import org.apache.arrow.memory.BufferAllocator;
 
 /**

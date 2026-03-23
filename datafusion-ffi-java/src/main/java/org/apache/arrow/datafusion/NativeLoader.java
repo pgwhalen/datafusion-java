@@ -22,7 +22,7 @@ import org.slf4j.LoggerFactory;
  *   <li><b>System path fallback</b> - Try System.loadLibrary() + SymbolLookup.loaderLookup()
  * </ol>
  */
-final class NativeLoader {
+public final class NativeLoader {
   private static final Logger logger = LoggerFactory.getLogger(NativeLoader.class);
   private static final String LIB_NAME = "datafusion_ffi_native";
   private static volatile SymbolLookup lookup;
@@ -34,7 +34,7 @@ final class NativeLoader {
    *
    * @return The symbol lookup instance
    */
-  static synchronized SymbolLookup get() {
+  public static synchronized SymbolLookup get() {
     if (lookup == null) {
       lookup = loadLibrary();
     }

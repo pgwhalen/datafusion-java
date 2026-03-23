@@ -4,6 +4,8 @@ import java.util.List;
 import java.util.Optional;
 import org.apache.arrow.datafusion.catalog.SchemaProvider;
 import org.apache.arrow.datafusion.catalog.TableProvider;
+import org.apache.arrow.datafusion.generated.DfSchemaTrait;
+import org.apache.arrow.datafusion.generated.DfTableProvider;
 import org.apache.arrow.memory.BufferAllocator;
 
 /**

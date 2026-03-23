@@ -22,10 +22,10 @@ import java.util.Set;
 /**
  * Enforces encapsulation rules for the Diplomat-based FFI architecture.
  *
- * <p>Diplomat-generated classes (Df* prefix, DiplomatLib), bridge classes (*Bridge), adapter
- * classes (Df*Adapter), remaining FFI classes (*Ffi), and utility classes (NativeUtil,
- * NativeLoader, Errors) must all be package-private. Public API classes must not expose
- * java.lang.foreign types.
+ * <p>Diplomat-generated classes live in the {@code generated} subpackage. Bridge classes (*Bridge),
+ * adapter classes (Df*Adapter), remaining FFI classes (*Ffi), and utility classes (NativeUtil,
+ * Errors) are internal implementation details. Public API classes must not expose java.lang.foreign
+ * types.
  */
 @AnalyzeClasses(
     packages = "org.apache.arrow.datafusion",
@@ -33,14 +33,18 @@ import java.util.Set;
 public class DiplomatEncapsulationTest {
 
   private static final String FFI_PACKAGE = "org.apache.arrow.datafusion";
+  private static final String GENERATED_PACKAGE = "org.apache.arrow.datafusion.generated";
 
   private static final Set<String> UTILITY_CLASS_NAMES =
-      Set.of("NativeUtil", "NativeLoader", "Errors", "OwnedSlice");
+      Set.of("NativeUtil", "NativeLoader", "Errors");
 
   private static final DescribedPredicate<JavaClass> IS_INTERNAL_FFI_CLASS =
-      new DescribedPredicate<>("an internal FFI/bridge/adapter class") {
+      new DescribedPredicate<>("an internal FFI/bridge/adapter/generated class") {
         @Override
         public boolean test(JavaClass javaClass) {
+          if (javaClass.getPackageName().equals(GENERATED_PACKAGE)) {
+            return true;
+          }
           if (!javaClass.getPackageName().startsWith(FFI_PACKAGE)) {
             return false;
           }
@@ -48,13 +52,8 @@ public class DiplomatEncapsulationTest {
           return name.endsWith("Ffi")
               || name.endsWith("Bridge")
               || name.endsWith("Converter")
-              || isDiplomatGenerated(name)
               || isDiplomatAdapter(name)
               || UTILITY_CLASS_NAMES.contains(name);
-        }
-
-        private boolean isDiplomatGenerated(String name) {
-          return name.startsWith("Df") || name.equals("DiplomatLib");
         }
 
         private boolean isDiplomatAdapter(String name) {
@@ -64,8 +63,8 @@ public class DiplomatEncapsulationTest {
 
   /**
    * Matches inner classes of internal FFI classes (e.g., DfCatalogTrait.Statics). These are
-   * implicitly public in Java (interface members) but are inaccessible outside the package because
-   * the enclosing interface is package-private.
+   * implicitly public in Java (interface members) but are implementation details of their enclosing
+   * class.
    */
   private static final DescribedPredicate<JavaClass> IS_INNER_OF_FFI_CLASS =
       new DescribedPredicate<>("an inner class of an internal FFI class") {

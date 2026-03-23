@@ -73,13 +73,8 @@ public class DocsLinkValidationDoclet implements Doclet {
         || name.endsWith("Converter")
         || name.endsWith("Ffi")
         || name.endsWith("Handle")
-        || name.startsWith("Df")
         || name.startsWith("Native")
-        || name.equals("NativeUtil")
-        || name.equals("NativeLoader")
-        || name.equals("Errors")
-        || name.equals("DiplomatLib")
-        || name.equals("OwnedSlice");
+        || name.equals("Errors");
   }
 
   /**

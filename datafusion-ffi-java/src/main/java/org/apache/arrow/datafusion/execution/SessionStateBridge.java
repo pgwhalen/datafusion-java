@@ -1,10 +1,10 @@
 package org.apache.arrow.datafusion.execution;
 
-import org.apache.arrow.datafusion.DfError;
-import org.apache.arrow.datafusion.DfLogicalPlan;
-import org.apache.arrow.datafusion.DfSessionState;
 import org.apache.arrow.datafusion.common.DataFusionError;
 import org.apache.arrow.datafusion.common.NativeDataFusionError;
+import org.apache.arrow.datafusion.generated.DfError;
+import org.apache.arrow.datafusion.generated.DfLogicalPlan;
+import org.apache.arrow.datafusion.generated.DfSessionState;
 import org.apache.arrow.datafusion.logical_expr.LogicalPlanBridge;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

@@ -2,6 +2,8 @@ package org.apache.arrow.datafusion;
 
 import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
+import org.apache.arrow.datafusion.generated.DfExecutionPlanTrait;
+import org.apache.arrow.datafusion.generated.DfRecordBatchReader;
 import org.apache.arrow.datafusion.physical_plan.ExecutionPlan;
 import org.apache.arrow.datafusion.physical_plan.RecordBatchReader;
 import org.apache.arrow.memory.BufferAllocator;

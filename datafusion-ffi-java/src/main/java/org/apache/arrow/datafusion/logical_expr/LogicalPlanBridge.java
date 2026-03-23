@@ -1,6 +1,6 @@
 package org.apache.arrow.datafusion.logical_expr;
 
-import org.apache.arrow.datafusion.DfLogicalPlan;
+import org.apache.arrow.datafusion.generated.DfLogicalPlan;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

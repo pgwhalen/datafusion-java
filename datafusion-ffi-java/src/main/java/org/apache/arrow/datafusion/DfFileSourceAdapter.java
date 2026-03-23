@@ -10,6 +10,8 @@ import org.apache.arrow.c.Data;
 import org.apache.arrow.datafusion.datasource.FileOpener;
 import org.apache.arrow.datafusion.datasource.FileScanConfig;
 import org.apache.arrow.datafusion.datasource.FileSource;
+import org.apache.arrow.datafusion.generated.DfFileOpener;
+import org.apache.arrow.datafusion.generated.DfFileSourceTrait;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.types.pojo.Schema;
 

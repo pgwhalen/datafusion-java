@@ -4,6 +4,8 @@ import java.util.List;
 import java.util.Optional;
 import org.apache.arrow.datafusion.catalog.CatalogProvider;
 import org.apache.arrow.datafusion.catalog.SchemaProvider;
+import org.apache.arrow.datafusion.generated.DfCatalogTrait;
+import org.apache.arrow.datafusion.generated.DfSchemaProvider;
 import org.apache.arrow.memory.BufferAllocator;
 
 /**

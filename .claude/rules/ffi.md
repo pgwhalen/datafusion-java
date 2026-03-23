@@ -40,7 +40,7 @@ User Java interfaces (CatalogProvider, TableProvider, ...)
 |--------------------------------|-----------------------------------------|
 | Diplomat opaque (Rust)         | `DfFoo` in `bridge.rs`                 |
 | Diplomat trait (Rust)          | `DfFooTrait` in `bridge.rs`            |
-| Diplomat-generated Java class  | `DfFoo` (package-private)              |
+| Diplomat-generated Java class  | `DfFoo` (public, in `generated` subpackage) |
 | Bridge class                   | `FooBridge` (package-private)          |
 | Adapter class                  | `DfFooAdapter` (package-private)       |
 | Converter class                | `FooConverter` (package-private)       |
@@ -158,8 +158,8 @@ try (DfExprBytes exprBytes = ...) {
 
 Enforced by `DiplomatEncapsulationTest` (ArchUnit):
 
-1. **Internal classes are package-private** — `Df*`, `*Bridge`, `*Adapter`, `*Ffi`, `*Converter`, `DiplomatLib`, `NativeUtil`, `NativeLoader`, `Errors`
-2. **No `java.lang.foreign` in public classes** — FFM types only in package-private classes
+1. **Diplomat-generated classes live in the `generated` subpackage** — All `Df*`, `DiplomatLib`, `OwnedSlice` classes are in `org.apache.arrow.datafusion.generated`
+2. **No `java.lang.foreign` in public API classes** — FFM types only in internal/generated classes
 3. **No `MemorySegment` in public API signatures** — No public method/constructor/field uses `MemorySegment`
 4. **`NativeLoader` confined to internal classes** — Only Diplomat-generated and bridge classes may reference it
 5. **Constructors taking internal types are package-private** — `*Ffi`, `*Bridge` parameters require package-private constructors
@@ -191,7 +191,7 @@ Contains only adapter helpers and Diplomat slice readers:
 ./gradlew :datafusion-ffi-java:test
 ```
 
-NativeLoader wiring is handled by `clib_initializer` in `diplomat-config.toml` — no post-processing needed.
+NativeLoader wiring is handled by `clib_initializer` in `diplomat-config.toml`.
 
 ## Arrow Data Passing
 

@@ -3,6 +3,7 @@ package org.apache.arrow.datafusion;
 import org.apache.arrow.c.ArrowArray;
 import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
+import org.apache.arrow.datafusion.generated.DfRecordBatchReaderTrait;
 import org.apache.arrow.datafusion.physical_plan.RecordBatchReader;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;

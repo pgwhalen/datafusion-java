@@ -4,6 +4,8 @@ import org.apache.arrow.datafusion.datasource.FileOpener;
 import org.apache.arrow.datafusion.datasource.FileRange;
 import org.apache.arrow.datafusion.datasource.ObjectMeta;
 import org.apache.arrow.datafusion.datasource.PartitionedFile;
+import org.apache.arrow.datafusion.generated.DfFileOpenerTrait;
+import org.apache.arrow.datafusion.generated.DfRecordBatchReader;
 import org.apache.arrow.datafusion.physical_plan.RecordBatchReader;
 import org.apache.arrow.memory.BufferAllocator;
 

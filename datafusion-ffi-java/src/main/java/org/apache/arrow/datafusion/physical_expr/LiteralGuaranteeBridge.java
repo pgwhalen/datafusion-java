@@ -8,11 +8,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
-import org.apache.arrow.datafusion.DfError;
-import org.apache.arrow.datafusion.DfExprBytes;
-import org.apache.arrow.datafusion.DfLiteralGuarantee;
-import org.apache.arrow.datafusion.DfLiteralGuarantees;
-import org.apache.arrow.datafusion.DfSpan;
 import org.apache.arrow.datafusion.Location;
 import org.apache.arrow.datafusion.ScalarValueProtoConverter;
 import org.apache.arrow.datafusion.Span;
@@ -22,6 +17,11 @@ import org.apache.arrow.datafusion.common.DataFusionError;
 import org.apache.arrow.datafusion.common.NativeDataFusionError;
 import org.apache.arrow.datafusion.common.ScalarValue;
 import org.apache.arrow.datafusion.common.TableReference;
+import org.apache.arrow.datafusion.generated.DfError;
+import org.apache.arrow.datafusion.generated.DfExprBytes;
+import org.apache.arrow.datafusion.generated.DfLiteralGuarantee;
+import org.apache.arrow.datafusion.generated.DfLiteralGuarantees;
+import org.apache.arrow.datafusion.generated.DfSpan;
 import org.apache.arrow.datafusion.physical_plan.PhysicalExprBridge;
 
 /**
