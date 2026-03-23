@@ -518,7 +518,8 @@ public class CustomTableProviderTest {
       assertNotSame(sentinel, capturedProjection.get(), "scan() should have been called");
       @SuppressWarnings("unchecked")
       List<Integer> projection = (List<Integer>) capturedProjection.get();
-      assertNotNull(projection, "count(*) should pass empty list, not null (null means all columns)");
+      assertNotNull(
+          projection, "count(*) should pass empty list, not null (null means all columns)");
       assertTrue(projection.isEmpty(), "count(*) should pass empty projection (zero columns)");
     }
   }
