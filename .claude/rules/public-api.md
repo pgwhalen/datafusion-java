@@ -102,9 +102,14 @@ These have no direct Rust equivalent but are permitted:
 
 Missing functionality is permitted but should be highlighted with a comment or TODO. Do not implement things differently from how Rust DataFusion does them -- if the Rust API uses a different approach, match it.
 
+## Test Coverage Requirement
+
+Every public class, public field, and public method **MUST** be referenced in at least one test. When adding new public API surface, you **MUST** also add a test that exercises it. This ensures the entire public API is validated across the FFI boundary. See `.claude/rules/testing.md` for details on coverage tooling and data verification requirements.
+
 ## What NOT to Do
 
 - Do not invent new public API surface that diverges from Rust DataFusion's design
 - Do not use Java generics to represent Rust generics -- use sealed hierarchies instead
 - Do not expose FFM types (`MemorySegment`, etc.) in public API signatures
 - Do not add convenience overloads without a clear Rust counterpart unless they are trivial wrappers
+- Do not add public API without corresponding test coverage

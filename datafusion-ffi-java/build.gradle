@@ -1,6 +1,7 @@
 plugins {
     id 'java-library'
     id 'maven-publish'
+    id 'jacoco'
     id 'com.diffplug.spotless'
     id 'com.google.osdetector'
     id 'com.google.protobuf' version '0.9.4'
@@ -121,6 +122,31 @@ test {
         '--add-opens=java.base/java.nio=ALL-UNNAMED'
     ]
     useJUnitPlatform()
+}
+
+jacocoTestReport {
+    dependsOn test
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it, excludes: [
+                'org/apache/arrow/datafusion/proto/**',
+                'org/apache/arrow/datafusion/DiplomatLib.class',
+                'org/apache/arrow/datafusion/DiplomatLib$*.class',
+            ]).matching {
+                // Exclude Diplomat-generated Df* classes but keep hand-written Df*Adapter classes
+                exclude { element ->
+                    def name = element.name
+                    name.startsWith('Df') && !name.contains('Adapter') &&
+                        element.path.startsWith('org/apache/arrow/datafusion/')
+                }
+            }
+        }))
+    }
+    reports {
+        xml.required = true
+        html.required = true
+        csv.required = false
+    }
 }
 
 // Validates @see docs.rs links using the DocsLinkValidationDoclet (presence + format, offline)
