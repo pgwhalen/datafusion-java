@@ -2,6 +2,33 @@
 
 This document describes the build system, JAR packaging, and release process for `datafusion-ffi-java`.
 
+## Versioning
+
+`datafusion-ffi-java` owns its version independently in `datafusion-ffi-java/build.gradle`:
+
+```groovy
+version = project.findProperty('releaseVersion') ?: '0.17.1-SNAPSHOT'
+```
+
+- **Local development**: Uses the SNAPSHOT version (the default)
+- **CI release**: Overrides via `-PreleaseVersion=0.17.1` (strips SNAPSHOT)
+
+### Version Lifecycle
+
+```
+build.gradle: 0.17.1-SNAPSHOT     (checked in, local dev)
+    ↓ workflow_dispatch triggered
+CI strips "-SNAPSHOT" → 0.17.1
+    ↓ build, test, publish
+CI creates git tag v0.17.1
+    ↓
+CI updates build.gradle → 0.17.2-SNAPSHOT
+    ↓ commit & push
+build.gradle: 0.17.2-SNAPSHOT     (ready for next release)
+```
+
+To bump the major or minor version, manually update `build.gradle` (e.g., `0.18.0-SNAPSHOT`).
+
 ## Native Library Loading Strategy
 
 `NativeLoader.java` implements a three-tier loading strategy:
@@ -76,6 +103,14 @@ Platform directory names follow native-lib-loader convention: `{os}_{arch}` wher
 | `publish` | Publish to GitHub Packages |
 | `publishToMavenLocal` | Publish to local Maven repository |
 
+### Gradle Properties
+
+| Property | Purpose |
+|----------|---------|
+| `-PreleaseVersion=X.Y.Z` | Override the SNAPSHOT version with a release version |
+| `-PpublishPrebuiltJars` | Publish exact pre-built JARs instead of rebuilding (CI mode) |
+| `-PskipDiplomatGeneration` | Skip Diplomat code generation (use pre-generated sources) |
+
 ## Development Workflow
 
 ### Running Tests
@@ -113,27 +148,41 @@ Requires Java 22+ (searches `JAVA_HOME`, common JDK locations, or falls back to 
 
 ## CI/CD Workflow
 
-The `.github/workflows/publish-ffi.yml` workflow handles cross-platform builds and publishing:
+The `.github/workflows/publish-ffi.yml` workflow handles CI and releases:
 
-### Job 1: build-native (matrix)
+### Triggers
+
+- **`workflow_dispatch`** — Manual trigger. Builds, tests, publishes, and bumps version.
+- **`push` to `main`** — Runs CI (build + test) but does NOT publish.
+- **`pull_request`** — Runs CI for PRs.
+
+### Job 1: compute-version
+
+Reads `build.gradle` to extract the SNAPSHOT version. On `workflow_dispatch`, strips `-SNAPSHOT` for the release version and computes the next SNAPSHOT. On other events, outputs `is_release=false`.
+
+### Job 2: checks
+
+Runs in parallel with build-native. Generates Diplomat bindings, runs spotlessCheck, javadoc, and docs link validation.
+
+### Job 3: build-native (matrix)
 
 Builds native libraries on 5 platforms:
 - `ubuntu-latest` (linux_64)
 - `ubuntu-24.04-arm` (linux_arm64)
-- `macos-13` (osx_64 - Intel)
+- `macos-14` (osx_64 - Intel, cross-compiled)
 - `macos-14` (osx_arm64 - Apple Silicon)
 - `windows-latest` (windows_64)
 
 Each platform uploads its native library as an artifact.
 
-### Job 2: build-jar
+### Job 4: build-jar
 
 1. Downloads all 5 native artifacts
 2. Organizes them into `build/native-artifacts/{platform}/`
-3. Runs `copyAllNativeLibraries` and `jar`
+3. Runs `copyAllNativeLibraries` and `jar` (with `-PreleaseVersion` on release runs)
 4. Uploads the combined JAR
 
-### Job 3: test-jar
+### Job 5: test-jar
 
 Tests the packaged JAR on 3 platforms:
 - `ubuntu-latest`
@@ -142,11 +191,12 @@ Tests the packaged JAR on 3 platforms:
 
 Runs without `java.library.path` to validate JAR extraction works.
 
-### Job 4: publish
+### Job 6: publish (workflow_dispatch only)
 
-Publishes to GitHub Packages when:
-- Pushing to `main` branch
-- Creating a tag starting with `v`
+1. Downloads pre-built JARs
+2. Publishes to GitHub Packages with `-PreleaseVersion`
+3. Creates git tag `v{version}`
+4. Updates `build.gradle` to next SNAPSHOT version, commits and pushes
 
 ## Publishing Configuration
 
@@ -193,7 +243,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'io.github.datafusion-contrib:datafusion-ffi-java:0.17.0'
+    implementation 'io.github.datafusion-contrib:datafusion-ffi-java:0.17.1'
 }
 ```
 
