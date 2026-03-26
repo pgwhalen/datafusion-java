@@ -11,13 +11,13 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import org.apache.arrow.datafusion.catalog.CatalogProvider;
+import org.apache.arrow.datafusion.catalog.ScanArgs;
 import org.apache.arrow.datafusion.catalog.SchemaProvider;
 import org.apache.arrow.datafusion.catalog.Session;
 import org.apache.arrow.datafusion.catalog.TableProvider;
 import org.apache.arrow.datafusion.common.ScalarValue;
 import org.apache.arrow.datafusion.dataframe.DataFrame;
 import org.apache.arrow.datafusion.execution.SessionContext;
-import org.apache.arrow.datafusion.logical_expr.Expr;
 import org.apache.arrow.datafusion.physical_expr.Guarantee;
 import org.apache.arrow.datafusion.physical_expr.LiteralGuarantee;
 import org.apache.arrow.datafusion.physical_plan.ExecutionPlan;
@@ -120,10 +120,9 @@ public class LiteralGuaranteeTest {
           }
 
           @Override
-          public ExecutionPlan scan(
-              Session session, List<Expr> filters, List<Integer> projection, Long limit) {
-            if (filters.size() > 0) {
-              try (PhysicalExpr physExpr = session.createPhysicalExpr(schema, filters)) {
+          public ExecutionPlan scanWithArgs(Session session, ScanArgs args) {
+            if (args.filters().size() > 0) {
+              try (PhysicalExpr physExpr = session.createPhysicalExpr(schema, args.filters())) {
                 capturedGuarantees.set(LiteralGuarantee.analyze(physExpr));
               }
             } else {
@@ -153,9 +152,8 @@ public class LiteralGuaranteeTest {
           }
 
           @Override
-          public ExecutionPlan scan(
-              Session session, List<Expr> filters, List<Integer> projection, Long limit) {
-            capturedExprArrayLength.set(filters.size());
+          public ExecutionPlan scanWithArgs(Session session, ScanArgs args) {
+            capturedExprArrayLength.set(args.filters().size());
             return new TestExecutionPlan(schema);
           }
         };
@@ -185,10 +183,9 @@ public class LiteralGuaranteeTest {
       }
 
       @Override
-      public ExecutionPlan scan(
-          Session session, List<Expr> filters, List<Integer> projection, Long limit) {
-        if (filters.size() > 0) {
-          try (PhysicalExpr physExpr = session.createPhysicalExpr(schema, filters)) {
+      public ExecutionPlan scanWithArgs(Session session, ScanArgs args) {
+        if (args.filters().size() > 0) {
+          try (PhysicalExpr physExpr = session.createPhysicalExpr(schema, args.filters())) {
             capturedGuarantees.set(LiteralGuarantee.analyze(physExpr));
           }
         } else {

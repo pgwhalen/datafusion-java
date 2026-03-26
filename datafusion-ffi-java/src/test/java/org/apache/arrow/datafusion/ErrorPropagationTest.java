@@ -4,13 +4,13 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.*;
 import org.apache.arrow.datafusion.catalog.CatalogProvider;
+import org.apache.arrow.datafusion.catalog.ScanArgs;
 import org.apache.arrow.datafusion.catalog.SchemaProvider;
 import org.apache.arrow.datafusion.catalog.Session;
 import org.apache.arrow.datafusion.catalog.TableProvider;
 import org.apache.arrow.datafusion.config.ConfigOptions;
 import org.apache.arrow.datafusion.dataframe.DataFrame;
 import org.apache.arrow.datafusion.execution.SessionContext;
-import org.apache.arrow.datafusion.logical_expr.Expr;
 import org.apache.arrow.datafusion.physical_plan.ExecutionPlan;
 import org.apache.arrow.datafusion.physical_plan.RecordBatchReader;
 import org.apache.arrow.datafusion.physical_plan.SendableRecordBatchStream;
@@ -43,7 +43,7 @@ import org.junit.jupiter.api.Test;
  *
  * <ul>
  *   <li>SchemaProvider.table()
- *   <li>TableProvider.scan()
+ *   <li>TableProvider.scanWithArgs()
  *   <li>ExecutionPlan.schema()
  *   <li>ExecutionPlan.execute()
  *   <li>RecordBatchReader.loadNextBatch()
@@ -115,8 +115,7 @@ public class ErrorPropagationTest {
             }
 
             @Override
-            public ExecutionPlan scan(
-                Session session, List<Expr> filters, List<Integer> projection, Long limit) {
+            public ExecutionPlan scanWithArgs(Session session, ScanArgs args) {
               throw new UnsupportedOperationException("Should not be called");
             }
           };
@@ -141,7 +140,7 @@ public class ErrorPropagationTest {
     try (BufferAllocator allocator = new RootAllocator();
         SessionContext ctx = new SessionContext()) {
 
-      String errorMessage = "Test error in TableProvider.scan()";
+      String errorMessage = "Test error in TableProvider.scanWithArgs()";
       Schema testSchema = createTestSchema();
 
       TableProvider errorTable =
@@ -152,8 +151,7 @@ public class ErrorPropagationTest {
             }
 
             @Override
-            public ExecutionPlan scan(
-                Session session, List<Expr> filters, List<Integer> projection, Long limit) {
+            public ExecutionPlan scanWithArgs(Session session, ScanArgs args) {
               throw new RuntimeException(errorMessage);
             }
           };
@@ -207,8 +205,7 @@ public class ErrorPropagationTest {
             }
 
             @Override
-            public ExecutionPlan scan(
-                Session session, List<Expr> filters, List<Integer> projection, Long limit) {
+            public ExecutionPlan scanWithArgs(Session session, ScanArgs args) {
               return errorPlan;
             }
           };
@@ -262,8 +259,7 @@ public class ErrorPropagationTest {
             }
 
             @Override
-            public ExecutionPlan scan(
-                Session session, List<Expr> filters, List<Integer> projection, Long limit) {
+            public ExecutionPlan scanWithArgs(Session session, ScanArgs args) {
               return errorPlan;
             }
           };
@@ -334,8 +330,7 @@ public class ErrorPropagationTest {
             }
 
             @Override
-            public ExecutionPlan scan(
-                Session session, List<Expr> filters, List<Integer> projection, Long limit) {
+            public ExecutionPlan scanWithArgs(Session session, ScanArgs args) {
               return errorPlan;
             }
           };
@@ -381,8 +376,7 @@ public class ErrorPropagationTest {
             }
 
             @Override
-            public ExecutionPlan scan(
-                Session session, List<Expr> filters, List<Integer> projection, Long limit) {
+            public ExecutionPlan scanWithArgs(Session session, ScanArgs args) {
               throw new IllegalStateException(errorMessage);
             }
           };
@@ -444,8 +438,7 @@ public class ErrorPropagationTest {
             }
 
             @Override
-            public ExecutionPlan scan(
-                Session session, List<Expr> filters, List<Integer> projection, Long limit) {
+            public ExecutionPlan scanWithArgs(Session session, ScanArgs args) {
               Exception cause = new IllegalArgumentException(rootCause);
               throw new RuntimeException(wrapperMessage, cause);
             }
@@ -504,8 +497,7 @@ public class ErrorPropagationTest {
             }
 
             @Override
-            public ExecutionPlan scan(
-                Session session, List<Expr> filters, List<Integer> projection, Long limit) {
+            public ExecutionPlan scanWithArgs(Session session, ScanArgs args) {
               throw new IllegalStateException(errorMessage);
             }
           };

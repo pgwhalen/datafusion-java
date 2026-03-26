@@ -14,6 +14,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.apache.arrow.datafusion.catalog.CatalogProvider;
+import org.apache.arrow.datafusion.catalog.ScanArgs;
 import org.apache.arrow.datafusion.catalog.SchemaProvider;
 import org.apache.arrow.datafusion.catalog.Session;
 import org.apache.arrow.datafusion.catalog.TableProvider;
@@ -340,9 +341,8 @@ public class CustomTableProviderTest {
             }
 
             @Override
-            public ExecutionPlan scan(
-                Session session, List<Expr> filters, List<Integer> projection, Long limit) {
-              capturedLimit.set(limit);
+            public ExecutionPlan scanWithArgs(Session session, ScanArgs args) {
+              capturedLimit.set(args.limit());
               return new TestExecutionPlan(schema, List.of(usersDataBatch()));
             }
           };
@@ -385,9 +385,8 @@ public class CustomTableProviderTest {
             }
 
             @Override
-            public ExecutionPlan scan(
-                Session session, List<Expr> filters, List<Integer> projection, Long limit) {
-              capturedLimit.set(limit);
+            public ExecutionPlan scanWithArgs(Session session, ScanArgs args) {
+              capturedLimit.set(args.limit());
               return new TestExecutionPlan(schema, List.of(usersDataBatch()));
             }
           };
@@ -428,9 +427,8 @@ public class CustomTableProviderTest {
             }
 
             @Override
-            public ExecutionPlan scan(
-                Session session, List<Expr> filters, List<Integer> projection, Long limit) {
-              capturedProjection.set(projection);
+            public ExecutionPlan scanWithArgs(Session session, ScanArgs args) {
+              capturedProjection.set(args.projection());
               return new TestExecutionPlan(schema, List.of(usersDataBatch()));
             }
           };
@@ -481,10 +479,10 @@ public class CustomTableProviderTest {
             }
 
             @Override
-            public ExecutionPlan scan(
-                Session session, List<Expr> filters, List<Integer> projection, Long limit) {
-              capturedProjection.set(projection);
+            public ExecutionPlan scanWithArgs(Session session, ScanArgs args) {
+              capturedProjection.set(args.projection());
               // count(*) passes empty projection — return an execution plan with empty schema
+              List<Integer> projection = args.projection();
               Schema scanSchema =
                   (projection != null && projection.isEmpty()) ? emptySchema : schema;
               BatchPopulator emptyBatch = root -> root.setRowCount(3);
@@ -540,8 +538,7 @@ public class CustomTableProviderTest {
             }
 
             @Override
-            public ExecutionPlan scan(
-                Session session, List<Expr> filters, List<Integer> projection, Long limit) {
+            public ExecutionPlan scanWithArgs(Session session, ScanArgs args) {
               return new ExecutionPlan() {
                 @Override
                 public Schema schema() {
@@ -614,8 +611,7 @@ public class CustomTableProviderTest {
             }
 
             @Override
-            public ExecutionPlan scan(
-                Session session, List<Expr> filters, List<Integer> projection, Long limit) {
+            public ExecutionPlan scanWithArgs(Session session, ScanArgs args) {
               return new TestExecutionPlan(schema, List.of(usersDataBatch()));
             }
           };
@@ -665,8 +661,7 @@ public class CustomTableProviderTest {
             }
 
             @Override
-            public ExecutionPlan scan(
-                Session session, List<Expr> filters, List<Integer> projection, Long limit) {
+            public ExecutionPlan scanWithArgs(Session session, ScanArgs args) {
               return new TestExecutionPlan(schema, List.of(usersDataBatch()));
             }
           };
@@ -747,9 +742,8 @@ public class CustomTableProviderTest {
             }
 
             @Override
-            public ExecutionPlan scan(
-                Session session, List<Expr> filters, List<Integer> projection, Long limit) {
-              capturedFilters.set(filters);
+            public ExecutionPlan scanWithArgs(Session session, ScanArgs args) {
+              capturedFilters.set(args.filters());
               return new TestExecutionPlan(schema, List.of(usersDataBatch()));
             }
           };
@@ -817,8 +811,7 @@ public class CustomTableProviderTest {
             }
 
             @Override
-            public ExecutionPlan scan(
-                Session session, List<Expr> filters, List<Integer> projection, Long limit) {
+            public ExecutionPlan scanWithArgs(Session session, ScanArgs args) {
               return new TestExecutionPlan(schema, List.of(usersDataBatch()));
             }
           };
@@ -922,8 +915,7 @@ public class CustomTableProviderTest {
     }
 
     @Override
-    public ExecutionPlan scan(
-        Session session, List<Expr> filters, List<Integer> projection, Long limit) {
+    public ExecutionPlan scanWithArgs(Session session, ScanArgs args) {
       return new TestExecutionPlan(schema, batches);
     }
   }
@@ -1053,8 +1045,7 @@ public class CustomTableProviderTest {
             }
 
             @Override
-            public ExecutionPlan scan(
-                Session session, List<Expr> filters, List<Integer> projection, Long limit) {
+            public ExecutionPlan scanWithArgs(Session session, ScanArgs args) {
               return new ExecutionPlan() {
                 @Override
                 public Schema schema() {

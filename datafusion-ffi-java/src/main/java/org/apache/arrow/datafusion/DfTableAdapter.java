@@ -7,6 +7,7 @@ import java.util.Collections;
 import java.util.List;
 import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
+import org.apache.arrow.datafusion.catalog.ScanArgs;
 import org.apache.arrow.datafusion.catalog.Session;
 import org.apache.arrow.datafusion.catalog.TableProvider;
 import org.apache.arrow.datafusion.generated.DfExecutionPlan;
@@ -108,7 +109,8 @@ public final class DfTableAdapter implements DfTableTrait {
       Session session = new Session(allocator);
 
       // Call the provider
-      ExecutionPlan plan = provider.scan(session, filterExprs, projectionList, limitValue);
+      ScanArgs args = new ScanArgs(filterExprs, projectionList, limitValue);
+      ExecutionPlan plan = provider.scanWithArgs(session, args);
 
       // Wrap and return as raw pointer
       DfExecutionPlanAdapter adapter = new DfExecutionPlanAdapter(plan, allocator, fullStackTrace);

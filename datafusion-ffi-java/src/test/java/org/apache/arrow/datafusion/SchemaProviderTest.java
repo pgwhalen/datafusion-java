@@ -4,10 +4,10 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.List;
 import java.util.Optional;
+import org.apache.arrow.datafusion.catalog.ScanArgs;
 import org.apache.arrow.datafusion.catalog.SchemaProvider;
 import org.apache.arrow.datafusion.catalog.Session;
 import org.apache.arrow.datafusion.catalog.TableProvider;
-import org.apache.arrow.datafusion.logical_expr.Expr;
 import org.apache.arrow.datafusion.physical_plan.ExecutionPlan;
 import org.apache.arrow.datafusion.physical_plan.PlanProperties;
 import org.apache.arrow.datafusion.physical_plan.RecordBatchReader;
@@ -64,8 +64,7 @@ public class SchemaProviderTest {
       }
 
       @Override
-      public ExecutionPlan scan(
-          Session session, List<Expr> filters, List<Integer> projection, Long limit) {
+      public ExecutionPlan scanWithArgs(Session session, ScanArgs args) {
         return new ExecutionPlan() {
           @Override
           public Schema schema() {

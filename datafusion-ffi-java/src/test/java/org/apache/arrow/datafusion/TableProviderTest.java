@@ -3,6 +3,7 @@ package org.apache.arrow.datafusion;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.List;
+import org.apache.arrow.datafusion.catalog.ScanArgs;
 import org.apache.arrow.datafusion.catalog.Session;
 import org.apache.arrow.datafusion.catalog.TableProvider;
 import org.apache.arrow.datafusion.common.ScalarValue;
@@ -41,8 +42,7 @@ public class TableProviderTest {
       }
 
       @Override
-      public ExecutionPlan scan(
-          Session session, List<Expr> filters, List<Integer> projection, Long limit) {
+      public ExecutionPlan scanWithArgs(Session session, ScanArgs args) {
         return new ExecutionPlan() {
           @Override
           public Schema schema() {
