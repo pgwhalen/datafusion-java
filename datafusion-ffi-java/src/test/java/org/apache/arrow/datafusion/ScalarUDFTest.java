@@ -249,4 +249,29 @@ class ScalarUDFTest {
 
     return root;
   }
+
+  @Test
+  void testSimpleScalarUDFCoerceTypes() {
+    var udf =
+        new org.apache.arrow.datafusion.logical_expr.SimpleScalarUDF(
+            "my_udf",
+            new Signature(Volatility.IMMUTABLE),
+            List.of(new ArrowType.Int(64, true), new ArrowType.Utf8()),
+            new ArrowType.Int(64, true),
+            (args, numRows, allocator) -> {
+              throw new UnsupportedOperationException("not implemented");
+            });
+
+    List<Field> inputFields =
+        List.of(
+            Field.nullable("x", new ArrowType.Utf8()),
+            Field.nullable("y", new ArrowType.Int(32, true)));
+
+    List<Field> coerced = udf.coerceTypes(inputFields);
+    assertEquals(2, coerced.size());
+    assertEquals("x", coerced.get(0).getName());
+    assertEquals("y", coerced.get(1).getName());
+    assertEquals(new ArrowType.Int(64, true), coerced.get(0).getType());
+    assertEquals(new ArrowType.Utf8(), coerced.get(1).getType());
+  }
 }

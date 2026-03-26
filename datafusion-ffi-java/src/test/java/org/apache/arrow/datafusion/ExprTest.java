@@ -8,9 +8,15 @@ import org.apache.arrow.datafusion.common.Column;
 import org.apache.arrow.datafusion.common.ScalarValue;
 import org.apache.arrow.datafusion.common.TableReference;
 import org.apache.arrow.datafusion.logical_expr.Expr;
+import org.apache.arrow.datafusion.logical_expr.GroupingSet;
+import org.apache.arrow.datafusion.logical_expr.NullTreatment;
 import org.apache.arrow.datafusion.logical_expr.Operator;
+import org.apache.arrow.datafusion.logical_expr.SortExpr;
 import org.apache.arrow.datafusion.logical_expr.WhenThen;
 import org.apache.arrow.datafusion.logical_expr.WildcardOptions;
+import org.apache.arrow.datafusion.logical_expr.WindowFrame;
+import org.apache.arrow.datafusion.logical_expr.WindowFrameBound;
+import org.apache.arrow.datafusion.logical_expr.WindowFrameUnits;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.junit.jupiter.api.Test;
 
@@ -409,6 +415,238 @@ public class ExprTest {
     assertInstanceOf(TableReference.Bare.class, wildcard.qualifier());
     assertEquals("my_table", ((TableReference.Bare) wildcard.qualifier()).table());
     assertEquals(WildcardOptions.EMPTY, wildcard.options());
+  }
+
+  // ── Aggregate function ──
+
+  @Test
+  void testAggregateFunctionExprRoundTrip() {
+    Expr original =
+        new Expr.AggregateFunctionExpr(
+            "sum",
+            List.of(new Expr.ColumnExpr(new Column("amount", null, null))),
+            false,
+            null,
+            List.of(),
+            null);
+    Expr result = roundTrip(original);
+    assertEquals(original, result);
+  }
+
+  @Test
+  void testAggregateFunctionExprWithAllOptions() {
+    Expr original =
+        new Expr.AggregateFunctionExpr(
+            "count",
+            List.of(new Expr.ColumnExpr(new Column("id", null, null))),
+            true,
+            new Expr.BinaryExpr(
+                new Expr.ColumnExpr(new Column("status", null, null)),
+                Operator.Eq,
+                new Expr.LiteralExpr(new ScalarValue.Utf8("active"))),
+            List.of(new SortExpr(new Expr.ColumnExpr(new Column("id", null, null)), true, false)),
+            NullTreatment.IGNORE_NULLS);
+    Expr result = roundTrip(original);
+    assertEquals(original, result);
+  }
+
+  // ── Window function ──
+
+  @Test
+  void testWindowFunctionExprRoundTrip() {
+    Expr original =
+        new Expr.WindowFunctionExpr(
+            "row_number",
+            List.of(),
+            List.of(new Expr.ColumnExpr(new Column("dept", null, null))),
+            List.of(
+                new SortExpr(new Expr.ColumnExpr(new Column("salary", null, null)), false, true)),
+            new WindowFrame(
+                WindowFrameUnits.ROWS,
+                new WindowFrameBound.Preceding(new ScalarValue.UInt64(BigInteger.ONE)),
+                new WindowFrameBound.CurrentRow()),
+            NullTreatment.RESPECT_NULLS);
+    Expr result = roundTrip(original);
+    assertEquals(original, result);
+  }
+
+  @Test
+  void testWindowFunctionExprWithFollowing() {
+    Expr original =
+        new Expr.WindowFunctionExpr(
+            "lag",
+            List.of(new Expr.ColumnExpr(new Column("val", null, null))),
+            List.of(),
+            List.of(),
+            new WindowFrame(
+                WindowFrameUnits.RANGE,
+                new WindowFrameBound.CurrentRow(),
+                new WindowFrameBound.Following(new ScalarValue.UInt64(BigInteger.TEN))),
+            null);
+    Expr result = roundTrip(original);
+    assertEquals(original, result);
+  }
+
+  @Test
+  void testWindowFunctionExprGroupsFrame() {
+    Expr original =
+        new Expr.WindowFunctionExpr(
+            "sum",
+            List.of(new Expr.ColumnExpr(new Column("val", null, null))),
+            List.of(),
+            List.of(),
+            new WindowFrame(
+                WindowFrameUnits.GROUPS,
+                new WindowFrameBound.Preceding(null),
+                new WindowFrameBound.Following(null)),
+            null);
+    Expr result = roundTrip(original);
+    assertEquals(original, result);
+  }
+
+  // ── Grouping sets ──
+
+  @Test
+  void testGroupingSetGroupByRoundTrip() {
+    Expr col1 = new Expr.ColumnExpr(new Column("a", null, null));
+    Expr col2 = new Expr.ColumnExpr(new Column("b", null, null));
+    Expr original = new Expr.GroupingSetExpr(GroupingSet.GROUP_BY, List.of(List.of(col1, col2)));
+    Expr result = roundTrip(original);
+    assertEquals(original, result);
+  }
+
+  @Test
+  void testGroupingSetCubeRoundTrip() {
+    Expr col1 = new Expr.ColumnExpr(new Column("a", null, null));
+    Expr col2 = new Expr.ColumnExpr(new Column("b", null, null));
+    Expr original =
+        new Expr.GroupingSetExpr(GroupingSet.CUBE, List.of(List.of(col1), List.of(col2)));
+    Expr result = roundTrip(original);
+    assertEquals(original, result);
+  }
+
+  @Test
+  void testGroupingSetRollupRoundTrip() {
+    Expr col1 = new Expr.ColumnExpr(new Column("a", null, null));
+    Expr col2 = new Expr.ColumnExpr(new Column("b", null, null));
+    Expr original =
+        new Expr.GroupingSetExpr(GroupingSet.ROLLUP, List.of(List.of(col1), List.of(col2)));
+    Expr result = roundTrip(original);
+    assertEquals(original, result);
+  }
+
+  // ── Unnest ──
+
+  @Test
+  void testUnnestExprRoundTrip() {
+    Expr original =
+        new Expr.UnnestExpr(
+            List.of(
+                new Expr.ColumnExpr(new Column("arr1", null, null)),
+                new Expr.ColumnExpr(new Column("arr2", null, null))));
+    Expr result = roundTrip(original);
+    assertEquals(original, result);
+  }
+
+  // ── Like/ILike/SimilarTo with escape char ──
+
+  @Test
+  void testLikeExprWithEscapeCharRoundTrip() {
+    Expr original =
+        new Expr.LikeExpr(
+            false,
+            new Expr.ColumnExpr(new Column("name", null, null)),
+            new Expr.LiteralExpr(new ScalarValue.Utf8("%test\\%")),
+            '\\',
+            false);
+    Expr result = roundTrip(original);
+    assertEquals(original, result);
+  }
+
+  @Test
+  void testILikeExprWithEscapeCharRoundTrip() {
+    Expr original =
+        new Expr.LikeExpr(
+            true,
+            new Expr.ColumnExpr(new Column("name", null, null)),
+            new Expr.LiteralExpr(new ScalarValue.Utf8("%test\\%")),
+            '\\',
+            true);
+    Expr result = roundTrip(original);
+    assertEquals(original, result);
+  }
+
+  @Test
+  void testSimilarToExprWithEscapeCharRoundTrip() {
+    Expr original =
+        new Expr.SimilarToExpr(
+            true,
+            new Expr.ColumnExpr(new Column("name", null, null)),
+            new Expr.LiteralExpr(new ScalarValue.Utf8("%(a|b)%")),
+            '!');
+    Expr result = roundTrip(original);
+    assertEquals(original, result);
+  }
+
+  // ── Case with match expression ──
+
+  @Test
+  void testCaseExprWithMatchExprRoundTrip() {
+    Expr original =
+        new Expr.CaseExpr(
+            new Expr.ColumnExpr(new Column("status", null, null)),
+            List.of(
+                new WhenThen(
+                    new Expr.LiteralExpr(new ScalarValue.Utf8("active")),
+                    new Expr.LiteralExpr(new ScalarValue.Int64(1L))),
+                new WhenThen(
+                    new Expr.LiteralExpr(new ScalarValue.Utf8("inactive")),
+                    new Expr.LiteralExpr(new ScalarValue.Int64(0L)))),
+            new Expr.LiteralExpr(new ScalarValue.Int64(-1L)));
+    Expr result = roundTrip(original);
+    assertEquals(original, result);
+  }
+
+  // ── Alias with table references ──
+
+  @Test
+  void testAliasExprWithPartialRelation() {
+    Expr original =
+        new Expr.AliasExpr(
+            new Expr.ColumnExpr(new Column("id", null, null)),
+            "my_id",
+            List.of(new TableReference.Partial("my_schema", "my_table")));
+    Expr result = roundTrip(original);
+    assertInstanceOf(Expr.AliasExpr.class, result);
+    Expr.AliasExpr alias = (Expr.AliasExpr) result;
+    assertEquals("my_id", alias.alias());
+    assertEquals(1, alias.relation().size());
+  }
+
+  @Test
+  void testAliasExprWithFullRelation() {
+    Expr original =
+        new Expr.AliasExpr(
+            new Expr.ColumnExpr(new Column("id", null, null)),
+            "my_id",
+            List.of(new TableReference.Full("cat", "sch", "tbl")));
+    Expr result = roundTrip(original);
+    assertInstanceOf(Expr.AliasExpr.class, result);
+    Expr.AliasExpr alias = (Expr.AliasExpr) result;
+    assertEquals("my_id", alias.alias());
+    assertEquals(1, alias.relation().size());
+  }
+
+  // ── Placeholder with null data type ──
+
+  @Test
+  void testPlaceholderExprWithNullDataType() {
+    Expr original = new Expr.PlaceholderExpr("$2", null);
+    Expr result = roundTrip(original);
+    assertInstanceOf(Expr.PlaceholderExpr.class, result);
+    Expr.PlaceholderExpr ph = (Expr.PlaceholderExpr) result;
+    assertEquals("$2", ph.id());
+    assertNull(ph.dataType());
   }
 
   /** Serializes an Expr to proto bytes and deserializes back. */
