@@ -19,6 +19,11 @@ public final class LogicalPlanBridge implements AutoCloseable {
     this.dfPlan = dfPlan;
   }
 
+  public DfLogicalPlan dfPlan() {
+    checkNotClosed();
+    return dfPlan;
+  }
+
   private void checkNotClosed() {
     if (closed) {
       throw new IllegalStateException("LogicalPlan has been closed");

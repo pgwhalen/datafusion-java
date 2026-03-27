@@ -996,6 +996,14 @@ pub mod ffi {
             Ok(self.wrap_df(self.rt.block_on(self.ctx.sql(sql_str))?))
         }
 
+        pub fn execute_logical_plan(
+            &self,
+            plan: &DfLogicalPlan,
+        ) -> Result<Box<DfDataFrame>, Box<DfError>> {
+            Ok(self
+                .wrap_df(self.rt.block_on(self.ctx.execute_logical_plan(plan.plan.clone()))?))
+        }
+
         pub fn session_id(&self, write: &mut DiplomatWrite) {
             let _ = write!(write, "{}", self.ctx.session_id());
         }

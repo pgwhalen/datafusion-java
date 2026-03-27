@@ -157,6 +157,11 @@ public class DocsLinkValidationDoclet implements Doclet {
                   // Java-only proto serialization helper
                   "encodeOptions")),
           Map.entry(
+              "LogicalPlan",
+              Set.of(
+                  // Java-only bridge accessor
+                  "bridge")),
+          Map.entry(
               "PhysicalExpr",
               Set.of(
                   // Java-only bridge accessor

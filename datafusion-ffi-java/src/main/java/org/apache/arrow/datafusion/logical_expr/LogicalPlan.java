@@ -22,6 +22,15 @@ public class LogicalPlan implements AutoCloseable {
     this.bridge = bridge;
   }
 
+  /**
+   * Returns the underlying bridge. Internal use only.
+   *
+   * @return the bridge
+   */
+  public LogicalPlanBridge bridge() {
+    return bridge;
+  }
+
   @Override
   public void close() {
     bridge.close();

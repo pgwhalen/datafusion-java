@@ -15,6 +15,7 @@ import org.apache.arrow.datafusion.datasource.ListingTable;
 import org.apache.arrow.datafusion.datasource.NdJsonReadOptions;
 import org.apache.arrow.datafusion.datasource.ParquetReadOptions;
 import org.apache.arrow.datafusion.logical_expr.Expr;
+import org.apache.arrow.datafusion.logical_expr.LogicalPlan;
 import org.apache.arrow.datafusion.logical_expr.ScalarUDF;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
@@ -201,6 +202,23 @@ public class SessionContext implements AutoCloseable {
   public DataFrame sql(String query) {
     checkNotClosed();
     return new DataFrame(bridge.sql(query));
+  }
+
+  /**
+   * Executes a {@link LogicalPlan} and returns a {@link DataFrame}.
+   *
+   * <p>The plan is cloned internally, so the same plan can be executed multiple times.
+   *
+   * @param plan the logical plan to execute
+   * @return a DataFrame representing the execution result
+   * @throws DataFusionError if execution fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.execute_logical_plan">Rust
+   *     DataFusion: SessionContext::execute_logical_plan</a>
+   */
+  public DataFrame executeLogicalPlan(LogicalPlan plan) {
+    checkNotClosed();
+    return new DataFrame(bridge.executeLogicalPlan(plan.bridge()));
   }
 
   /**

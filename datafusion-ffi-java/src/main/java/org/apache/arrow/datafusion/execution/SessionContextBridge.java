@@ -193,6 +193,19 @@ public final class SessionContextBridge implements AutoCloseable {
     }
   }
 
+  DataFrameBridge executeLogicalPlan(
+      org.apache.arrow.datafusion.logical_expr.LogicalPlanBridge plan) {
+    try {
+      DfDataFrame df = dfCtx.executeLogicalPlan(plan.dfPlan());
+      logger.debug("Executed logical plan via Diplomat bridge");
+      return new DataFrameBridge(df);
+    } catch (DfError e) {
+      throw new NativeDataFusionError(e);
+    } catch (Exception e) {
+      throw new DataFusionError("Failed to execute logical plan", e);
+    }
+  }
+
   SessionStateBridge state() {
     try {
       DfSessionState dfState = dfCtx.state();
