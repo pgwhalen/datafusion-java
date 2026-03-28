@@ -1,3 +1,12 @@
+---
+paths:
+  - "datafusion-ffi-java/build.gradle"
+  - "build.gradle"
+  - "settings.gradle"
+  - ".github/workflows/*.yml"
+  - "scripts/*"
+---
+
 # Build and Release
 
 ## Versioning

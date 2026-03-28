@@ -1,3 +1,8 @@
+---
+paths:
+  - "datafusion-ffi-java/src/test/**/*.java"
+---
+
 # Testing
 
 ## Test Coverage Requirements

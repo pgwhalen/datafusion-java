@@ -1,3 +1,8 @@
+---
+paths:
+  - "datafusion-ffi-java/src/main/java/**/*.java"
+---
+
 # Public API
 
 The public API (every public Java class, interface, enum, or record in `datafusion-ffi-java`) should be **AS SIMILAR AS

@@ -1,3 +1,9 @@
+---
+paths:
+  - "datafusion-ffi-java/src/main/java/**/*.java"
+  - "datafusion-ffi-java/src/test/**/DocsLinkValidationDoclet.java"
+---
+
 # Documentation
 
 ## docs.rs Links in Public Javadoc

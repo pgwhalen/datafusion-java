@@ -1,3 +1,9 @@
+---
+paths:
+  - "datafusion-ffi-java/src/main/java/**/*.java"
+  - "datafusion-ffi-native/src/**/*.rs"
+---
+
 # FFI Architecture (Diplomat-Based)
 
 This document describes the FFI patterns used in `datafusion-ffi-java` and `datafusion-ffi-native`. All native calls go through Diplomat-generated bindings.
