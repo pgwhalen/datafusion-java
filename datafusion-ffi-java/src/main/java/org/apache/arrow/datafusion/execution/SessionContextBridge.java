@@ -206,6 +206,11 @@ public final class SessionContextBridge implements AutoCloseable {
     }
   }
 
+  /** Returns the underlying Diplomat-generated DfSessionContext. */
+  public DfSessionContext dfContext() {
+    return dfCtx;
+  }
+
   SessionStateBridge state() {
     try {
       DfSessionState dfState = dfCtx.state();

@@ -11,7 +11,7 @@ pub mod ffi {
     use datafusion::execution::context::SessionContext;
     use datafusion::execution::runtime_env::RuntimeEnv;
     use datafusion::execution::SessionState;
-    use datafusion::logical_expr::{Expr, LogicalPlan, SortExpr};
+    use datafusion::logical_expr::{Expr, LogicalPlan, LogicalPlanBuilder, SortExpr};
     use datafusion_proto::logical_plan::from_proto::{parse_exprs, parse_sorts};
     use datafusion_proto::logical_plan::to_proto::serialize_exprs;
     use datafusion_proto::logical_plan::DefaultLogicalExtensionCodec;
@@ -725,6 +725,252 @@ pub mod ffi {
         /// Get a display string of the logical plan.
         pub fn to_display(&self, write: &mut DiplomatWrite) {
             let _ = write!(write, "{}", self.plan.display_indent());
+        }
+    }
+
+    // ============================================================================
+    // DfLogicalPlanBuilder
+    // ============================================================================
+
+    /// Opaque wrapper for building LogicalPlans programmatically.
+    #[diplomat::opaque]
+    pub struct DfLogicalPlanBuilder {
+        pub(super) plan: LogicalPlan,
+        pub(super) ctx: SessionContext,
+        pub(super) rt: Arc<Runtime>,
+    }
+
+    impl DfLogicalPlanBuilder {
+        fn wrap(&self, plan: LogicalPlan) -> Box<DfLogicalPlanBuilder> {
+            Box::new(DfLogicalPlanBuilder {
+                plan,
+                ctx: self.ctx.clone(),
+                rt: Arc::clone(&self.rt),
+            })
+        }
+
+        fn builder(&self) -> LogicalPlanBuilder {
+            LogicalPlanBuilder::from(self.plan.clone())
+        }
+
+        /// Create an empty builder (no rows by default).
+        pub fn empty(
+            ctx: &DfSessionContext,
+            produce_one_row: bool,
+        ) -> Box<DfLogicalPlanBuilder> {
+            let plan = LogicalPlanBuilder::empty(produce_one_row)
+                .build()
+                .expect("empty plan should not fail");
+            Box::new(DfLogicalPlanBuilder {
+                plan,
+                ctx: ctx.ctx.clone(),
+                rt: Arc::clone(&ctx.rt),
+            })
+        }
+
+        /// Create a builder from an existing LogicalPlan.
+        pub fn from_plan(
+            ctx: &DfSessionContext,
+            plan: &DfLogicalPlan,
+        ) -> Box<DfLogicalPlanBuilder> {
+            Box::new(DfLogicalPlanBuilder {
+                plan: plan.plan.clone(),
+                ctx: ctx.ctx.clone(),
+                rt: Arc::clone(&ctx.rt),
+            })
+        }
+
+        /// Project expressions (proto-encoded).
+        pub fn project(&self, expr_bytes: &[u8]) -> Result<Box<DfLogicalPlanBuilder>, Box<DfError>> {
+            let exprs = deserialize_exprs(&self.ctx, expr_bytes)?;
+            let plan = self.builder().project(exprs)?.build()?;
+            Ok(self.wrap(plan))
+        }
+
+        /// Filter by predicate (proto-encoded, single expr).
+        pub fn filter(&self, expr_bytes: &[u8]) -> Result<Box<DfLogicalPlanBuilder>, Box<DfError>> {
+            let exprs = deserialize_exprs(&self.ctx, expr_bytes)?;
+            if exprs.is_empty() {
+                return Err("Filter requires exactly one predicate expression".into());
+            }
+            let plan = self.builder().filter(exprs[0].clone())?.build()?;
+            Ok(self.wrap(plan))
+        }
+
+        /// Sort by proto-encoded sort expressions.
+        pub fn sort(&self, sort_bytes: &[u8]) -> Result<Box<DfLogicalPlanBuilder>, Box<DfError>> {
+            let sort_exprs = deserialize_sort_exprs(&self.ctx, sort_bytes)?;
+            let plan = self.builder().sort(sort_exprs)?.build()?;
+            Ok(self.wrap(plan))
+        }
+
+        /// Limit rows. fetch=-1 means no limit.
+        pub fn limit(
+            &self,
+            skip: usize,
+            fetch: i64,
+        ) -> Result<Box<DfLogicalPlanBuilder>, Box<DfError>> {
+            let fetch_option = if fetch < 0 { None } else { Some(fetch as usize) };
+            let plan = self.builder().limit(skip, fetch_option)?.build()?;
+            Ok(self.wrap(plan))
+        }
+
+        /// Aggregate with proto-encoded group-by and aggregate expression lists.
+        pub fn aggregate(
+            &self,
+            group_bytes: &[u8],
+            aggr_bytes: &[u8],
+        ) -> Result<Box<DfLogicalPlanBuilder>, Box<DfError>> {
+            let group_exprs = deserialize_exprs(&self.ctx, group_bytes)?;
+            let aggr_exprs = deserialize_exprs(&self.ctx, aggr_bytes)?;
+            let plan = self.builder().aggregate(group_exprs, aggr_exprs)?.build()?;
+            Ok(self.wrap(plan))
+        }
+
+        /// Distinct rows.
+        pub fn distinct(&self) -> Result<Box<DfLogicalPlanBuilder>, Box<DfError>> {
+            let plan = self.builder().distinct()?.build()?;
+            Ok(self.wrap(plan))
+        }
+
+        /// Having clause (proto-encoded predicate).
+        pub fn having(&self, expr_bytes: &[u8]) -> Result<Box<DfLogicalPlanBuilder>, Box<DfError>> {
+            let exprs = deserialize_exprs(&self.ctx, expr_bytes)?;
+            if exprs.is_empty() {
+                return Err("Having requires exactly one expression".into());
+            }
+            let plan = self.builder().having(exprs[0].clone())?.build()?;
+            Ok(self.wrap(plan))
+        }
+
+        /// Window expressions (proto-encoded).
+        pub fn window(
+            &self,
+            window_bytes: &[u8],
+        ) -> Result<Box<DfLogicalPlanBuilder>, Box<DfError>> {
+            let exprs = deserialize_exprs(&self.ctx, window_bytes)?;
+            let plan = self.builder().window(exprs)?.build()?;
+            Ok(self.wrap(plan))
+        }
+
+        /// Subquery alias.
+        pub fn alias(&self, name: &DiplomatStr) -> Result<Box<DfLogicalPlanBuilder>, Box<DfError>> {
+            let name_str = diplomat_str(name)?;
+            let plan = self.builder().alias(name_str)?.build()?;
+            Ok(self.wrap(plan))
+        }
+
+        /// Explain plan.
+        pub fn explain(
+            &self,
+            verbose: bool,
+            analyze: bool,
+        ) -> Result<Box<DfLogicalPlanBuilder>, Box<DfError>> {
+            let plan = self.builder().explain(verbose, analyze)?.build()?;
+            Ok(self.wrap(plan))
+        }
+
+        /// Join with another plan using column name pairs.
+        /// left_cols and right_cols are null-separated column names.
+        pub fn join(
+            &self,
+            right: &DfLogicalPlan,
+            join_type: DfJoinType,
+            left_cols: &[u8],
+            right_cols: &[u8],
+        ) -> Result<Box<DfLogicalPlanBuilder>, Box<DfError>> {
+            let jt: JoinType = match join_type {
+                DfJoinType::Inner => JoinType::Inner,
+                DfJoinType::Left => JoinType::Left,
+                DfJoinType::Right => JoinType::Right,
+                DfJoinType::Full => JoinType::Full,
+                DfJoinType::LeftSemi => JoinType::LeftSemi,
+                DfJoinType::LeftAnti => JoinType::LeftAnti,
+                DfJoinType::RightSemi => JoinType::RightSemi,
+                DfJoinType::RightAnti => JoinType::RightAnti,
+            };
+
+            let left_strs = super::parse_null_separated(left_cols);
+            let right_strs = super::parse_null_separated(right_cols);
+
+            let keys: Vec<(String, String)> = left_strs
+                .into_iter()
+                .zip(right_strs)
+                .collect();
+
+            let plan = self.builder().join(
+                right.plan.clone(),
+                jt,
+                (
+                    keys.iter().map(|(l, _)| l.as_str()).collect::<Vec<_>>(),
+                    keys.iter().map(|(_, r)| r.as_str()).collect::<Vec<_>>(),
+                ),
+                None,
+            )?.build()?;
+            Ok(self.wrap(plan))
+        }
+
+        /// Cross join with another plan.
+        pub fn cross_join(
+            &self,
+            right: &DfLogicalPlan,
+        ) -> Result<Box<DfLogicalPlanBuilder>, Box<DfError>> {
+            let plan = self.builder().cross_join(right.plan.clone())?.build()?;
+            Ok(self.wrap(plan))
+        }
+
+        /// Union with another plan.
+        pub fn union(
+            &self,
+            other: &DfLogicalPlan,
+        ) -> Result<Box<DfLogicalPlanBuilder>, Box<DfError>> {
+            let plan = self.builder().union(other.plan.clone())?.build()?;
+            Ok(self.wrap(plan))
+        }
+
+        /// Union distinct.
+        pub fn union_distinct(
+            &self,
+            other: &DfLogicalPlan,
+        ) -> Result<Box<DfLogicalPlanBuilder>, Box<DfError>> {
+            let plan = self.builder().union_distinct(other.plan.clone())?.build()?;
+            Ok(self.wrap(plan))
+        }
+
+        /// Intersect two plans.
+        pub fn intersect(
+            left: &DfLogicalPlan,
+            right: &DfLogicalPlan,
+            is_all: bool,
+        ) -> Result<Box<DfLogicalPlan>, Box<DfError>> {
+            let plan = LogicalPlanBuilder::intersect(
+                left.plan.clone(),
+                right.plan.clone(),
+                is_all,
+            )?;
+            Ok(Box::new(DfLogicalPlan { plan }))
+        }
+
+        /// Except (set difference) two plans.
+        pub fn except(
+            left: &DfLogicalPlan,
+            right: &DfLogicalPlan,
+            is_all: bool,
+        ) -> Result<Box<DfLogicalPlan>, Box<DfError>> {
+            let plan = LogicalPlanBuilder::except(
+                left.plan.clone(),
+                right.plan.clone(),
+                is_all,
+            )?;
+            Ok(Box::new(DfLogicalPlan { plan }))
+        }
+
+        /// Build the final LogicalPlan.
+        pub fn build(&self) -> Result<Box<DfLogicalPlan>, Box<DfError>> {
+            // The plan is already built (we store LogicalPlan, not LogicalPlanBuilder)
+            Ok(Box::new(DfLogicalPlan {
+                plan: self.plan.clone(),
+            }))
         }
     }
 

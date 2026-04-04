@@ -588,6 +588,12 @@ public class SessionContext implements AutoCloseable {
     return Instant.ofEpochMilli(bridge.sessionStartTimeMillis());
   }
 
+  /** Returns the underlying bridge. Internal use only. */
+  public SessionContextBridge bridge() {
+    checkNotClosed();
+    return bridge;
+  }
+
   private void checkNotClosed() {
     if (closed) {
       throw new IllegalStateException("SessionContext has been closed");

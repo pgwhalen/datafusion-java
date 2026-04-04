@@ -170,7 +170,12 @@ public class DocsLinkValidationDoclet implements Doclet {
               "ParquetOptions",
               Set.of(
                   // Java-only proto serialization helper
-                  "encodeOptions")));
+                  "encodeOptions")),
+          Map.entry(
+              "SessionContext",
+              Set.of(
+                  // Java-only bridge accessor
+                  "bridge")));
 
   /** Types whose method-level @see validation is deferred (links not yet added). */
   private static final Set<String> METHOD_VALIDATION_DEFERRED = Set.of();
