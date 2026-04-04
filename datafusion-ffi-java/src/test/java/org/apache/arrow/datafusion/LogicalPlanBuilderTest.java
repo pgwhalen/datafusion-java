@@ -610,6 +610,74 @@ public class LogicalPlanBuilderTest {
     root.close();
   }
 
+  // ==========================================================================
+  // Null-byte-in-string tests
+  // ==========================================================================
+
+  @Test
+  void testJoinWithMultiByteUtf8ColumnName() {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+      String colWithNull = "key_\u00e9\u00e0\u00fc";
+
+      // Register left table
+      Schema leftSchema =
+          new Schema(
+              Arrays.asList(
+                  new Field(colWithNull, FieldType.nullable(new ArrowType.Int(64, true)), null),
+                  new Field("left_val", FieldType.nullable(new ArrowType.Int(64, true)), null)));
+      VectorSchemaRoot leftRoot = VectorSchemaRoot.create(leftSchema, allocator);
+      BigIntVector leftKey = (BigIntVector) leftRoot.getVector(colWithNull);
+      BigIntVector leftVal = (BigIntVector) leftRoot.getVector("left_val");
+      leftKey.allocateNew(1);
+      leftVal.allocateNew(1);
+      leftKey.set(0, 1);
+      leftVal.set(0, 10);
+      leftKey.setValueCount(1);
+      leftVal.setValueCount(1);
+      leftRoot.setRowCount(1);
+      ctx.registerBatch("left_tbl", leftRoot, allocator);
+      leftRoot.close();
+
+      // Register right table
+      Schema rightSchema =
+          new Schema(
+              Arrays.asList(
+                  new Field(colWithNull, FieldType.nullable(new ArrowType.Int(64, true)), null),
+                  new Field("right_val", FieldType.nullable(new ArrowType.Int(64, true)), null)));
+      VectorSchemaRoot rightRoot = VectorSchemaRoot.create(rightSchema, allocator);
+      BigIntVector rightKey = (BigIntVector) rightRoot.getVector(colWithNull);
+      BigIntVector rightVal = (BigIntVector) rightRoot.getVector("right_val");
+      rightKey.allocateNew(1);
+      rightVal.allocateNew(1);
+      rightKey.set(0, 1);
+      rightVal.set(0, 100);
+      rightKey.setValueCount(1);
+      rightVal.setValueCount(1);
+      rightRoot.setRowCount(1);
+      ctx.registerBatch("right_tbl", rightRoot, allocator);
+      rightRoot.close();
+
+      // Use LogicalPlanBuilder to join on the multi-byte UTF-8 column
+      try (LogicalPlan leftPlan = createPlan(ctx, "SELECT * FROM left_tbl");
+          LogicalPlan rightPlan = createPlan(ctx, "SELECT * FROM right_tbl");
+          LogicalPlanBuilder builder = LogicalPlanBuilder.from(leftPlan, ctx);
+          LogicalPlanBuilder joined =
+              builder.join(rightPlan, JoinType.INNER, List.of(colWithNull), List.of(colWithNull));
+          LogicalPlan joinedPlan = joined.build();
+          DataFrame df = ctx.executeLogicalPlan(joinedPlan);
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
+        assertTrue(stream.loadNextBatch());
+        VectorSchemaRoot result = stream.getVectorSchemaRoot();
+        assertEquals(1, result.getRowCount());
+        BigIntVector lv = (BigIntVector) result.getVector("left_val");
+        BigIntVector rv = (BigIntVector) result.getVector("right_val");
+        assertEquals(10, lv.get(0));
+        assertEquals(100, rv.get(0));
+      }
+    }
+  }
+
   /** Creates a LogicalPlan from SQL, properly closing the intermediate SessionState. */
   private LogicalPlan createPlan(SessionContext ctx, String sql) {
     try (SessionState state = ctx.state()) {

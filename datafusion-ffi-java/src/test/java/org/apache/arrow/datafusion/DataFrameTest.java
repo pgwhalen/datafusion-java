@@ -1648,6 +1648,115 @@ public class DataFrameTest {
     root.close();
   }
 
+  // ==========================================================================
+  // Verify that String[] encoding (replacing null-separated bytes) works
+  // correctly with multi-byte UTF-8 and special characters in column names.
+  // Note: DataFusion's internal identifier handling may not support actual
+  // null bytes (\0) in column names, but the FFI encoding layer must handle
+  // them without corruption. We test with multi-byte UTF-8 characters to
+  // verify the DiplomatStrSlice encoding works correctly.
+  // ==========================================================================
+
+  @Test
+  void testJoinOnColumnsWithMultiByteUtf8Names() {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+      // Use multi-byte UTF-8 column names that would exercise the string encoding
+      String unicodeCol = "col_\u00e9\u00e0\u00fc";
+
+      Schema leftSchema =
+          new Schema(
+              Arrays.asList(
+                  new Field(unicodeCol, FieldType.nullable(new ArrowType.Int(64, true)), null),
+                  new Field("val_left", FieldType.nullable(new ArrowType.Int(64, true)), null)));
+      VectorSchemaRoot leftRoot = VectorSchemaRoot.create(leftSchema, allocator);
+      BigIntVector leftKey = (BigIntVector) leftRoot.getVector(unicodeCol);
+      BigIntVector leftVal = (BigIntVector) leftRoot.getVector("val_left");
+      leftKey.allocateNew(2);
+      leftVal.allocateNew(2);
+      leftKey.set(0, 1);
+      leftVal.set(0, 10);
+      leftKey.set(1, 2);
+      leftVal.set(1, 20);
+      leftKey.setValueCount(2);
+      leftVal.setValueCount(2);
+      leftRoot.setRowCount(2);
+      ctx.registerBatch("left_tbl", leftRoot, allocator);
+      leftRoot.close();
+
+      Schema rightSchema =
+          new Schema(
+              Arrays.asList(
+                  new Field(unicodeCol, FieldType.nullable(new ArrowType.Int(64, true)), null),
+                  new Field("val_right", FieldType.nullable(new ArrowType.Int(64, true)), null)));
+      VectorSchemaRoot rightRoot = VectorSchemaRoot.create(rightSchema, allocator);
+      BigIntVector rightKey = (BigIntVector) rightRoot.getVector(unicodeCol);
+      BigIntVector rightVal = (BigIntVector) rightRoot.getVector("val_right");
+      rightKey.allocateNew(2);
+      rightVal.allocateNew(2);
+      rightKey.set(0, 1);
+      rightVal.set(0, 100);
+      rightKey.set(1, 3);
+      rightVal.set(1, 300);
+      rightKey.setValueCount(2);
+      rightVal.setValueCount(2);
+      rightRoot.setRowCount(2);
+      ctx.registerBatch("right_tbl", rightRoot, allocator);
+      rightRoot.close();
+
+      try (DataFrame left = ctx.sql("SELECT * FROM left_tbl");
+          DataFrame right = ctx.sql("SELECT * FROM right_tbl");
+          DataFrame joined =
+              left.join(right, JoinType.INNER, List.of(unicodeCol), List.of(unicodeCol));
+          SendableRecordBatchStream stream = joined.executeStream(allocator)) {
+        assertTrue(stream.loadNextBatch());
+        VectorSchemaRoot root = stream.getVectorSchemaRoot();
+        assertEquals(1, root.getRowCount());
+        BigIntVector valLeft = (BigIntVector) root.getVector("val_left");
+        BigIntVector valRight = (BigIntVector) root.getVector("val_right");
+        assertEquals(10, valLeft.get(0));
+        assertEquals(100, valRight.get(0));
+      }
+    }
+  }
+
+  @Test
+  void testDropColumnsWithMultiByteUtf8Names() {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+      String unicodeCol = "drop_\u00e9\u00e0\u00fc";
+      Schema schema =
+          new Schema(
+              Arrays.asList(
+                  new Field("keep", FieldType.nullable(new ArrowType.Int(64, true)), null),
+                  new Field(unicodeCol, FieldType.nullable(new ArrowType.Int(64, true)), null)));
+      VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
+      BigIntVector keep = (BigIntVector) root.getVector("keep");
+      BigIntVector drop = (BigIntVector) root.getVector(unicodeCol);
+      keep.allocateNew(1);
+      drop.allocateNew(1);
+      keep.set(0, 42);
+      drop.set(0, 99);
+      keep.setValueCount(1);
+      drop.setValueCount(1);
+      root.setRowCount(1);
+      ctx.registerBatch("test_tbl", root, allocator);
+      root.close();
+
+      try (DataFrame df = ctx.sql("SELECT * FROM test_tbl");
+          DataFrame dropped = df.dropColumns(unicodeCol);
+          SendableRecordBatchStream stream = dropped.executeStream(allocator)) {
+        assertTrue(stream.loadNextBatch());
+        VectorSchemaRoot result = stream.getVectorSchemaRoot();
+        assertEquals(1, result.getRowCount());
+        assertEquals(1, result.getSchema().getFields().size());
+        assertEquals("keep", result.getSchema().getFields().get(0).getName());
+        BigIntVector keepResult = (BigIntVector) result.getVector("keep");
+        assertEquals(42, keepResult.get(0));
+      }
+    }
+  }
+
   /** Extract a numeric value as double from any numeric vector type. */
   private static double getNumericValue(VectorSchemaRoot root, String column, int row) {
     var vector = root.getVector(column);

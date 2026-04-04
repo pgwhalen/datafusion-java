@@ -1,4 +1,4 @@
-use crate::bridge::ffi::{DfSchemaTrait, DfTableProvider};
+use crate::bridge::ffi::{DfSchemaTrait, DfStringArray, DfTableProvider};
 use super::{read_error, SchemaProviderBridge, TableProviderBridge};
 use async_trait::async_trait;
 use datafusion::catalog::{SchemaProvider, TableProvider};
@@ -37,19 +37,7 @@ impl<T: DfSchemaTrait + 'static> SchemaProvider for ForeignDfSchema<T> {
     }
 
     fn table_names(&self) -> Vec<String> {
-        let cap: usize = 65536;
-        let mut buf = vec![0u8; cap];
-        let buf_addr = buf.as_mut_ptr() as usize;
-        let written = self.inner.table_names_to(buf_addr, cap);
-        if written <= 0 {
-            return Vec::new();
-        }
-        let written = written as usize;
-        let s = String::from_utf8_lossy(&buf[..written]);
-        s.split('\0')
-            .filter(|s| !s.is_empty())
-            .map(|s| s.to_string())
-            .collect()
+        DfStringArray::take_from_raw(self.inner.table_names_raw())
     }
 
     fn table_exist(&self, name: &str) -> bool {

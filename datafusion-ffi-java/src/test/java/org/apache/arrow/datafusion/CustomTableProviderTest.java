@@ -1239,4 +1239,54 @@ public class CustomTableProviderTest {
       root.setRowCount(rowsPerBatch);
     };
   }
+
+  // ==========================================================================
+  // Null-byte round-trip tests via custom catalog callbacks
+  // ==========================================================================
+
+  /**
+   * Verifies that table names containing null bytes survive the Java→Rust→Java round-trip through
+   * the DfStringArray callback path. This was previously broken because null-separated encoding
+   * split on \0.
+   */
+  @Test
+  void testTableNamesWithNullByteRoundTrip() {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+      Schema simpleSchema = createUsersSchema();
+      BatchPopulator simpleBatch = usersDataBatch();
+
+      // Create schema provider with table names containing null bytes
+      String tableWithNull = "tbl\0name";
+      String normalTable = "normal";
+      Map<String, TableProvider> tables = new HashMap<>();
+      tables.put(tableWithNull, new TestTableProvider(simpleSchema, simpleBatch));
+      tables.put(normalTable, new TestTableProvider(simpleSchema, simpleBatch));
+      SchemaProvider mySchema = new SimpleSchemaProvider(tables);
+
+      // Create catalog provider with schema names containing null bytes
+      String schemaWithNull = "sch\0ema";
+      CatalogProvider myCatalog = new SimpleCatalogProvider(Map.of(schemaWithNull, mySchema));
+      ctx.registerCatalog("test_cat", myCatalog, allocator);
+
+      // Verify schema names round-trip correctly
+      Optional<CatalogProvider> catalog = ctx.catalog("test_cat");
+      assertTrue(catalog.isPresent());
+      List<String> schemaNames = catalog.get().schemaNames();
+      assertTrue(
+          schemaNames.contains(schemaWithNull),
+          "Schema name with null byte should survive round-trip. Got: " + schemaNames);
+
+      // Verify table names round-trip correctly
+      Optional<SchemaProvider> schema = catalog.get().schema(schemaWithNull);
+      assertTrue(schema.isPresent());
+      List<String> tableNames = schema.get().tableNames();
+      assertTrue(
+          tableNames.contains(tableWithNull),
+          "Table name with null byte should survive round-trip. Got: " + tableNames);
+      assertTrue(
+          tableNames.contains(normalTable),
+          "Normal table name should also be present. Got: " + tableNames);
+    }
+  }
 }

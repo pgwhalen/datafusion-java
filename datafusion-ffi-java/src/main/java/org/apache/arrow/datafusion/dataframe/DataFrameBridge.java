@@ -1,6 +1,5 @@
 package org.apache.arrow.datafusion.dataframe;
 
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
@@ -175,13 +174,13 @@ public final class DataFrameBridge implements AutoCloseable {
       List<String> rightCols,
       Expr filter) {
     checkNotClosed();
-    byte[] leftBytes = encodeNullSeparated(leftCols.toArray(new String[0]));
-    byte[] rightBytes = encodeNullSeparated(rightCols.toArray(new String[0]));
+    String[] leftArr = leftCols.toArray(new String[0]);
+    String[] rightArr = rightCols.toArray(new String[0]);
     byte[] filterBytes =
         filter != null ? ExprProtoConverter.toProtoBytes(List.of(filter)) : new byte[0];
     try {
       DfDataFrame result =
-          dfDf.join(right.dfDf, joinTypeToDfJoinType(joinType), leftBytes, rightBytes, filterBytes);
+          dfDf.join(right.dfDf, joinTypeToDfJoinType(joinType), leftArr, rightArr, filterBytes);
       return new DataFrameBridge(result);
     } catch (DfError e) {
       throw new NativeDataFusionError(e);
@@ -284,9 +283,9 @@ public final class DataFrameBridge implements AutoCloseable {
 
   DataFrameBridge dropColumns(List<String> columns) {
     checkNotClosed();
-    byte[] bytes = encodeNullSeparated(columns.toArray(new String[0]));
+    String[] columnArr = columns.toArray(new String[0]);
     try {
-      DfDataFrame result = dfDf.dropColumns(bytes);
+      DfDataFrame result = dfDf.dropColumns(columnArr);
       return new DataFrameBridge(result);
     } catch (DfError e) {
       throw new NativeDataFusionError(e);
@@ -332,9 +331,9 @@ public final class DataFrameBridge implements AutoCloseable {
     checkNotClosed();
     try {
       DfWriteOptions dfOpts = toDfWriteOptions(writeOpts);
-      byte[] partitionBytes = encodeNullSeparated(writeOpts.partitionBy().toArray(new String[0]));
+      String[] partitionArr = writeOpts.partitionBy().toArray(new String[0]);
       byte[] formatBytes = formatOpts != null ? formatOpts.encodeOptions() : new byte[0];
-      dfDf.writeParquetWithOptions(path, dfOpts, partitionBytes, formatBytes);
+      dfDf.writeParquetWithOptions(path, dfOpts, partitionArr, formatBytes);
     } catch (DfError e) {
       throw new NativeDataFusionError(e);
     } catch (Exception e) {
@@ -346,9 +345,9 @@ public final class DataFrameBridge implements AutoCloseable {
     checkNotClosed();
     try {
       DfWriteOptions dfOpts = toDfWriteOptions(writeOpts);
-      byte[] partitionBytes = encodeNullSeparated(writeOpts.partitionBy().toArray(new String[0]));
+      String[] partitionArr = writeOpts.partitionBy().toArray(new String[0]);
       byte[] formatBytes = formatOpts != null ? formatOpts.encodeOptions() : new byte[0];
-      dfDf.writeCsvWithOptions(path, dfOpts, partitionBytes, formatBytes);
+      dfDf.writeCsvWithOptions(path, dfOpts, partitionArr, formatBytes);
     } catch (DfError e) {
       throw new NativeDataFusionError(e);
     } catch (Exception e) {
@@ -360,9 +359,9 @@ public final class DataFrameBridge implements AutoCloseable {
     checkNotClosed();
     try {
       DfWriteOptions dfOpts = toDfWriteOptions(writeOpts);
-      byte[] partitionBytes = encodeNullSeparated(writeOpts.partitionBy().toArray(new String[0]));
+      String[] partitionArr = writeOpts.partitionBy().toArray(new String[0]);
       byte[] formatBytes = formatOpts != null ? formatOpts.encodeOptions() : new byte[0];
-      dfDf.writeJsonWithOptions(path, dfOpts, partitionBytes, formatBytes);
+      dfDf.writeJsonWithOptions(path, dfOpts, partitionArr, formatBytes);
     } catch (DfError e) {
       throw new NativeDataFusionError(e);
     } catch (Exception e) {
@@ -433,16 +432,6 @@ public final class DataFrameBridge implements AutoCloseable {
       case RIGHT_SEMI -> DfJoinType.RIGHT_SEMI;
       case RIGHT_ANTI -> DfJoinType.RIGHT_ANTI;
     };
-  }
-
-  private static byte[] encodeNullSeparated(String[] strs) {
-    if (strs.length == 0) return new byte[0];
-    StringBuilder sb = new StringBuilder();
-    for (int i = 0; i < strs.length; i++) {
-      if (i > 0) sb.append('\0');
-      sb.append(strs[i]);
-    }
-    return sb.toString().getBytes(StandardCharsets.UTF_8);
   }
 
   private static byte[] sortExprToProtoBytes(List<SortExpr> sortExprs) {

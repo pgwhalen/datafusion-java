@@ -1,5 +1,6 @@
-use crate::bridge::ffi::{DfCatalogTrait, DfSchemaProvider};
+use crate::bridge::ffi::{DfCatalogTrait, DfSchemaProvider, DfStringArray};
 use super::SchemaProviderBridge;
+
 use datafusion::catalog::{CatalogProvider, SchemaProvider};
 use std::any::Any;
 use std::fmt;
@@ -32,20 +33,7 @@ impl<T: DfCatalogTrait + 'static> CatalogProvider for ForeignDfCatalog<T> {
     }
 
     fn schema_names(&self) -> Vec<String> {
-        // Allocate a buffer for the names
-        let cap: usize = 65536;
-        let mut buf = vec![0u8; cap];
-        let buf_addr = buf.as_mut_ptr() as usize;
-        let written = self.inner.schema_names_to(buf_addr, cap);
-        if written <= 0 {
-            return Vec::new();
-        }
-        let written = written as usize;
-        let s = String::from_utf8_lossy(&buf[..written]);
-        s.split('\0')
-            .filter(|s| !s.is_empty())
-            .map(|s| s.to_string())
-            .collect()
+        DfStringArray::take_from_raw(self.inner.schema_names_raw())
     }
 
     fn schema(&self, name: &str) -> Option<Arc<dyn SchemaProvider>> {

@@ -1,6 +1,5 @@
 package org.apache.arrow.datafusion.logical_expr;
 
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import org.apache.arrow.datafusion.ExprProtoConverter;
 import org.apache.arrow.datafusion.common.DataFusionError;
@@ -169,11 +168,11 @@ public final class LogicalPlanBuilderBridge implements AutoCloseable {
   LogicalPlanBuilderBridge join(
       LogicalPlanBridge right, JoinType joinType, List<String> leftCols, List<String> rightCols) {
     checkNotClosed();
-    byte[] leftBytes = encodeNullSeparated(leftCols.toArray(new String[0]));
-    byte[] rightBytes = encodeNullSeparated(rightCols.toArray(new String[0]));
+    String[] leftArr = leftCols.toArray(new String[0]);
+    String[] rightArr = rightCols.toArray(new String[0]);
     try {
       return new LogicalPlanBuilderBridge(
-          dfBuilder.join(right.dfPlan(), joinTypeToDfJoinType(joinType), leftBytes, rightBytes));
+          dfBuilder.join(right.dfPlan(), joinTypeToDfJoinType(joinType), leftArr, rightArr));
     } catch (DfError e) {
       throw new NativeDataFusionError(e);
     } catch (Exception e) {
@@ -262,16 +261,6 @@ public final class LogicalPlanBuilderBridge implements AutoCloseable {
       case RIGHT_SEMI -> DfJoinType.RIGHT_SEMI;
       case RIGHT_ANTI -> DfJoinType.RIGHT_ANTI;
     };
-  }
-
-  private static byte[] encodeNullSeparated(String[] strs) {
-    if (strs.length == 0) return new byte[0];
-    StringBuilder sb = new StringBuilder();
-    for (int i = 0; i < strs.length; i++) {
-      if (i > 0) sb.append('\0');
-      sb.append(strs[i]);
-    }
-    return sb.toString().getBytes(StandardCharsets.UTF_8);
   }
 
   private static byte[] sortExprToProtoBytes(List<SortExpr> sortExprs) {

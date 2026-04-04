@@ -50,17 +50,31 @@ pub mod ffi {
         Ok(std::str::from_utf8(s)?)
     }
 
-    /// Parse session config from null-separated bytes: key\0value\0key\0value...
-    fn build_session_config(options: &[u8]) -> Result<SessionConfig, Box<DfError>> {
-        let parts = super::parse_null_separated(options);
-        if parts.is_empty() {
+    /// Convert a slice of DiplomatStrSlice to Vec<String>.
+    fn diplomat_str_slice_to_vec(slices: &[DiplomatStrSlice]) -> Result<Vec<String>, Box<DfError>> {
+        slices
+            .iter()
+            .map(|s| {
+                std::str::from_utf8(s)
+                    .map(|s| s.to_string())
+                    .map_err(|e| Box::new(DfError(e.to_string().into())))
+            })
+            .collect()
+    }
+
+    /// Parse session config from parallel key/value string slices.
+    fn build_session_config(
+        keys: &[DiplomatStrSlice],
+        values: &[DiplomatStrSlice],
+    ) -> Result<SessionConfig, Box<DfError>> {
+        if keys.is_empty() {
             return Ok(SessionConfig::new());
         }
-        let mut settings = HashMap::with_capacity(parts.len() / 2);
-        for chunk in parts.chunks(2) {
-            if chunk.len() == 2 {
-                settings.insert(chunk[0].clone(), chunk[1].clone());
-            }
+        let key_strs = diplomat_str_slice_to_vec(keys)?;
+        let value_strs = diplomat_str_slice_to_vec(values)?;
+        let mut settings = HashMap::with_capacity(key_strs.len());
+        for (k, v) in key_strs.into_iter().zip(value_strs) {
+            settings.insert(k, v);
         }
         Ok(SessionConfig::from_string_hash_map(&settings)?)
     }
@@ -230,18 +244,18 @@ pub mod ffi {
 
     /// Catalog provider trait: returns schema names and schema providers.
     pub trait DfCatalogTrait {
-        /// Write null-separated schema names to buf at buf_addr (cap buf_cap).
-        /// Returns bytes written, or -1 on error.
-        fn schema_names_to(&self, buf_addr: usize, buf_cap: usize) -> i64;
+        /// Returns a raw pointer to a DfStringArray containing schema names.
+        /// The caller takes ownership and must free via Box::from_raw.
+        fn schema_names_raw(&self) -> usize;
         /// Returns DfSchemaProvider raw ptr (via createRaw downcall), or 0 for not found.
         fn schema(&self, name_addr: usize, name_len: usize) -> usize;
     }
 
     /// Schema provider trait: returns table names and table providers.
     pub trait DfSchemaTrait {
-        /// Write null-separated table names to buf at buf_addr (cap buf_cap).
-        /// Returns bytes written, or -1 on error.
-        fn table_names_to(&self, buf_addr: usize, buf_cap: usize) -> i64;
+        /// Returns a raw pointer to a DfStringArray containing table names.
+        /// The caller takes ownership and must free via Box::from_raw.
+        fn table_names_raw(&self) -> usize;
         /// Returns true if table exists.
         fn table_exists(&self, name_addr: usize, name_len: usize) -> bool;
         /// Returns DfTableProvider raw ptr, or 0 for not found/error (check error buffer).
@@ -554,6 +568,54 @@ pub mod ffi {
             }
         }
     }
+
+    /// Opaque wrapper for a list of strings, used where Diplomat cannot return
+    /// slices of strings directly (return values, trait callbacks).
+    #[diplomat::opaque]
+    pub struct DfStringArray {
+        pub(crate) strings: Vec<String>,
+    }
+
+    impl DfStringArray {
+        /// Number of strings in the array.
+        pub fn len(&self) -> usize {
+            self.strings.len()
+        }
+
+        /// Get the string at the given index.
+        /// Returns empty string if index is out of bounds.
+        pub fn get(&self, idx: usize, write: &mut DiplomatWrite) {
+            if let Some(s) = self.strings.get(idx) {
+                let _ = write.write_str(s);
+            }
+        }
+
+        /// Create an empty DfStringArray (for use in trait callbacks).
+        pub fn new_empty() -> Box<DfStringArray> {
+            Box::new(DfStringArray {
+                strings: Vec::new(),
+            })
+        }
+
+        /// Append a string to this array (for use in trait callbacks).
+        pub fn push(&mut self, s: &DiplomatStr) {
+            let string = std::str::from_utf8(s)
+                .unwrap_or("")
+                .to_string();
+            self.strings.push(string);
+        }
+
+        /// Create a raw pointer copy of this array's data, transferring ownership
+        /// to the caller. Used by trait callback implementations to return a
+        /// DfStringArray across the FFI boundary as a usize.
+        /// The caller must free via `from_raw_ptr`.
+        pub fn to_raw_ptr(&mut self) -> usize {
+            let strings = std::mem::take(&mut self.strings);
+            let boxed = Box::new(DfStringArray { strings });
+            Box::into_raw(boxed) as usize
+        }
+    }
+
 
     // ============================================================================
     // New opaques: DfRuntimeEnv, DfRecordBatchStream, DfSessionState, DfLogicalPlan
@@ -871,13 +933,12 @@ pub mod ffi {
         }
 
         /// Join with another plan using column name pairs.
-        /// left_cols and right_cols are null-separated column names.
         pub fn join(
             &self,
             right: &DfLogicalPlan,
             join_type: DfJoinType,
-            left_cols: &[u8],
-            right_cols: &[u8],
+            left_cols: &[DiplomatStrSlice],
+            right_cols: &[DiplomatStrSlice],
         ) -> Result<Box<DfLogicalPlanBuilder>, Box<DfError>> {
             let jt: JoinType = match join_type {
                 DfJoinType::Inner => JoinType::Inner,
@@ -890,8 +951,8 @@ pub mod ffi {
                 DfJoinType::RightAnti => JoinType::RightAnti,
             };
 
-            let left_strs = super::parse_null_separated(left_cols);
-            let right_strs = super::parse_null_separated(right_cols);
+            let left_strs = diplomat_str_slice_to_vec(left_cols)?;
+            let right_strs = diplomat_str_slice_to_vec(right_cols)?;
 
             let keys: Vec<(String, String)> = left_strs
                 .into_iter()
@@ -1200,11 +1261,12 @@ pub mod ffi {
         }
 
         /// Create a SessionContext with configuration options.
-        /// options contains null-separated bytes: key\0value\0key\0value...
+        /// keys and values are parallel string slices of config key-value pairs.
         pub fn new_with_config(
-            options: &[u8],
+            keys: &[DiplomatStrSlice],
+            values: &[DiplomatStrSlice],
         ) -> Result<Box<DfSessionContext>, Box<DfError>> {
-            let config = build_session_config(options)?;
+            let config = build_session_config(keys, values)?;
             let rt = Runtime::new()?;
             let ctx = SessionContext::new_with_config(config);
             Ok(Box::new(DfSessionContext {
@@ -1214,12 +1276,13 @@ pub mod ffi {
         }
 
         /// Create a SessionContext with configuration options and a custom RuntimeEnv.
-        /// options contains null-separated bytes: key\0value\0key\0value...
+        /// keys and values are parallel string slices of config key-value pairs.
         pub fn new_with_config_rt(
-            options: &[u8],
+            keys: &[DiplomatStrSlice],
+            values: &[DiplomatStrSlice],
             rt_env: &DfRuntimeEnv,
         ) -> Result<Box<DfSessionContext>, Box<DfError>> {
-            let config = build_session_config(options)?;
+            let config = build_session_config(keys, values)?;
             let rt = Runtime::new()?;
             let ctx =
                 SessionContext::new_with_config_rt(config, Arc::clone(&rt_env.rt_env));
@@ -1319,7 +1382,7 @@ pub mod ffi {
             &self,
             name: &DiplomatStr,
             format: impl DfFileFormatTrait + 'static,
-            urls: &[u8],
+            urls: &[DiplomatStrSlice],
             extension: &DiplomatStr,
             schema_addr: usize,
             collect_stat: i32,
@@ -1358,8 +1421,8 @@ pub mod ffi {
                 .with_collect_stat(collect_stat != 0)
                 .with_target_partitions(target_partitions);
 
-            // Parse URLs from null-separated bytes
-            let url_strs = super::parse_null_separated(urls);
+            // Parse URLs from string slices
+            let url_strs = diplomat_str_slice_to_vec(urls)?;
             let mut table_urls = Vec::with_capacity(url_strs.len());
             for url_str in &url_strs {
                 let table_url = ListingTableUrl::parse(url_str)?;
@@ -1530,38 +1593,32 @@ pub mod ffi {
             Ok(self.wrap_df(df))
         }
 
-        /// Return catalog names as null-separated bytes.
-        pub fn catalog_names(&self) -> Box<DfExprBytes> {
+        /// Return catalog names.
+        pub fn catalog_names(&self) -> Box<DfStringArray> {
             let names = self.ctx.catalog_names();
-            let joined = names.join("\0");
-            Box::new(DfExprBytes {
-                bytes: joined.into_bytes(),
-            })
+            Box::new(DfStringArray { strings: names })
         }
 
-        /// Return schema names for a catalog as null-separated bytes.
+        /// Return schema names for a catalog.
         pub fn catalog_schema_names(
             &self,
             catalog: &DiplomatStr,
-        ) -> Result<Box<DfExprBytes>, Box<DfError>> {
+        ) -> Result<Box<DfStringArray>, Box<DfError>> {
             let catalog_str = diplomat_str(catalog)?;
             let catalog_provider = self
                 .ctx
                 .catalog(catalog_str)
                 .ok_or_else(|| DataFusionError::Plan(format!("Catalog '{}' not found", catalog_str)))?;
             let names = catalog_provider.schema_names();
-            let joined = names.join("\0");
-            Ok(Box::new(DfExprBytes {
-                bytes: joined.into_bytes(),
-            }))
+            Ok(Box::new(DfStringArray { strings: names }))
         }
 
-        /// Return table names for a catalog.schema as null-separated bytes.
+        /// Return table names for a catalog.schema.
         pub fn catalog_table_names(
             &self,
             catalog: &DiplomatStr,
             schema: &DiplomatStr,
-        ) -> Result<Box<DfExprBytes>, Box<DfError>> {
+        ) -> Result<Box<DfStringArray>, Box<DfError>> {
             let catalog_str = diplomat_str(catalog)?;
             let schema_str = diplomat_str(schema)?;
             let catalog_provider = self
@@ -1577,10 +1634,7 @@ pub mod ffi {
                     ))
                 })?;
             let names = schema_provider.table_names();
-            let joined = names.join("\0");
-            Ok(Box::new(DfExprBytes {
-                bytes: joined.into_bytes(),
-            }))
+            Ok(Box::new(DfStringArray { strings: names }))
         }
 
         /// Check if a table exists in a specific catalog.schema.
@@ -1775,14 +1829,13 @@ pub mod ffi {
 
         // ── Join and set operations ──
 
-        /// Join on column names with optional filter.
-        /// Join with null-separated column name lists and optional protobuf filter bytes.
+        /// Join on column names with optional protobuf filter bytes.
         pub fn join(
             &self,
             right: &DfDataFrame,
             join_type: DfJoinType,
-            left_cols: &[u8],
-            right_cols: &[u8],
+            left_cols: &[DiplomatStrSlice],
+            right_cols: &[DiplomatStrSlice],
             filter: &[u8],
         ) -> Result<Box<DfDataFrame>, Box<DfError>> {
             let jt: JoinType = match join_type {
@@ -1796,8 +1849,8 @@ pub mod ffi {
                 DfJoinType::RightAnti => JoinType::RightAnti,
             };
 
-            let left_strs = super::parse_null_separated(left_cols);
-            let right_strs = super::parse_null_separated(right_cols);
+            let left_strs = diplomat_str_slice_to_vec(left_cols)?;
+            let right_strs = diplomat_str_slice_to_vec(right_cols)?;
             let left_col_strs: Vec<&str> = left_strs.iter().map(|s| s.as_str()).collect();
             let right_col_strs: Vec<&str> = right_strs.iter().map(|s| s.as_str()).collect();
 
@@ -1896,12 +1949,12 @@ pub mod ffi {
             Ok(self.wrap(self.df.clone().with_column_renamed(old_str, new_str)?))
         }
 
-        /// Drop columns by name. names contains null-separated UTF-8 column names.
+        /// Drop columns by name.
         pub fn drop_columns(
             &self,
-            names: &[u8],
+            names: &[DiplomatStrSlice],
         ) -> Result<Box<DfDataFrame>, Box<DfError>> {
-            let col_strs = super::parse_null_separated(names);
+            let col_strs = diplomat_str_slice_to_vec(names)?;
             let col_strs_ref: Vec<&str> = col_strs.iter().map(|s| s.as_str()).collect();
             Ok(self.wrap(self.df.clone().drop_columns(&col_strs_ref)?))
         }
@@ -1937,11 +1990,11 @@ pub mod ffi {
             &self,
             path: &DiplomatStr,
             write_opts: DfWriteOptions,
-            partition_by: &[u8],
+            partition_by: &[DiplomatStrSlice],
             format_opts: &[u8],
         ) -> Result<(), Box<DfError>> {
             let path_str = diplomat_str(path)?;
-            let df_write_opts = super::build_write_options(&write_opts, partition_by);
+            let df_write_opts = super::build_write_options(&write_opts, partition_by)?;
             let parquet_opts = super::decode_parquet_write_options(format_opts)?;
             let df = self.df.clone();
             self.rt.block_on(df.write_parquet(path_str, df_write_opts, parquet_opts))?;
@@ -1953,11 +2006,11 @@ pub mod ffi {
             &self,
             path: &DiplomatStr,
             write_opts: DfWriteOptions,
-            partition_by: &[u8],
+            partition_by: &[DiplomatStrSlice],
             format_opts: &[u8],
         ) -> Result<(), Box<DfError>> {
             let path_str = diplomat_str(path)?;
-            let df_write_opts = super::build_write_options(&write_opts, partition_by);
+            let df_write_opts = super::build_write_options(&write_opts, partition_by)?;
             let csv_opts = super::decode_csv_write_options(format_opts)?;
             let df = self.df.clone();
             self.rt.block_on(df.write_csv(path_str, df_write_opts, csv_opts))?;
@@ -1969,16 +2022,33 @@ pub mod ffi {
             &self,
             path: &DiplomatStr,
             write_opts: DfWriteOptions,
-            partition_by: &[u8],
+            partition_by: &[DiplomatStrSlice],
             format_opts: &[u8],
         ) -> Result<(), Box<DfError>> {
             let path_str = diplomat_str(path)?;
-            let df_write_opts = super::build_write_options(&write_opts, partition_by);
+            let df_write_opts = super::build_write_options(&write_opts, partition_by)?;
             let json_opts = super::decode_json_write_options(format_opts)?;
             let df = self.df.clone();
             self.rt.block_on(df.write_json(path_str, df_write_opts, json_opts))?;
             Ok(())
         }
+    }
+}
+
+impl ffi::DfStringArray {
+    /// Reconstitute a `DfStringArray` from a raw pointer previously created
+    /// by `to_raw_ptr`, and extract its strings.  Returns an empty Vec if
+    /// the pointer is null (0).
+    ///
+    /// # Safety contained here
+    /// The pointer must have been produced by `to_raw_ptr` and must not be
+    /// used again after this call.
+    pub(crate) fn take_from_raw(ptr: usize) -> Vec<String> {
+        if ptr == 0 {
+            return Vec::new();
+        }
+        let boxed = unsafe { Box::from_raw(ptr as *mut ffi::DfStringArray) };
+        boxed.strings
     }
 }
 
@@ -2004,17 +2074,6 @@ fn scalar_to_proto_bytes(value: &datafusion::common::ScalarValue) -> Result<Vec<
     Ok(prost::Message::encode_to_vec(&proto))
 }
 
-/// Parse null-separated UTF-8 strings from a byte slice.
-fn parse_null_separated(bytes: &[u8]) -> Vec<String> {
-    if bytes.is_empty() {
-        return Vec::new();
-    }
-    bytes
-        .split(|&b| b == 0)
-        .filter(|s| !s.is_empty())
-        .map(|s| std::str::from_utf8(s).unwrap_or("").to_string())
-        .collect()
-}
 
 /// Import an Arrow schema from an FFI address, or return None if addr is 0.
 fn import_schema_option(
@@ -2032,11 +2091,11 @@ fn import_schema_option(
 
 use prost::Message as _;
 
-/// Build DataFrameWriteOptions from a DfWriteOptions and partition_by bytes.
+/// Build DataFrameWriteOptions from a DfWriteOptions and partition_by string slices.
 fn build_write_options(
     opts: &ffi::DfWriteOptions,
-    partition_by: &[u8],
-) -> datafusion::dataframe::DataFrameWriteOptions {
+    partition_by: &[diplomat_runtime::DiplomatStrSlice],
+) -> Result<datafusion::dataframe::DataFrameWriteOptions, Box<ffi::DfError>> {
     use datafusion::dataframe::DataFrameWriteOptions;
     use datafusion::logical_expr::dml::InsertOp;
 
@@ -2050,11 +2109,18 @@ fn build_write_options(
         .with_single_file_output(opts.single_file_output)
         .with_insert_operation(insert_op);
 
-    let cols = parse_null_separated(partition_by);
-    if !cols.is_empty() {
+    if !partition_by.is_empty() {
+        let cols: Vec<String> = partition_by
+            .iter()
+            .map(|s| {
+                std::str::from_utf8(s)
+                    .map(|s| s.to_string())
+                    .map_err(|e| Box::new(ffi::DfError(e.to_string().into())))
+            })
+            .collect::<Result<_, _>>()?;
         wo = wo.with_partition_by(cols);
     }
-    wo
+    Ok(wo)
 }
 
 /// Decode protobuf bytes into TableParquetOptions for write.

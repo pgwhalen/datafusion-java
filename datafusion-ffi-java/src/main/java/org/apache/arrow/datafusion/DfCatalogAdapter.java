@@ -1,6 +1,5 @@
 package org.apache.arrow.datafusion;
 
-import java.util.List;
 import java.util.Optional;
 import org.apache.arrow.datafusion.catalog.CatalogProvider;
 import org.apache.arrow.datafusion.catalog.SchemaProvider;
@@ -32,15 +31,11 @@ public final class DfCatalogAdapter implements DfCatalogTrait {
   }
 
   @Override
-  public long schemaNamesTo(long bufAddr, long bufCap) {
+  public long schemaNamesRaw() {
     try {
-      List<String> names = catalog.schemaNames();
-      if (names.isEmpty()) {
-        return 0;
-      }
-      return NativeUtil.writeStrings(bufAddr, bufCap, names);
+      return NativeUtil.toRawStringArray(catalog.schemaNames());
     } catch (Exception e) {
-      return -1;
+      return 0;
     }
   }
 

@@ -1,6 +1,5 @@
 package org.apache.arrow.datafusion;
 
-import java.util.List;
 import java.util.Optional;
 import org.apache.arrow.datafusion.catalog.SchemaProvider;
 import org.apache.arrow.datafusion.catalog.TableProvider;
@@ -24,15 +23,11 @@ final class DfSchemaAdapter implements DfSchemaTrait {
   }
 
   @Override
-  public long tableNamesTo(long bufAddr, long bufCap) {
+  public long tableNamesRaw() {
     try {
-      List<String> names = schema.tableNames();
-      if (names.isEmpty()) {
-        return 0;
-      }
-      return NativeUtil.writeStrings(bufAddr, bufCap, names);
+      return NativeUtil.toRawStringArray(schema.tableNames());
     } catch (Exception e) {
-      return -1;
+      return 0;
     }
   }
 

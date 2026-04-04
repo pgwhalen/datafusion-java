@@ -3,7 +3,9 @@ package org.apache.arrow.datafusion;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
+import org.apache.arrow.datafusion.generated.DfStringArray;
 
 /**
  * Utility class for adapter helpers and Diplomat slice readers.
@@ -14,13 +16,6 @@ import java.util.List;
 final class NativeUtil {
 
   private NativeUtil() {}
-
-  static long writeStrings(long bufAddr, long bufCap, List<String> names) {
-    byte[] bytes = String.join("\0", names).getBytes(StandardCharsets.UTF_8);
-    int len = (int) Math.min(bytes.length, bufCap);
-    MemorySegment.ofAddress(bufAddr).reinterpret(bufCap).copyFrom(MemorySegment.ofArray(bytes));
-    return len;
-  }
 
   static String readString(long addr, long len) {
     byte[] bytes = MemorySegment.ofAddress(addr).reinterpret(len).toArray(ValueLayout.JAVA_BYTE);
@@ -74,5 +69,30 @@ final class NativeUtil {
     long len = view.get(ValueLayout.JAVA_LONG, 8);
     if (len == 0) return new int[0];
     return dataPtr.reinterpret(len * 4).toArray(ValueLayout.JAVA_INT);
+  }
+
+  /** Convert a DfStringArray to an immutable List of Strings. */
+  static List<String> toStringList(DfStringArray arr) {
+    int len = (int) arr.len();
+    if (len == 0) {
+      return List.of();
+    }
+    List<String> result = new ArrayList<>(len);
+    for (int i = 0; i < len; i++) {
+      result.add(arr.get(i));
+    }
+    return List.copyOf(result);
+  }
+
+  /**
+   * Build a DfStringArray from a list of strings and return its raw pointer. The caller (Rust)
+   * takes ownership and must free via Box::from_raw.
+   */
+  static long toRawStringArray(List<String> strings) {
+    DfStringArray arr = DfStringArray.newEmpty();
+    for (String s : strings) {
+      arr.push(s);
+    }
+    return arr.toRawPtr();
   }
 }

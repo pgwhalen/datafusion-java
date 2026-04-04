@@ -34,6 +34,7 @@ import org.apache.arrow.datafusion.generated.DfExprBytes;
 import org.apache.arrow.datafusion.generated.DfRuntimeEnv;
 import org.apache.arrow.datafusion.generated.DfSessionContext;
 import org.apache.arrow.datafusion.generated.DfSessionState;
+import org.apache.arrow.datafusion.generated.DfStringArray;
 import org.apache.arrow.datafusion.logical_expr.Expr;
 import org.apache.arrow.datafusion.logical_expr.ScalarUDF;
 import org.apache.arrow.memory.BufferAllocator;
@@ -104,35 +105,13 @@ public final class SessionContextBridge implements AutoCloseable {
 
   private static DfSessionContext createFromOptions(
       Map<String, String> options, DfRuntimeEnv rtEnv) {
-    // Encode as interleaved null-separated: key\0value\0key\0value...
-    byte[] optBytes = encodeConfigOptions(options);
+    String[] keys = options.keySet().toArray(new String[0]);
+    String[] values = options.values().toArray(new String[0]);
     if (rtEnv != null) {
-      return DfSessionContext.newWithConfigRt(optBytes, rtEnv);
+      return DfSessionContext.newWithConfigRt(keys, values, rtEnv);
     } else {
-      return DfSessionContext.newWithConfig(optBytes);
+      return DfSessionContext.newWithConfig(keys, values);
     }
-  }
-
-  private static byte[] encodeNullSeparated(String[] strs) {
-    if (strs.length == 0) return new byte[0];
-    StringBuilder sb = new StringBuilder();
-    for (int i = 0; i < strs.length; i++) {
-      if (i > 0) sb.append('\0');
-      sb.append(strs[i]);
-    }
-    return sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
-  }
-
-  private static byte[] encodeConfigOptions(Map<String, String> options) {
-    if (options.isEmpty()) return new byte[0];
-    StringBuilder sb = new StringBuilder();
-    boolean first = true;
-    for (Map.Entry<String, String> entry : options.entrySet()) {
-      if (!first) sb.append('\0');
-      sb.append(entry.getKey()).append('\0').append(entry.getValue());
-      first = false;
-    }
-    return sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
   }
 
   void registerBatch(
@@ -288,10 +267,9 @@ public final class SessionContextBridge implements AutoCloseable {
           new DfFileFormatAdapter(table.options().format(), allocator, config.fullStackTrace());
       traitImpls.add(adapter);
 
-      // Build URL bytes (null-separated)
+      // Build URL strings
       List<ListingTableUrl> tablePaths = table.tablePaths();
       String[] urlStrs = tablePaths.stream().map(ListingTableUrl::getUrl).toArray(String[]::new);
-      byte[] urlBytes = encodeNullSeparated(urlStrs);
       String extension = table.options().fileExtension();
 
       // Export schema to FFI_ArrowSchema
@@ -301,7 +279,7 @@ public final class SessionContextBridge implements AutoCloseable {
         dfCtx.registerListingTable(
             name,
             adapter,
-            urlBytes,
+            urlStrs,
             extension,
             ffiSchema.memoryAddress(),
             table.options().collectStat() ? 1 : 0,
@@ -494,15 +472,15 @@ public final class SessionContextBridge implements AutoCloseable {
   }
 
   List<String> catalogNames() {
-    try (DfExprBytes bytes = dfCtx.catalogNames()) {
-      return decodeNullSeparatedBytes(bytes);
+    try (DfStringArray names = dfCtx.catalogNames()) {
+      return toStringList(names);
     }
   }
 
   public List<String> catalogSchemaNames(String catalogName) {
     try {
-      try (DfExprBytes bytes = dfCtx.catalogSchemaNames(catalogName)) {
-        return decodeNullSeparatedBytes(bytes);
+      try (DfStringArray names = dfCtx.catalogSchemaNames(catalogName)) {
+        return toStringList(names);
       }
     } catch (DfError e) {
       throw new NativeDataFusionError(e);
@@ -513,14 +491,26 @@ public final class SessionContextBridge implements AutoCloseable {
 
   public List<String> catalogTableNames(String catalogName, String schemaName) {
     try {
-      try (DfExprBytes bytes = dfCtx.catalogTableNames(catalogName, schemaName)) {
-        return decodeNullSeparatedBytes(bytes);
+      try (DfStringArray names = dfCtx.catalogTableNames(catalogName, schemaName)) {
+        return toStringList(names);
       }
     } catch (DfError e) {
       throw new NativeDataFusionError(e);
     } catch (Exception e) {
       throw new DataFusionError("Failed to get table names", e);
     }
+  }
+
+  private static List<String> toStringList(DfStringArray arr) {
+    int len = (int) arr.len();
+    if (len == 0) {
+      return List.of();
+    }
+    List<String> result = new ArrayList<>(len);
+    for (int i = 0; i < len; i++) {
+      result.add(arr.get(i));
+    }
+    return List.copyOf(result);
   }
 
   public boolean catalogTableExists(String catalogName, String schemaName, String tableName) {
@@ -557,20 +547,6 @@ public final class SessionContextBridge implements AutoCloseable {
       } finally {
         ffiSchema.release();
       }
-    }
-  }
-
-  private static List<String> decodeNullSeparatedBytes(DfExprBytes bytes) {
-    long len = bytes.len();
-    if (len == 0) {
-      return List.of();
-    }
-    try (Arena arena = Arena.ofConfined()) {
-      MemorySegment buf = arena.allocate(len);
-      bytes.copyTo(buf.address(), len);
-      byte[] raw = buf.toArray(ValueLayout.JAVA_BYTE);
-      String joined = new String(raw, java.nio.charset.StandardCharsets.UTF_8);
-      return List.of(joined.split("\0"));
     }
   }
 
