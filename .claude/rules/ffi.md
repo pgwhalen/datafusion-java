@@ -172,17 +172,14 @@ Enforced by `DiplomatEncapsulationTest` (ArchUnit):
 
 ### NativeUtil
 
-Contains only adapter helpers and Diplomat slice readers:
+Contains adapter helpers used by Diplomat-generated trait adapters:
 
 | Method                                    | Used By                                  |
 |-------------------------------------------|------------------------------------------|
-| `writeStrings(long, long, List<String>)`  | DfCatalogAdapter, DfSchemaAdapter        |
 | `readString(long, long)`                  | Adapter classes                          |
 | `readU32s(long, long)`                    | DfTableAdapter                           |
 | `readBytes(long, long)`                   | DfTableAdapter, DfFileSourceAdapter      |
-| `readDiplomatStr(Object)`                 | Diplomat-generated trait code            |
-| `readDiplomatBytes(Object)`               | Diplomat-generated trait code            |
-| `readDiplomatInts(Object)`                | Diplomat-generated trait code            |
+| `toRawStringArray(List<String>)`          | Adapter classes                          |
 
 ### Build Process
 

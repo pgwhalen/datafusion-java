@@ -3,15 +3,11 @@ package org.apache.arrow.datafusion;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.List;
 import org.apache.arrow.datafusion.generated.DfStringArray;
 
 /**
- * Utility class for adapter helpers and Diplomat slice readers.
- *
- * <p>Used by Diplomat-generated trait adapters (Df*Adapter classes) and by Diplomat-generated code
- * for reading slice parameters.
+ * Utility class for adapter helpers used by Diplomat-generated trait adapters (Df*Adapter classes).
  */
 final class NativeUtil {
 
@@ -32,56 +28,6 @@ final class NativeUtil {
   static byte[] readBytes(long addr, long len) {
     if (len == 0) return new byte[0];
     return MemorySegment.ofAddress(addr).reinterpret(len).toArray(ValueLayout.JAVA_BYTE);
-  }
-
-  /**
-   * Convert a Diplomat slice parameter (Object = MemorySegment pointing to {data: ADDRESS, len:
-   * long}) to a Java String.
-   */
-  static String readDiplomatStr(Object obj) {
-    MemorySegment view = ((MemorySegment) obj).reinterpret(16);
-    MemorySegment dataPtr = view.get(ValueLayout.ADDRESS, 0);
-    long len = view.get(ValueLayout.JAVA_LONG, 8);
-    if (len == 0) return "";
-    byte[] bytes = dataPtr.reinterpret(len).toArray(ValueLayout.JAVA_BYTE);
-    return new String(bytes, StandardCharsets.UTF_8);
-  }
-
-  /**
-   * Convert a Diplomat slice parameter (Object = MemorySegment pointing to {data: ADDRESS, len:
-   * long}) to a byte[].
-   */
-  static byte[] readDiplomatBytes(Object obj) {
-    MemorySegment view = ((MemorySegment) obj).reinterpret(16);
-    MemorySegment dataPtr = view.get(ValueLayout.ADDRESS, 0);
-    long len = view.get(ValueLayout.JAVA_LONG, 8);
-    if (len == 0) return new byte[0];
-    return dataPtr.reinterpret(len).toArray(ValueLayout.JAVA_BYTE);
-  }
-
-  /**
-   * Convert a Diplomat slice parameter (Object = MemorySegment pointing to {data: ADDRESS, len:
-   * long}) to an int[] (treating each element as a 32-bit unsigned integer).
-   */
-  static int[] readDiplomatInts(Object obj) {
-    MemorySegment view = ((MemorySegment) obj).reinterpret(16);
-    MemorySegment dataPtr = view.get(ValueLayout.ADDRESS, 0);
-    long len = view.get(ValueLayout.JAVA_LONG, 8);
-    if (len == 0) return new int[0];
-    return dataPtr.reinterpret(len * 4).toArray(ValueLayout.JAVA_INT);
-  }
-
-  /** Convert a DfStringArray to an immutable List of Strings. */
-  static List<String> toStringList(DfStringArray arr) {
-    int len = (int) arr.len();
-    if (len == 0) {
-      return List.of();
-    }
-    List<String> result = new ArrayList<>(len);
-    for (int i = 0; i < len; i++) {
-      result.add(arr.get(i));
-    }
-    return List.copyOf(result);
   }
 
   /**
