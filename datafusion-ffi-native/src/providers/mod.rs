@@ -57,8 +57,68 @@ pub trait FileOpenerBridge: Send + Sync {
     ) -> Result<Box<dyn RecordBatchReaderBridge>, DataFusionError>;
 }
 
+/// A 32 KiB error buffer for capturing error messages from Java FFI callbacks.
+///
+/// Usage:
+/// ```ignore
+/// let err = ErrorBuffer::new();
+/// let ptr = some_ffi_call(err.addr(), err.cap());
+/// if ptr == 0 {
+///     let msg = err.read();
+/// }
+/// ```
+pub(crate) struct ErrorBuffer {
+    buf: Vec<u8>,
+}
+
+impl ErrorBuffer {
+    pub fn new() -> Self {
+        Self {
+            buf: vec![0u8; 32768],
+        }
+    }
+
+    pub fn addr(&self) -> usize {
+        self.buf.as_ptr() as usize
+    }
+
+    pub fn cap(&self) -> usize {
+        self.buf.len()
+    }
+
+    /// Read the error message written by Java. Returns empty string if none.
+    pub fn read(&self) -> String {
+        unsafe { read_error(self.addr(), self.cap()) }
+    }
+}
+
+/// A Java upcall that accepts `(error_addr, error_cap)` and returns a raw pointer
+/// (0 on error, non-zero on success).
+pub(crate) type Upcall<'a> = dyn FnOnce(/*error_addr:*/ usize, /*error_cap:*/ usize) -> usize + 'a;
+
+/// Invoke a Java upcall that returns a raw pointer (0 on error).
+/// Creates an internal error buffer, calls `f` with `(error_addr, error_cap)`,
+/// and reconstructs `Box<T>` on success or returns a `DataFusionError` on failure.
+///
+/// # Safety
+/// The pointer returned by `f` must be a valid `Box<T>` pointer created
+/// by `Box::into_raw` on the Java side (via `Df*.createRaw()`).
+pub(crate) unsafe fn do_returning_upcall<'a, T>(
+    context: &str,
+    f: Box<Upcall<'a>>,
+) -> Result<Box<T>, DataFusionError> {
+    let err = ErrorBuffer::new();
+    let ptr = f(err.addr(), err.cap());
+    if ptr == 0 {
+        return Err(DataFusionError::External(
+            format!("{}: {}", context, err.read()).into(),
+        ));
+    }
+    Ok(Box::from_raw(ptr as *mut T))
+}
+
 /// Read an error message from the error buffer. Returns empty string if addr is 0.
-pub(crate) unsafe fn read_error(addr: usize, cap: usize) -> String {
+unsafe fn read_error(addr: usize, cap: usize) -> String {
     if addr == 0 || cap == 0 {
         return String::new();
     }

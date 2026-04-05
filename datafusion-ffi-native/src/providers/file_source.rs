@@ -1,5 +1,5 @@
 use crate::bridge::ffi::{DfFileOpener, DfFileSourceTrait};
-use super::{read_error, FileOpenerBridge, FileSourceBridge};
+use super::{do_returning_upcall, FileOpenerBridge, FileSourceBridge};
 use arrow::datatypes::Schema as ArrowSchema;
 use arrow::ffi::FFI_ArrowSchema;
 use datafusion::common::DataFusionError;
@@ -58,29 +58,22 @@ impl<T: DfFileSourceTrait + 'static> FileSourceBridge for ForeignDfFileSource<T>
             None => -1,
         };
 
-        // Error buffer
-        let error_cap: usize = 32768;
-        let mut error_buf = vec![0u8; error_cap];
-        let error_addr = error_buf.as_mut_ptr() as usize;
-
-        let ptr = self.inner.create_file_opener(
-            schema_addr,
-            proj_u32.as_ptr() as usize,
-            proj_u32.len(),
-            limit_val,
-            batch_size_val,
-            error_addr,
-            error_cap,
-        );
-
-        if ptr == 0 {
-            let msg = unsafe { read_error(error_addr, error_cap) };
-            return Err(DataFusionError::External(
-                format!("Java create_file_opener failed: {}", msg).into(),
-            ));
-        }
-
-        let boxed = unsafe { Box::from_raw(ptr as *mut DfFileOpener) };
+        let boxed = unsafe {
+            do_returning_upcall::<DfFileOpener>(
+                "Java create_file_opener failed",
+                Box::new(|ea, ec| {
+                    self.inner.create_file_opener(
+                        schema_addr,
+                        proj_u32.as_ptr() as usize,
+                        proj_u32.len(),
+                        limit_val,
+                        batch_size_val,
+                        ea,
+                        ec,
+                    )
+                }),
+            )
+        }?;
         Ok(boxed.0)
     }
 

@@ -1,12 +1,13 @@
 use crate::bridge::ffi::{DfExecutionPlan, DfTableTrait};
-use super::{read_error, ExecutionPlanBridge, TableProviderBridge};
+use crate::bridge::{ffi::DfLazyRecordBatchStream, ffi::DfStringArray, LazyStreamState};
+use super::{do_returning_upcall, ErrorBuffer, ExecutionPlanBridge, TableProviderBridge};
 use arrow::datatypes::Schema as ArrowSchema;
 use arrow::ffi::FFI_ArrowSchema;
 use async_trait::async_trait;
 use datafusion::catalog::TableProvider;
 use datafusion::common::DataFusionError;
 use datafusion::datasource::TableType;
-use datafusion::logical_expr::TableProviderFilterPushDown;
+use datafusion::logical_expr::{dml::InsertOp, TableProviderFilterPushDown};
 use datafusion::physical_plan::ExecutionPlan;
 use datafusion::prelude::Expr;
 use datafusion_proto::logical_plan::to_proto::serialize_exprs;
@@ -16,6 +17,24 @@ use prost::Message;
 use std::any::Any;
 use std::fmt;
 use std::sync::Arc;
+
+/// Serialize expressions to protobuf bytes. Returns an empty Vec for empty input.
+fn encode_exprs(exprs: &[Expr]) -> datafusion::error::Result<Vec<u8>> {
+    if exprs.is_empty() {
+        return Ok(Vec::new());
+    }
+    let codec = DefaultLogicalExtensionCodec {};
+    let serialized = serialize_exprs(exprs, &codec)?;
+    let proto_list = LogicalExprList { expr: serialized };
+    Ok(proto_list.encode_to_vec())
+}
+
+/// Convert a boxed `DfExecutionPlan` into an `Arc<dyn ExecutionPlan>`.
+fn reconstruct_plan_from(boxed: Box<DfExecutionPlan>) -> Arc<dyn ExecutionPlan> {
+    let bridge: Box<dyn ExecutionPlanBridge> = boxed.0;
+    let arc: Arc<dyn ExecutionPlanBridge> = Arc::from(bridge);
+    arc as Arc<dyn ExecutionPlan>
+}
 
 // ── ForeignDfTable ──
 
@@ -86,15 +105,7 @@ impl<T: DfTableTrait + 'static> TableProvider for ForeignDfTable<T> {
         // We pass the raw pointer to &dyn Session so Java can call back into it
         let session_addr = state as *const dyn datafusion::catalog::Session as *const () as usize;
 
-        // Serialize filters to protobuf bytes
-        let filter_bytes: Vec<u8> = if filters.is_empty() {
-            Vec::new()
-        } else {
-            let codec = DefaultLogicalExtensionCodec {};
-            let serialized = serialize_exprs(filters, &codec)?;
-            let proto_list = LogicalExprList { expr: serialized };
-            proto_list.encode_to_vec()
-        };
+        let filter_bytes = encode_exprs(filters)?;
 
         // Projection: convert usize indices to u32
         let proj_u32: Vec<u32> = match projections {
@@ -108,34 +119,24 @@ impl<T: DfTableTrait + 'static> TableProvider for ForeignDfTable<T> {
             None => -1,
         };
 
-        // Error buffer
-        let error_cap: usize = 32768;
-        let mut error_buf = vec![0u8; error_cap];
-        let error_addr = error_buf.as_mut_ptr() as usize;
-
-        let ptr = self.inner.scan(
-            session_addr,
-            filter_bytes.as_ptr() as usize,
-            filter_bytes.len(),
-            proj_u32.as_ptr() as usize,
-            proj_u32.len(),
-            limit_val,
-            error_addr,
-            error_cap,
-        );
-
-        if ptr == 0 {
-            let msg = unsafe { read_error(error_addr, error_cap) };
-            return Err(DataFusionError::External(
-                format!("Java scan callback failed: {}", msg).into(),
-            ));
-        }
-
-        // Reconstruct the DfExecutionPlan from the raw pointer
-        let boxed = unsafe { Box::from_raw(ptr as *mut DfExecutionPlan) };
-        let bridge: Box<dyn ExecutionPlanBridge> = boxed.0;
-        let arc: Arc<dyn ExecutionPlanBridge> = Arc::from(bridge);
-        Ok(arc as Arc<dyn ExecutionPlan>)
+        let boxed = unsafe {
+            do_returning_upcall::<DfExecutionPlan>(
+                "Java scan callback failed",
+                Box::new(|ea, ec| {
+                    self.inner.scan(
+                        session_addr,
+                        filter_bytes.as_ptr() as usize,
+                        filter_bytes.len(),
+                        proj_u32.as_ptr() as usize,
+                        proj_u32.len(),
+                        limit_val,
+                        ea,
+                        ec,
+                    )
+                }),
+            )
+        }?;
+        Ok(reconstruct_plan_from(boxed))
     }
 
     fn supports_filters_pushdown(
@@ -146,34 +147,27 @@ impl<T: DfTableTrait + 'static> TableProvider for ForeignDfTable<T> {
             return Ok(Vec::new());
         }
 
-        // Serialize filters to protobuf bytes
-        let codec = DefaultLogicalExtensionCodec {};
         let owned_filters: Vec<Expr> = filters.iter().map(|f| (*f).clone()).collect();
-        let serialized = serialize_exprs(&owned_filters, &codec)?;
-        let proto_list = LogicalExprList { expr: serialized };
-        let filter_bytes = proto_list.encode_to_vec();
+        let filter_bytes = encode_exprs(&owned_filters)?;
 
         // Result buffer for i32 discriminants
         let result_cap = filters.len();
         let mut result_buf = vec![0i32; result_cap];
         let result_addr = result_buf.as_mut_ptr() as usize;
 
-        // Error buffer
-        let error_cap: usize = 32768;
-        let mut error_buf = vec![0u8; error_cap];
-        let error_addr = error_buf.as_mut_ptr() as usize;
+        let err = ErrorBuffer::new();
 
         let count = self.inner.supports_filters_pushdown(
             filter_bytes.as_ptr() as usize,
             filter_bytes.len(),
             result_addr,
             result_cap,
-            error_addr,
-            error_cap,
+            err.addr(),
+            err.cap(),
         );
 
         if count < 0 {
-            let msg = unsafe { read_error(error_addr, error_cap) };
+            let msg = err.read();
             return Err(DataFusionError::External(
                 format!("Java supports_filters_pushdown failed: {}", msg).into(),
             ));
@@ -188,5 +182,114 @@ impl<T: DfTableTrait + 'static> TableProvider for ForeignDfTable<T> {
                 _ => TableProviderFilterPushDown::Unsupported,
             })
             .collect())
+    }
+
+    async fn insert_into(
+        &self,
+        state: &dyn datafusion::catalog::Session,
+        input: Arc<dyn ExecutionPlan>,
+        insert_op: InsertOp,
+    ) -> datafusion::error::Result<Arc<dyn ExecutionPlan>> {
+        let session_addr =
+            state as *const dyn datafusion::catalog::Session as *const () as usize;
+
+        // Execute the input plan to get a SendableRecordBatchStream
+        let task_ctx = state.task_ctx();
+        let stream = input.execute(0, task_ctx)?;
+        let schema = Arc::new(input.schema().as_ref().clone());
+
+        // Wrap in DfLazyRecordBatchStream with rt=None (re-entrant path uses block_in_place)
+        let lazy_stream = DfLazyRecordBatchStream {
+            inner: LazyStreamState {
+                stream: std::sync::Mutex::new(Some(stream)),
+                rt: None,
+            },
+            schema,
+        };
+        let stream_ptr = Box::into_raw(Box::new(lazy_stream)) as usize;
+
+        // Convert InsertOp to i32 discriminant
+        let insert_op_i32: i32 = match insert_op {
+            InsertOp::Append => 0,
+            InsertOp::Overwrite => 1,
+            InsertOp::Replace => 2,
+        };
+
+        let boxed = unsafe {
+            do_returning_upcall::<DfExecutionPlan>(
+                "Java insert_into callback failed",
+                Box::new(|ea, ec| {
+                    self.inner.insert_into(session_addr, stream_ptr, insert_op_i32, ea, ec)
+                }),
+            )
+        }?;
+        Ok(reconstruct_plan_from(boxed))
+    }
+
+    async fn delete_from(
+        &self,
+        state: &dyn datafusion::catalog::Session,
+        filters: Vec<Expr>,
+    ) -> datafusion::error::Result<Arc<dyn ExecutionPlan>> {
+        let session_addr =
+            state as *const dyn datafusion::catalog::Session as *const () as usize;
+
+        let filter_bytes = encode_exprs(&filters)?;
+
+        let boxed = unsafe {
+            do_returning_upcall::<DfExecutionPlan>(
+                "Java delete_from callback failed",
+                Box::new(|ea, ec| {
+                    self.inner.delete_from(
+                        session_addr,
+                        filter_bytes.as_ptr() as usize,
+                        filter_bytes.len(),
+                        ea,
+                        ec,
+                    )
+                }),
+            )
+        }?;
+        Ok(reconstruct_plan_from(boxed))
+    }
+
+    async fn update(
+        &self,
+        state: &dyn datafusion::catalog::Session,
+        assignments: Vec<(String, Expr)>,
+        filters: Vec<Expr>,
+    ) -> datafusion::error::Result<Arc<dyn ExecutionPlan>> {
+        let session_addr =
+            state as *const dyn datafusion::catalog::Session as *const () as usize;
+
+        // Split assignments into column names and expressions
+        let (col_names, assign_exprs): (Vec<String>, Vec<Expr>) =
+            assignments.into_iter().unzip();
+
+        // Create DfStringArray for column names (Java takes ownership via Box::from_raw)
+        let col_names_array = Box::new(DfStringArray { strings: col_names });
+        let col_names_ptr = Box::into_raw(col_names_array) as usize;
+
+        let assign_bytes = encode_exprs(&assign_exprs)?;
+        let filter_bytes = encode_exprs(&filters)?;
+
+        let boxed = unsafe {
+            do_returning_upcall::<DfExecutionPlan>(
+                "Java update callback failed",
+                Box::new(|ea, ec| {
+                    self.inner.update(
+                        session_addr,
+                        col_names_ptr,
+                        assign_bytes.as_ptr() as usize,
+                        assign_bytes.len(),
+                        filter_bytes.as_ptr() as usize,
+                        filter_bytes.len(),
+                        ea,
+                        ec,
+                    )
+                }),
+            )
+        }?;
+        Ok(reconstruct_plan_from(boxed))
     }
 }

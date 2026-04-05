@@ -1,5 +1,5 @@
 use crate::bridge::ffi::{DfFileOpenerTrait, DfRecordBatchReader};
-use super::{read_error, FileOpenerBridge, RecordBatchReaderBridge};
+use super::{do_returning_upcall, FileOpenerBridge, RecordBatchReaderBridge};
 use datafusion::common::DataFusionError;
 use std::fmt;
 
@@ -34,29 +34,22 @@ impl<T: DfFileOpenerTrait + 'static> FileOpenerBridge for ForeignDfFileOpener<T>
         let path_bytes = path.as_bytes();
         let (range_start, range_end) = range.unwrap_or((0, 0));
 
-        // Error buffer
-        let error_cap: usize = 32768;
-        let mut error_buf = vec![0u8; error_cap];
-        let error_addr = error_buf.as_mut_ptr() as usize;
-
-        let ptr = self.inner.open(
-            path_bytes.as_ptr() as usize,
-            path_bytes.len(),
-            file_size,
-            range_start,
-            range_end,
-            error_addr,
-            error_cap,
-        );
-
-        if ptr == 0 {
-            let msg = unsafe { read_error(error_addr, error_cap) };
-            return Err(DataFusionError::External(
-                format!("Java open failed: {}", msg).into(),
-            ));
-        }
-
-        let boxed = unsafe { Box::from_raw(ptr as *mut DfRecordBatchReader) };
+        let boxed = unsafe {
+            do_returning_upcall::<DfRecordBatchReader>(
+                "Java open failed",
+                Box::new(|ea, ec| {
+                    self.inner.open(
+                        path_bytes.as_ptr() as usize,
+                        path_bytes.len(),
+                        file_size,
+                        range_start,
+                        range_end,
+                        ea,
+                        ec,
+                    )
+                }),
+            )
+        }?;
         Ok(boxed.0)
     }
 }

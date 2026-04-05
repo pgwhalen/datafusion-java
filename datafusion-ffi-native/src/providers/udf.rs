@@ -1,5 +1,5 @@
 use crate::bridge::ffi::DfScalarUdfTrait;
-use super::read_error;
+use super::ErrorBuffer;
 use arrow::array::{Array, StructArray};
 use arrow::datatypes::{DataType, Field, FieldRef, Schema as ArrowSchema};
 use arrow::ffi::{from_ffi, to_ffi, FFI_ArrowArray, FFI_ArrowSchema};
@@ -111,23 +111,19 @@ impl<T: DfScalarUdfTrait + 'static> ScalarUDFImpl for ForeignDfUdf<T> {
         let mut out_schema = FFI_ArrowSchema::empty();
         let out_schema_addr = &mut out_schema as *mut FFI_ArrowSchema as usize;
 
-        // Error buffer
-        let error_cap: usize = 32768;
-        let mut error_buf = vec![0u8; error_cap];
-        let error_addr = error_buf.as_mut_ptr() as usize;
+        let err = ErrorBuffer::new();
 
         let result = self.inner.return_field(
             arg_types_addr,
             arg_types_len,
             out_schema_addr,
-            error_addr,
-            error_cap,
+            err.addr(),
+            err.cap(),
         );
 
         if result != 0 {
-            let msg = unsafe { read_error(error_addr, error_cap) };
             return Err(DataFusionError::External(
-                format!("Java return_field failed: {}", msg).into(),
+                format!("Java return_field failed: {}", err.read()).into(),
             ));
         }
 
@@ -189,10 +185,7 @@ impl<T: DfScalarUdfTrait + 'static> ScalarUDFImpl for ForeignDfUdf<T> {
         let out_array_addr = &mut out_array as *mut FFI_ArrowArray as usize;
         let out_schema_addr = &mut out_schema as *mut FFI_ArrowSchema as usize;
 
-        // Error buffer
-        let error_cap: usize = 32768;
-        let mut error_buf = vec![0u8; error_cap];
-        let error_addr = error_buf.as_mut_ptr() as usize;
+        let err = ErrorBuffer::new();
 
         let result = self.inner.invoke(
             args_addr,
@@ -202,14 +195,13 @@ impl<T: DfScalarUdfTrait + 'static> ScalarUDFImpl for ForeignDfUdf<T> {
             return_field_addr,
             out_array_addr,
             out_schema_addr,
-            error_addr,
-            error_cap,
+            err.addr(),
+            err.cap(),
         );
 
         if result != 0 {
-            let msg = unsafe { read_error(error_addr, error_cap) };
             return Err(DataFusionError::External(
-                format!("Java invoke failed: {}", msg).into(),
+                format!("Java invoke failed: {}", err.read()).into(),
             ));
         }
 
@@ -243,24 +235,20 @@ impl<T: DfScalarUdfTrait + 'static> ScalarUDFImpl for ForeignDfUdf<T> {
             (0..result_cap).map(|_| FFI_ArrowSchema::empty()).collect();
         let result_addr = result_schemas.as_mut_ptr() as usize;
 
-        // Error buffer
-        let error_cap: usize = 32768;
-        let mut error_buf = vec![0u8; error_cap];
-        let error_addr = error_buf.as_mut_ptr() as usize;
+        let err = ErrorBuffer::new();
 
         let count = self.inner.coerce_types(
             arg_types_addr,
             arg_types_len,
             result_addr,
             result_cap,
-            error_addr,
-            error_cap,
+            err.addr(),
+            err.cap(),
         );
 
         if count < 0 {
-            let msg = unsafe { read_error(error_addr, error_cap) };
             return Err(DataFusionError::External(
-                format!("Java coerce_types failed: {}", msg).into(),
+                format!("Java coerce_types failed: {}", err.read()).into(),
             ));
         }
 

@@ -1,5 +1,5 @@
 use crate::bridge::ffi::{DfSchemaTrait, DfStringArray, DfTableProvider};
-use super::{read_error, SchemaProviderBridge, TableProviderBridge};
+use super::{ErrorBuffer, SchemaProviderBridge, TableProviderBridge};
 use async_trait::async_trait;
 use datafusion::catalog::{SchemaProvider, TableProvider};
 use datafusion::common::DataFusionError;
@@ -48,15 +48,12 @@ impl<T: DfSchemaTrait + 'static> SchemaProvider for ForeignDfSchema<T> {
     async fn table(&self, name: &str) -> datafusion::error::Result<Option<Arc<dyn TableProvider>>> {
         let name_bytes = name.as_bytes();
 
-        // Error buffer
-        let error_cap: usize = 32768;
-        let mut error_buf = vec![0u8; error_cap];
-        let error_addr = error_buf.as_mut_ptr() as usize;
+        let err = ErrorBuffer::new();
 
-        let ptr = self.inner.table(name_bytes.as_ptr() as usize, name_bytes.len(), error_addr, error_cap);
+        let ptr = self.inner.table(name_bytes.as_ptr() as usize, name_bytes.len(), err.addr(), err.cap());
         if ptr == 0 {
             // Check if Java reported an error
-            let msg = unsafe { read_error(error_addr, error_cap) };
+            let msg = err.read();
             if !msg.is_empty() {
                 return Err(DataFusionError::External(
                     format!("Java SchemaProvider.table() failed: {}", msg).into(),

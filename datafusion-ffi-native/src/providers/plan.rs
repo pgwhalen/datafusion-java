@@ -1,8 +1,7 @@
 use crate::bridge::ffi::{DfExecutionPlanTrait, DfRecordBatchReader};
-use super::{read_error, ExecutionPlanBridge};
+use super::{do_returning_upcall, ExecutionPlanBridge};
 use arrow::datatypes::Schema as ArrowSchema;
 use arrow::ffi::FFI_ArrowSchema;
-use datafusion::common::DataFusionError;
 use datafusion::execution::SendableRecordBatchStream;
 use datafusion::physical_plan::execution_plan::{Boundedness, EmissionType};
 use datafusion::physical_plan::stream::RecordBatchStreamAdapter;
@@ -113,21 +112,12 @@ impl<T: DfExecutionPlanTrait + 'static> ExecutionPlan for ForeignDfPlan<T> {
         partition: usize,
         _context: Arc<datafusion::execution::TaskContext>,
     ) -> datafusion::error::Result<SendableRecordBatchStream> {
-        // Error buffer
-        let error_cap: usize = 32768;
-        let mut error_buf = vec![0u8; error_cap];
-        let error_addr = error_buf.as_mut_ptr() as usize;
-
-        let ptr = self.inner.execute(partition as i32, error_addr, error_cap);
-        if ptr == 0 {
-            let msg = unsafe { read_error(error_addr, error_cap) };
-            return Err(DataFusionError::External(
-                format!("Java execute callback failed: {}", msg).into(),
-            ));
-        }
-
-        // Reconstruct the DfRecordBatchReader from the raw pointer
-        let boxed = unsafe { Box::from_raw(ptr as *mut DfRecordBatchReader) };
+        let boxed = unsafe {
+            do_returning_upcall::<DfRecordBatchReader>(
+                "Java execute callback failed",
+                Box::new(|ea, ec| self.inner.execute(partition as i32, ea, ec)),
+            )
+        }?;
         let reader_bridge = boxed.0;
         let reader_schema = reader_bridge.schema();
 

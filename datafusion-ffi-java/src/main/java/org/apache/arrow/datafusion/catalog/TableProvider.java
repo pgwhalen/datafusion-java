@@ -3,10 +3,13 @@ package org.apache.arrow.datafusion.catalog;
 import java.util.Collections;
 import java.util.List;
 import org.apache.arrow.datafusion.common.DataFusionError;
+import org.apache.arrow.datafusion.logical_expr.ColumnAssignment;
 import org.apache.arrow.datafusion.logical_expr.Expr;
+import org.apache.arrow.datafusion.logical_expr.InsertOp;
 import org.apache.arrow.datafusion.logical_expr.TableProviderFilterPushDown;
 import org.apache.arrow.datafusion.logical_expr.TableType;
 import org.apache.arrow.datafusion.physical_plan.ExecutionPlan;
+import org.apache.arrow.datafusion.physical_plan.RecordBatchReader;
 import org.apache.arrow.vector.types.pojo.Schema;
 
 /**
@@ -103,5 +106,72 @@ public interface TableProvider {
    */
   default List<TableProviderFilterPushDown> supportsFiltersPushdown(List<Expr> filters) {
     return Collections.nCopies(filters.size(), TableProviderFilterPushDown.INEXACT);
+  }
+
+  /**
+   * Inserts data from the given input into this table.
+   *
+   * <p>The input is a {@link RecordBatchReader} that provides the data to insert. The reader is
+   * lazily evaluated — each call to {@link RecordBatchReader#loadNextBatch()} fetches exactly one
+   * batch from the DataFusion execution plan. The caller is responsible for closing the reader.
+   *
+   * <p>Returns an {@link ExecutionPlan} that produces a single row with a {@code count} column
+   * (UInt64) indicating the number of rows inserted.
+   *
+   * <p>The default implementation throws {@link UnsupportedOperationException}.
+   *
+   * @param session the session context (borrowed, valid only during this call)
+   * @param input the data to insert (borrowed, valid only during this call)
+   * @param insertOp the insert operation type (append, overwrite, or replace)
+   * @return an execution plan producing the insert count
+   * @throws UnsupportedOperationException if this table does not support inserts
+   * @see <a
+   *     href="https://docs.rs/datafusion-catalog/52.1.0/datafusion_catalog/trait.TableProvider.html#method.insert_into">Rust
+   *     DataFusion: TableProvider::insert_into</a>
+   */
+  default ExecutionPlan insertInto(Session session, RecordBatchReader input, InsertOp insertOp) {
+    throw new UnsupportedOperationException("insert_into not implemented");
+  }
+
+  /**
+   * Deletes rows matching the filter predicates from this table.
+   *
+   * <p>Returns an {@link ExecutionPlan} that produces a single row with a {@code count} column
+   * (UInt64) indicating the number of rows deleted. An empty filter list deletes all rows.
+   *
+   * <p>The default implementation throws {@link UnsupportedOperationException}.
+   *
+   * @param session the session context (borrowed, valid only during this call)
+   * @param filters the filter predicates for rows to delete (empty means delete all)
+   * @return an execution plan producing the delete count
+   * @throws UnsupportedOperationException if this table does not support deletes
+   * @see <a
+   *     href="https://docs.rs/datafusion-catalog/52.1.0/datafusion_catalog/trait.TableProvider.html#method.delete_from">Rust
+   *     DataFusion: TableProvider::delete_from</a>
+   */
+  default ExecutionPlan deleteFrom(Session session, List<Expr> filters) {
+    throw new UnsupportedOperationException("delete_from not implemented");
+  }
+
+  /**
+   * Updates rows matching the filter predicates in this table.
+   *
+   * <p>Returns an {@link ExecutionPlan} that produces a single row with a {@code count} column
+   * (UInt64) indicating the number of rows updated. An empty filter list updates all rows.
+   *
+   * <p>The default implementation throws {@link UnsupportedOperationException}.
+   *
+   * @param session the session context (borrowed, valid only during this call)
+   * @param assignments the column assignments to apply (column name + new value expression)
+   * @param filters the filter predicates for rows to update (empty means update all)
+   * @return an execution plan producing the update count
+   * @throws UnsupportedOperationException if this table does not support updates
+   * @see <a
+   *     href="https://docs.rs/datafusion-catalog/52.1.0/datafusion_catalog/trait.TableProvider.html#method.update">Rust
+   *     DataFusion: TableProvider::update</a>
+   */
+  default ExecutionPlan update(
+      Session session, List<ColumnAssignment> assignments, List<Expr> filters) {
+    throw new UnsupportedOperationException("update not implemented");
   }
 }

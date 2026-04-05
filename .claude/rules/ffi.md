@@ -170,16 +170,96 @@ Enforced by `DiplomatEncapsulationTest` (ArchUnit):
 4. **`NativeLoader` confined to internal classes** — Only Diplomat-generated and bridge classes may reference it
 5. **Constructors taking internal types are package-private** — `*Ffi`, `*Bridge` parameters require package-private constructors
 
-### NativeUtil
+### Rust Helpers (`providers/`)
 
-Contains adapter helpers used by Diplomat-generated trait adapters:
+#### `do_returning_upcall` (`providers/mod.rs`)
 
-| Method                                    | Used By                                  |
+Most Rust→Java upcalls follow the same pattern: allocate an error buffer, call Java, check for null pointer, reconstruct `Box<T>` on success. **Use `do_returning_upcall`** for any upcall that returns a raw pointer (0 on error):
+
+```rust
+use super::do_returning_upcall;
+
+let boxed = unsafe {
+    do_returning_upcall::<DfExecutionPlan>(
+        "Java scan callback failed",
+        Box::new(|ea, ec| self.inner.scan(session_addr, ..., ea, ec)),
+    )
+}?;
+```
+
+The `Upcall` type alias documents the closure signature: `(error_addr: usize, error_cap: usize) -> usize`. The function creates the `ErrorBuffer` internally, checks for null, and returns `Result<Box<T>, DataFusionError>`.
+
+For upcalls with non-standard error handling (e.g., `schema.rs` where ptr==0 can mean `Ok(None)`), use `ErrorBuffer` directly:
+
+```rust
+use super::ErrorBuffer;
+
+let err = ErrorBuffer::new();
+let ptr = self.inner.some_callback(arg1, arg2, err.addr(), err.cap());
+if ptr == 0 {
+    let msg = err.read();
+    if !msg.is_empty() { return Err(...); }
+    return Ok(None);
+}
+```
+
+#### `encode_exprs` (`providers/table.rs`)
+
+Serializes `&[Expr]` to protobuf `LogicalExprList` bytes for passing to Java. Returns empty `Vec` for empty input. Use this instead of manually creating a `DefaultLogicalExtensionCodec` + `serialize_exprs` + `LogicalExprList` + `encode_to_vec`:
+
+```rust
+let filter_bytes = encode_exprs(filters)?;
+// Pass to Java as (addr, len) pair:
+self.inner.callback(filter_bytes.as_ptr() as usize, filter_bytes.len(), ...);
+```
+
+#### `reconstruct_plan` (`providers/table.rs`)
+
+Reconstructs an `Arc<dyn ExecutionPlan>` from a raw pointer returned by Java's `DfExecutionPlan.createRaw()`. Use this instead of manually calling `Box::from_raw` + extracting the bridge + converting to `Arc`:
+
+```rust
+if ptr == 0 { /* handle error */ }
+Ok(unsafe { reconstruct_plan(ptr) })
+```
+
+### NativeUtil (Java)
+
+Contains adapter helpers used by `Df*Adapter` classes:
+
+| Method                                    | Purpose                                  |
 |-------------------------------------------|------------------------------------------|
-| `readString(long, long)`                  | Adapter classes                          |
-| `readU32s(long, long)`                    | DfTableAdapter                           |
-| `readBytes(long, long)`                   | DfTableAdapter, DfFileSourceAdapter      |
-| `toRawStringArray(List<String>)`          | Adapter classes                          |
+| `readString(long, long)`                  | Read UTF-8 string from raw address       |
+| `readU32s(long, long)`                    | Read u32 array from raw address          |
+| `readBytes(long, long)`                   | Read byte array from raw address         |
+| `toRawStringArray(List<String>)`          | Java → Rust: string list via DfStringArray |
+| `fromRawStringArray(long)`                | Rust → Java: string list via DfStringArray |
+
+#### `toRawStringArray` — Java → Rust string list
+
+Creates a `DfStringArray`, pushes strings, and returns a raw pointer. Rust consumes it via `DfStringArray::take_from_raw()`:
+
+```java
+// In a Df*Adapter method returning strings to Rust:
+return NativeUtil.toRawStringArray(provider.schemaNames());
+```
+
+#### `fromRawStringArray` — Rust → Java string list
+
+Reads strings from a raw `DfStringArray` pointer passed by Rust, then destroys it (takes ownership). Uses native method handles directly since the generated `DfStringArray` constructor is package-private to the `generated` package:
+
+```java
+// In a Df*Adapter method receiving strings from Rust:
+List<String> colNames = NativeUtil.fromRawStringArray(colNamesPtr);
+```
+
+Rust side to create the pointer:
+
+```rust
+use crate::bridge::ffi::DfStringArray;
+let arr = Box::new(DfStringArray { strings: col_names });
+let ptr = Box::into_raw(arr) as usize;
+// Pass ptr to Java — Java takes ownership and destroys it
+```
 
 ### Build Process
 

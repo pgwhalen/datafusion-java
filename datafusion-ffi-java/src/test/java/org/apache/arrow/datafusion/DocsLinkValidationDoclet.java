@@ -85,7 +85,9 @@ public class DocsLinkValidationDoclet implements Doclet {
       Set.of(
           "WhenThen",
           // RecordBatchReader maps to arrow::record_batch::RecordBatch (Arrow, not DataFusion)
-          "RecordBatchReader");
+          "RecordBatchReader",
+          // ColumnAssignment maps to Rust's (String, Expr) tuple — no standalone Rust type
+          "ColumnAssignment");
 
   /** Name mismatch exceptions: Java name -> expected Rust label in @see. */
   private static final Map<String, String> NAME_EXCEPTIONS =

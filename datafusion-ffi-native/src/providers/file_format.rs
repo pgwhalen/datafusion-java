@@ -1,4 +1,4 @@
-use super::{read_error, FileOpenerBridge, FileSourceBridge};
+use super::{ErrorBuffer, FileOpenerBridge, FileSourceBridge};
 use arrow::datatypes::Schema as ArrowSchema;
 use arrow::ffi::FFI_ArrowSchema;
 use arrow::record_batch::RecordBatch;
@@ -87,12 +87,9 @@ impl<T: crate::bridge::ffi::DfFileFormatTrait + 'static> DataFusionFileFormat
             .expect("Failed to export schema for file_source");
         let schema_addr = &ffi_schema as *const FFI_ArrowSchema as usize;
 
-        // Error buffer
-        let error_cap: usize = 32768;
-        let mut error_buf = vec![0u8; error_cap];
-        let error_addr = error_buf.as_mut_ptr() as usize;
+        let err = ErrorBuffer::new();
 
-        let ptr = self.inner.file_source(schema_addr, error_addr, error_cap);
+        let ptr = self.inner.file_source(schema_addr, err.addr(), err.cap());
 
         // file_source() is infallible, so defer error
         let source_bridge: Result<Arc<dyn FileSourceBridge>, String> = if ptr != 0 {
@@ -100,8 +97,7 @@ impl<T: crate::bridge::ffi::DfFileFormatTrait + 'static> DataFusionFileFormat
                 unsafe { Box::from_raw(ptr as *mut crate::bridge::ffi::DfFileSource) };
             Ok(Arc::from(boxed.0))
         } else {
-            let msg = unsafe { read_error(error_addr, error_cap) };
-            Err(format!("Java file_source failed: {}", msg))
+            Err(format!("Java file_source failed: {}", err.read()))
         };
 
         let projection =

@@ -1,5 +1,5 @@
 use crate::bridge::ffi::DfRecordBatchReaderTrait;
-use super::{read_error, RecordBatchReaderBridge};
+use super::{ErrorBuffer, RecordBatchReaderBridge};
 use arrow::datatypes::Schema as ArrowSchema;
 use arrow::ffi::{from_ffi, FFI_ArrowArray, FFI_ArrowSchema};
 use arrow::record_batch::RecordBatch;
@@ -53,14 +53,11 @@ impl<T: DfRecordBatchReaderTrait> RecordBatchReaderBridge for ForeignDfStream<T>
         let array_addr = &mut ffi_array as *mut FFI_ArrowArray as usize;
         let schema_addr = &mut ffi_schema as *mut FFI_ArrowSchema as usize;
 
-        // Error buffer
-        let error_cap: usize = 32768;
-        let mut error_buf = vec![0u8; error_cap];
-        let error_addr = error_buf.as_mut_ptr() as usize;
+        let err = ErrorBuffer::new();
 
         let result = self
             .inner
-            .next(array_addr, schema_addr, error_addr, error_cap);
+            .next(array_addr, schema_addr, err.addr(), err.cap());
 
         match result {
             1 => {
@@ -80,9 +77,8 @@ impl<T: DfRecordBatchReaderTrait> RecordBatchReaderBridge for ForeignDfStream<T>
             }
             _ => {
                 // Error
-                let msg = unsafe { read_error(error_addr, error_cap) };
                 Err(DataFusionError::External(
-                    format!("Java next() callback failed: {}", msg).into(),
+                    format!("Java next() callback failed: {}", err.read()).into(),
                 ))
             }
         }

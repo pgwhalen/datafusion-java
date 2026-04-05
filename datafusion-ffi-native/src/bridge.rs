@@ -292,6 +292,48 @@ pub mod ffi {
             error_addr: usize,
             error_cap: usize,
         ) -> i32;
+
+        /// Insert data into this table. The input_stream_ptr is a raw
+        /// `Box<DfLazyRecordBatchStream>` pointer that Java wraps in a
+        /// SendableRecordBatchStream to iterate lazily.
+        /// insert_op: 0=Append, 1=Overwrite, 2=Replace.
+        /// Returns DfExecutionPlan raw ptr, or 0 on error (check error buffer).
+        fn insert_into(
+            &self,
+            session_addr: usize,
+            input_stream_ptr: usize,
+            insert_op: i32,
+            error_addr: usize,
+            error_cap: usize,
+        ) -> usize;
+
+        /// Delete rows matching the filter predicates.
+        /// Returns DfExecutionPlan raw ptr, or 0 on error (check error buffer).
+        fn delete_from(
+            &self,
+            session_addr: usize,
+            filters_addr: usize,
+            filters_len: usize,
+            error_addr: usize,
+            error_cap: usize,
+        ) -> usize;
+
+        /// Update rows matching the filter predicates with the given assignments.
+        /// col_names_ptr: raw DfStringArray pointer (Java takes ownership).
+        /// assign_exprs_addr/assign_exprs_len: protobuf LogicalExprList for assignment values.
+        /// filters_addr/filters_len: protobuf LogicalExprList for WHERE filters.
+        /// Returns DfExecutionPlan raw ptr, or 0 on error (check error buffer).
+        fn update(
+            &self,
+            session_addr: usize,
+            col_names_ptr: usize,
+            assign_exprs_addr: usize,
+            assign_exprs_len: usize,
+            filters_addr: usize,
+            filters_len: usize,
+            error_addr: usize,
+            error_cap: usize,
+        ) -> usize;
     }
 
     /// Execution plan trait: returns properties and executes partitions.
@@ -703,8 +745,8 @@ pub mod ffi {
     /// dyn-trait fields inside the #[diplomat::bridge] macro.
     #[diplomat::opaque]
     pub struct DfLazyRecordBatchStream {
-        pub(super) inner: super::LazyStreamState,
-        pub(super) schema: Arc<ArrowSchema>,
+        pub(crate) inner: super::LazyStreamState,
+        pub(crate) schema: Arc<ArrowSchema>,
     }
 
     impl DfLazyRecordBatchStream {
@@ -736,7 +778,22 @@ pub mod ffi {
                 None => return Ok(0),
                 Some(s) => s,
             };
-            match self.inner.rt.block_on(stream.next()) {
+            let next_result = match tokio::runtime::Handle::try_current() {
+                Ok(handle) => {
+                    // On a Tokio worker (re-entrant callback from insert_into) —
+                    // block_in_place tells Tokio to spawn replacement workers as needed.
+                    tokio::task::block_in_place(|| handle.block_on(stream.next()))
+                }
+                Err(_) => {
+                    // Normal Java thread — use the stored runtime.
+                    self.inner
+                        .rt
+                        .as_ref()
+                        .expect("No runtime available outside async context")
+                        .block_on(stream.next())
+                }
+            };
+            match next_result {
                 None => Ok(0),
                 Some(Err(e)) => Err(e.into()),
                 Some(Ok(batch)) => {
@@ -1729,7 +1786,7 @@ pub mod ffi {
             Ok(Box::new(DfLazyRecordBatchStream {
                 inner: super::LazyStreamState {
                     stream: std::sync::Mutex::new(Some(stream)),
-                    rt: Arc::clone(&self.rt),
+                    rt: Some(Arc::clone(&self.rt)),
                 },
                 schema,
             }))
@@ -2342,5 +2399,5 @@ pub(crate) struct LazyStreamState {
     pub(crate) stream: std::sync::Mutex<
         Option<datafusion::physical_plan::SendableRecordBatchStream>,
     >,
-    pub(crate) rt: std::sync::Arc<tokio::runtime::Runtime>,
+    pub(crate) rt: Option<std::sync::Arc<tokio::runtime::Runtime>>,
 }

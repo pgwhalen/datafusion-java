@@ -21,7 +21,9 @@ import org.apache.arrow.datafusion.catalog.TableProvider;
 import org.apache.arrow.datafusion.common.ScalarValue;
 import org.apache.arrow.datafusion.dataframe.DataFrame;
 import org.apache.arrow.datafusion.execution.SessionContext;
+import org.apache.arrow.datafusion.logical_expr.ColumnAssignment;
 import org.apache.arrow.datafusion.logical_expr.Expr;
+import org.apache.arrow.datafusion.logical_expr.InsertOp;
 import org.apache.arrow.datafusion.logical_expr.Operator;
 import org.apache.arrow.datafusion.logical_expr.TableProviderFilterPushDown;
 import org.apache.arrow.datafusion.physical_plan.Boundedness;
@@ -33,6 +35,7 @@ import org.apache.arrow.datafusion.physical_plan.SendableRecordBatchStream;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.BigIntVector;
+import org.apache.arrow.vector.UInt8Vector;
 import org.apache.arrow.vector.VarCharVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.types.pojo.ArrowType;
@@ -857,6 +860,193 @@ public class CustomTableProviderTest {
     }
   }
 
+  // ==========================================================================
+  // DML tests: INSERT INTO, DELETE FROM, UPDATE
+  // ==========================================================================
+
+  @Test
+  void testDeleteFromCustomTable() {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+
+      Schema schema = createUsersSchema();
+      MutableTableProvider mutableTable =
+          new MutableTableProvider(
+              schema,
+              new Object[] {1L, "Alice"},
+              new Object[] {2L, "Bob"},
+              new Object[] {3L, "Charlie"});
+
+      SchemaProvider mySchema = new SimpleSchemaProvider(Map.of("users", mutableTable));
+      CatalogProvider myCatalog = new SimpleCatalogProvider(Map.of("default", mySchema));
+      ctx.registerCatalog("dml", myCatalog, allocator);
+
+      // DELETE rows where id > 1
+      try (DataFrame df = ctx.sql("DELETE FROM dml.default.users WHERE id > 1");
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
+        VectorSchemaRoot root = stream.getVectorSchemaRoot();
+        assertTrue(stream.loadNextBatch());
+        // DML results produce a "count" column — read as long regardless of vector type
+        long count = readCountColumn(root);
+        assertEquals(2L, count, "Should delete 2 rows (Bob and Charlie)");
+        assertFalse(stream.loadNextBatch());
+      }
+
+      // Verify remaining data
+      assertEquals(1, mutableTable.rows.size());
+      assertEquals(1L, mutableTable.rows.get(0)[0]);
+      assertEquals("Alice", mutableTable.rows.get(0)[1]);
+    }
+  }
+
+  @Test
+  void testDeleteFromAllRows() {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+
+      Schema schema = createUsersSchema();
+      MutableTableProvider mutableTable =
+          new MutableTableProvider(schema, new Object[] {1L, "Alice"}, new Object[] {2L, "Bob"});
+
+      SchemaProvider mySchema = new SimpleSchemaProvider(Map.of("users", mutableTable));
+      CatalogProvider myCatalog = new SimpleCatalogProvider(Map.of("default", mySchema));
+      ctx.registerCatalog("dml_del_all", myCatalog, allocator);
+
+      // DELETE all rows (no WHERE)
+      try (DataFrame df = ctx.sql("DELETE FROM dml_del_all.default.users");
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
+        VectorSchemaRoot root = stream.getVectorSchemaRoot();
+        assertTrue(stream.loadNextBatch());
+        long count = readCountColumn(root);
+        assertEquals(2L, count, "Should delete all 2 rows");
+      }
+
+      assertTrue(mutableTable.rows.isEmpty(), "Table should be empty after DELETE all");
+    }
+  }
+
+  @Test
+  void testUpdateCustomTable() {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+
+      Schema schema = createUsersSchema();
+      MutableTableProvider mutableTable =
+          new MutableTableProvider(
+              schema,
+              new Object[] {1L, "Alice"},
+              new Object[] {2L, "Bob"},
+              new Object[] {3L, "Charlie"});
+
+      SchemaProvider mySchema = new SimpleSchemaProvider(Map.of("users", mutableTable));
+      CatalogProvider myCatalog = new SimpleCatalogProvider(Map.of("default", mySchema));
+      ctx.registerCatalog("dml_upd", myCatalog, allocator);
+
+      // UPDATE name to 'updated' where id = 1
+      try (DataFrame df =
+              ctx.sql("UPDATE dml_upd.default.users SET name = 'updated' WHERE id = 1");
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
+        VectorSchemaRoot root = stream.getVectorSchemaRoot();
+        assertTrue(stream.loadNextBatch());
+        long count = readCountColumn(root);
+        assertEquals(1L, count, "Should update 1 row");
+      }
+
+      // Verify the updated data
+      assertEquals(3, mutableTable.rows.size());
+      assertEquals("updated", mutableTable.rows.get(0)[1]);
+      assertEquals("Bob", mutableTable.rows.get(1)[1]);
+      assertEquals("Charlie", mutableTable.rows.get(2)[1]);
+    }
+  }
+
+  @Test
+  void testInsertIntoCustomTable() {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+
+      Schema schema = createUsersSchema();
+      MutableTableProvider mutableTable =
+          new MutableTableProvider(schema, new Object[] {1L, "Alice"});
+
+      SchemaProvider mySchema = new SimpleSchemaProvider(Map.of("users", mutableTable));
+      CatalogProvider myCatalog = new SimpleCatalogProvider(Map.of("default", mySchema));
+      ctx.registerCatalog("dml_ins", myCatalog, allocator);
+
+      // INSERT new rows
+      try (DataFrame df =
+              ctx.sql("INSERT INTO dml_ins.default.users VALUES (2, 'Bob'), (3, 'Charlie')");
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
+        VectorSchemaRoot root = stream.getVectorSchemaRoot();
+        assertTrue(stream.loadNextBatch());
+        long count = readCountColumn(root);
+        assertEquals(2L, count, "Should insert 2 rows");
+      }
+
+      // Verify all data
+      assertEquals(3, mutableTable.rows.size());
+      assertEquals(1L, mutableTable.rows.get(0)[0]);
+      assertEquals("Alice", mutableTable.rows.get(0)[1]);
+      assertEquals(2L, mutableTable.rows.get(1)[0]);
+      assertEquals("Bob", mutableTable.rows.get(1)[1]);
+      assertEquals(3L, mutableTable.rows.get(2)[0]);
+      assertEquals("Charlie", mutableTable.rows.get(2)[1]);
+    }
+  }
+
+  @Test
+  void testInsertIntoMultipleBatches() {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+
+      Schema schema = createUsersSchema();
+      MutableTableProvider mutableTable = new MutableTableProvider(schema);
+
+      SchemaProvider mySchema = new SimpleSchemaProvider(Map.of("users", mutableTable));
+      CatalogProvider myCatalog = new SimpleCatalogProvider(Map.of("default", mySchema));
+      ctx.registerCatalog("dml_multi", myCatalog, allocator);
+
+      // Insert enough rows to potentially span multiple batches
+      StringBuilder sb = new StringBuilder("INSERT INTO dml_multi.default.users VALUES ");
+      for (int i = 1; i <= 10; i++) {
+        if (i > 1) sb.append(", ");
+        sb.append("(").append(i).append(", 'Name").append(i).append("')");
+      }
+
+      try (DataFrame df = ctx.sql(sb.toString());
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
+        VectorSchemaRoot root = stream.getVectorSchemaRoot();
+        assertTrue(stream.loadNextBatch());
+        long count = readCountColumn(root);
+        assertEquals(10L, count, "Should insert 10 rows");
+      }
+
+      // Verify all rows were inserted
+      assertEquals(10, mutableTable.rows.size());
+      for (int i = 0; i < 10; i++) {
+        assertEquals((long) (i + 1), mutableTable.rows.get(i)[0]);
+        assertEquals("Name" + (i + 1), mutableTable.rows.get(i)[1]);
+      }
+    }
+  }
+
+  /**
+   * Reads the "count" column from a DML result batch. DataFusion DML operations return the count as
+   * UInt64, which Arrow Java represents as a UInt8Vector (unsigned 64-bit). Our
+   * MutableTableProvider returns Int64 (BigIntVector). This helper handles both.
+   */
+  private long readCountColumn(VectorSchemaRoot root) {
+    var vector = root.getVector("count");
+    if (vector instanceof BigIntVector bigInt) {
+      return bigInt.get(0);
+    } else if (vector instanceof UInt8Vector uint8) {
+      return uint8.get(0);
+    } else {
+      throw new AssertionError(
+          "Unexpected count vector type: " + vector.getClass().getSimpleName());
+    }
+  }
+
   /**
    * Recursively checks if an expression tree contains a BinaryExpr with the given op and column.
    */
@@ -969,6 +1159,172 @@ public class CustomTableProviderTest {
     @Override
     public void close() {
       root.close();
+    }
+  }
+
+  /**
+   * A mutable in-memory TableProvider that supports INSERT, DELETE, and UPDATE for DML tests.
+   *
+   * <p>Data is stored as a List of Object[] rows. Each DML operation returns a count execution
+   * plan.
+   */
+  static class MutableTableProvider implements TableProvider {
+    private final Schema schema;
+    final List<Object[]> rows;
+
+    MutableTableProvider(Schema schema, Object[]... initialRows) {
+      this.schema = schema;
+      this.rows = new ArrayList<>(Arrays.asList(initialRows));
+    }
+
+    @Override
+    public Schema schema() {
+      return schema;
+    }
+
+    @Override
+    public ExecutionPlan scanWithArgs(Session session, ScanArgs args) {
+      // Snapshot the current data into a batch populator
+      List<Object[]> snapshot = new ArrayList<>(rows);
+      BatchPopulator populator =
+          root -> {
+            BigIntVector idVec = (BigIntVector) root.getVector("id");
+            VarCharVector nameVec = (VarCharVector) root.getVector("name");
+            idVec.allocateNew(snapshot.size());
+            nameVec.allocateNew(snapshot.size());
+            for (int i = 0; i < snapshot.size(); i++) {
+              idVec.set(i, (long) snapshot.get(i)[0]);
+              nameVec.setSafe(i, ((String) snapshot.get(i)[1]).getBytes());
+            }
+            idVec.setValueCount(snapshot.size());
+            nameVec.setValueCount(snapshot.size());
+            root.setRowCount(snapshot.size());
+          };
+      return new TestExecutionPlan(schema, List.of(populator));
+    }
+
+    @Override
+    public ExecutionPlan deleteFrom(Session session, List<Expr> filters) {
+      // Simple delete: evaluate filters in Java by matching column expressions
+      int deleted = 0;
+      java.util.Iterator<Object[]> it = rows.iterator();
+      while (it.hasNext()) {
+        Object[] row = it.next();
+        if (matchesFilters(row, filters)) {
+          it.remove();
+          deleted++;
+        }
+      }
+      return countPlan(deleted);
+    }
+
+    @Override
+    public ExecutionPlan update(
+        Session session, List<ColumnAssignment> assignments, List<Expr> filters) {
+      int updated = 0;
+      for (Object[] row : rows) {
+        if (matchesFilters(row, filters)) {
+          for (ColumnAssignment assignment : assignments) {
+            int colIdx = columnIndex(assignment.column());
+            if (colIdx >= 0 && assignment.value() instanceof Expr.LiteralExpr lit) {
+              row[colIdx] = scalarToJava(lit);
+            }
+          }
+          updated++;
+        }
+      }
+      return countPlan(updated);
+    }
+
+    @Override
+    public ExecutionPlan insertInto(
+        Session session,
+        org.apache.arrow.datafusion.physical_plan.RecordBatchReader input,
+        InsertOp insertOp) {
+      int inserted = 0;
+      VectorSchemaRoot root = input.getVectorSchemaRoot();
+      while (input.loadNextBatch()) {
+        BigIntVector idVec = (BigIntVector) root.getVector("id");
+        VarCharVector nameVec = (VarCharVector) root.getVector("name");
+        for (int i = 0; i < root.getRowCount(); i++) {
+          rows.add(new Object[] {idVec.get(i), new String(nameVec.get(i))});
+          inserted++;
+        }
+      }
+      return countPlan(inserted);
+    }
+
+    private int columnIndex(String name) {
+      for (int i = 0; i < schema.getFields().size(); i++) {
+        if (schema.getFields().get(i).getName().equals(name)) return i;
+      }
+      return -1;
+    }
+
+    /**
+     * Simple filter matching for test purposes. Supports basic column op literal comparisons on the
+     * "id" (Int64) and "name" (Utf8) columns.
+     */
+    private boolean matchesFilters(Object[] row, List<Expr> filters) {
+      if (filters.isEmpty()) return true;
+      for (Expr filter : filters) {
+        if (!matchesFilter(row, filter)) return false;
+      }
+      return true;
+    }
+
+    private boolean matchesFilter(Object[] row, Expr filter) {
+      if (filter instanceof Expr.BinaryExpr bin) {
+        if (bin.left() instanceof Expr.ColumnExpr col
+            && bin.right() instanceof Expr.LiteralExpr lit) {
+          int colIdx = columnIndex(col.column().name());
+          if (colIdx < 0) return true;
+          return compareOp(row[colIdx], scalarToJava(lit), bin.op());
+        }
+      }
+      return true; // Unknown filter — include the row
+    }
+
+    @SuppressWarnings("unchecked")
+    private boolean compareOp(Object rowVal, Object litVal, Operator op) {
+      if (rowVal instanceof Comparable c1 && litVal instanceof Comparable c2) {
+        int cmp = c1.compareTo(c2);
+        return switch (op) {
+          case Eq -> cmp == 0;
+          case NotEq -> cmp != 0;
+          case Lt -> cmp < 0;
+          case LtEq -> cmp <= 0;
+          case Gt -> cmp > 0;
+          case GtEq -> cmp >= 0;
+          default -> true;
+        };
+      }
+      return true;
+    }
+
+    private Object scalarToJava(Expr.LiteralExpr lit) {
+      return switch (lit.value()) {
+        case org.apache.arrow.datafusion.common.ScalarValue.Int64 i -> i.value();
+        case org.apache.arrow.datafusion.common.ScalarValue.Utf8 s -> s.value();
+        default -> null;
+      };
+    }
+
+    /** Creates an ExecutionPlan that returns a single batch with a UInt64 "count" column. */
+    private ExecutionPlan countPlan(long count) {
+      Schema countSchema =
+          new Schema(
+              List.of(new Field("count", FieldType.nullable(new ArrowType.Int(64, true)), null)));
+      return new TestExecutionPlan(
+          countSchema,
+          List.of(
+              root -> {
+                BigIntVector vec = (BigIntVector) root.getVector("count");
+                vec.allocateNew(1);
+                vec.set(0, count);
+                vec.setValueCount(1);
+                root.setRowCount(1);
+              }));
     }
   }
 

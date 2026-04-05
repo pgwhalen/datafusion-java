@@ -1,7 +1,14 @@
 package org.apache.arrow.datafusion;
 
+import java.lang.foreign.Arena;
+import java.lang.foreign.FunctionDescriptor;
+import java.lang.foreign.Linker;
+import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
+import java.lang.foreign.StructLayout;
 import java.lang.foreign.ValueLayout;
+import java.lang.invoke.MethodHandle;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -12,9 +19,14 @@ import org.apache.arrow.datafusion.catalog.Session;
 import org.apache.arrow.datafusion.catalog.TableProvider;
 import org.apache.arrow.datafusion.generated.DfExecutionPlan;
 import org.apache.arrow.datafusion.generated.DfTableTrait;
+import org.apache.arrow.datafusion.logical_expr.ColumnAssignment;
 import org.apache.arrow.datafusion.logical_expr.Expr;
+import org.apache.arrow.datafusion.logical_expr.InsertOp;
 import org.apache.arrow.datafusion.logical_expr.TableProviderFilterPushDown;
 import org.apache.arrow.datafusion.physical_plan.ExecutionPlan;
+import org.apache.arrow.datafusion.physical_plan.NativeSendableRecordBatchStream;
+import org.apache.arrow.datafusion.physical_plan.SendableRecordBatchStream;
+import org.apache.arrow.datafusion.physical_plan.SendableRecordBatchStreamBridge;
 import org.apache.arrow.memory.BufferAllocator;
 
 /**
@@ -22,6 +34,40 @@ import org.apache.arrow.memory.BufferAllocator;
  * interface for FFI callbacks.
  */
 public final class DfTableAdapter implements DfTableTrait {
+  // Native method handles for DfLazyRecordBatchStream operations (used in insert_into callback).
+  // We resolve these directly rather than going through the generated class whose constructor
+  // is package-private to the generated package.
+  private static final StructLayout LAZY_STREAM_RESULT =
+      MemoryLayout.structLayout(
+          ValueLayout.ADDRESS.withName("union_val"),
+          ValueLayout.JAVA_BOOLEAN.withName("is_ok"),
+          MemoryLayout.paddingLayout(7));
+
+  private static final MethodHandle LAZY_STREAM_DESTROY;
+  private static final MethodHandle LAZY_STREAM_SCHEMA_TO;
+  private static final MethodHandle LAZY_STREAM_NEXT;
+
+  static {
+    var lib = NativeLoader.get();
+    var linker = Linker.nativeLinker();
+    LAZY_STREAM_DESTROY =
+        linker.downcallHandle(
+            lib.find("datafusion_DfLazyRecordBatchStream_destroy").orElseThrow(),
+            FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
+    LAZY_STREAM_SCHEMA_TO =
+        linker.downcallHandle(
+            lib.find("datafusion_DfLazyRecordBatchStream_schema_to").orElseThrow(),
+            FunctionDescriptor.of(LAZY_STREAM_RESULT, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG));
+    LAZY_STREAM_NEXT =
+        linker.downcallHandle(
+            lib.find("datafusion_DfLazyRecordBatchStream_next").orElseThrow(),
+            FunctionDescriptor.of(
+                LAZY_STREAM_RESULT,
+                ValueLayout.ADDRESS,
+                ValueLayout.JAVA_LONG,
+                ValueLayout.JAVA_LONG));
+  }
+
   private final TableProvider provider;
   private final BufferAllocator allocator;
   private final boolean fullStackTrace;
@@ -158,6 +204,178 @@ public final class DfTableAdapter implements DfTableTrait {
     } catch (Exception e) {
       Errors.writeException(errorAddr, errorCap, e, fullStackTrace);
       return -1;
+    }
+  }
+
+  @Override
+  public long insertInto(
+      long sessionAddr, long inputStreamPtr, int insertOp, long errorAddr, long errorCap) {
+    MemorySegment streamHandle = MemorySegment.ofAddress(inputStreamPtr);
+    boolean streamClosed = false;
+    try {
+      // Wrap the raw DfLazyRecordBatchStream pointer as a NativeSendableRecordBatchStream
+      // using native method handles directly (the generated class constructor is package-private)
+      NativeSendableRecordBatchStream adapter =
+          new NativeSendableRecordBatchStream() {
+            public int next(long arrayOutAddr, long schemaOutAddr) {
+              try (var arena = Arena.ofConfined()) {
+                var result =
+                    (MemorySegment)
+                        LAZY_STREAM_NEXT.invokeExact(
+                            (SegmentAllocator) arena, streamHandle, arrayOutAddr, schemaOutAddr);
+                boolean isOk = result.get(ValueLayout.JAVA_BOOLEAN, 8L);
+                if (isOk) {
+                  return result.get(ValueLayout.JAVA_INT, 0L);
+                } else {
+                  throw new RuntimeException("Lazy stream next() failed");
+                }
+              } catch (RuntimeException ex) {
+                throw ex;
+              } catch (Throwable ex) {
+                throw new RuntimeException(ex);
+              }
+            }
+
+            public void schemaTo(long outAddr) {
+              try (var arena = Arena.ofConfined()) {
+                var result =
+                    (MemorySegment)
+                        LAZY_STREAM_SCHEMA_TO.invokeExact(
+                            (SegmentAllocator) arena, streamHandle, outAddr);
+                boolean isOk = result.get(ValueLayout.JAVA_BOOLEAN, 8L);
+                if (!isOk) {
+                  throw new RuntimeException("Lazy stream schemaTo() failed");
+                }
+              } catch (RuntimeException ex) {
+                throw ex;
+              } catch (Throwable ex) {
+                throw new RuntimeException(ex);
+              }
+            }
+
+            public void close() {
+              try {
+                LAZY_STREAM_DESTROY.invokeExact(streamHandle);
+              } catch (Throwable ex) {
+                throw new RuntimeException(ex);
+              }
+            }
+          };
+      SendableRecordBatchStreamBridge bridge =
+          new SendableRecordBatchStreamBridge(adapter, allocator);
+      SendableRecordBatchStream stream = new SendableRecordBatchStream(bridge);
+
+      // Convert insert op discriminant
+      InsertOp op =
+          switch (insertOp) {
+            case 1 -> InsertOp.OVERWRITE;
+            case 2 -> InsertOp.REPLACE;
+            default -> InsertOp.APPEND;
+          };
+
+      Session session = new Session(allocator);
+      ExecutionPlan plan = provider.insertInto(session, stream, op);
+
+      // Wrap and return as raw pointer
+      DfExecutionPlanAdapter planAdapter =
+          new DfExecutionPlanAdapter(plan, allocator, fullStackTrace);
+      long ptr = DfExecutionPlan.createRaw(planAdapter);
+      planAdapter.closeFfiSchema();
+
+      // Close the stream (drops the Rust lazy stream)
+      stream.close();
+      streamClosed = true;
+
+      return ptr;
+    } catch (Exception e) {
+      Errors.writeException(errorAddr, errorCap, e, fullStackTrace);
+      return 0;
+    } finally {
+      if (!streamClosed) {
+        try {
+          LAZY_STREAM_DESTROY.invokeExact(streamHandle);
+        } catch (Throwable ignored) {
+        }
+      }
+    }
+  }
+
+  @Override
+  public long deleteFrom(
+      long sessionAddr, long filtersAddr, long filtersLen, long errorAddr, long errorCap) {
+    try {
+      // Deserialize filters from raw byte buffer
+      byte[] filterBytes = NativeUtil.readBytes(filtersAddr, filtersLen);
+      List<Expr> filterExprs =
+          filterBytes.length == 0
+              ? Collections.emptyList()
+              : ExprProtoConverter.fromProtoBytes(filterBytes);
+
+      Session session = new Session(allocator);
+      ExecutionPlan plan = provider.deleteFrom(session, filterExprs);
+
+      // Wrap and return as raw pointer
+      DfExecutionPlanAdapter adapter = new DfExecutionPlanAdapter(plan, allocator, fullStackTrace);
+      long ptr = DfExecutionPlan.createRaw(adapter);
+      adapter.closeFfiSchema();
+      return ptr;
+    } catch (UnsupportedOperationException e) {
+      Errors.writeException(errorAddr, errorCap, e, fullStackTrace);
+      return 0;
+    } catch (Exception e) {
+      Errors.writeException(errorAddr, errorCap, e, fullStackTrace);
+      return 0;
+    }
+  }
+
+  @Override
+  public long update(
+      long sessionAddr,
+      long colNamesPtr,
+      long assignExprsAddr,
+      long assignExprsLen,
+      long filtersAddr,
+      long filtersLen,
+      long errorAddr,
+      long errorCap) {
+    try {
+      // Read column names from DfStringArray raw pointer (takes ownership and destroys)
+      List<String> colNamesList = NativeUtil.fromRawStringArray(colNamesPtr);
+
+      // Deserialize assignment expressions from protobuf bytes
+      byte[] assignBytes = NativeUtil.readBytes(assignExprsAddr, assignExprsLen);
+      List<Expr> assignExprs =
+          assignBytes.length == 0
+              ? Collections.emptyList()
+              : ExprProtoConverter.fromProtoBytes(assignBytes);
+
+      // Deserialize filter expressions from protobuf bytes
+      byte[] filterBytes = NativeUtil.readBytes(filtersAddr, filtersLen);
+      List<Expr> filterExprs =
+          filterBytes.length == 0
+              ? Collections.emptyList()
+              : ExprProtoConverter.fromProtoBytes(filterBytes);
+
+      // Pair column names with expressions into ColumnAssignment list
+      List<ColumnAssignment> assignments = new ArrayList<>(colNamesList.size());
+      for (int i = 0; i < colNamesList.size(); i++) {
+        assignments.add(new ColumnAssignment(colNamesList.get(i), assignExprs.get(i)));
+      }
+
+      Session session = new Session(allocator);
+      ExecutionPlan plan = provider.update(session, assignments, filterExprs);
+
+      // Wrap and return as raw pointer
+      DfExecutionPlanAdapter adapter = new DfExecutionPlanAdapter(plan, allocator, fullStackTrace);
+      long ptr = DfExecutionPlan.createRaw(adapter);
+      adapter.closeFfiSchema();
+      return ptr;
+    } catch (UnsupportedOperationException e) {
+      Errors.writeException(errorAddr, errorCap, e, fullStackTrace);
+      return 0;
+    } catch (Exception e) {
+      Errors.writeException(errorAddr, errorCap, e, fullStackTrace);
+      return 0;
     }
   }
 }
