@@ -3,6 +3,12 @@ package org.apache.arrow.datafusion.logical_expr;
 /**
  * A window frame definition, corresponding to DataFusion's {@code WindowFrame}.
  *
+ * <p>Example:
+ *
+ * <p>{@snippet : WindowFrame frame = new WindowFrame( WindowFrameUnits.ROWS, new
+ * WindowFrameBound.Preceding(null), // unbounded preceding new WindowFrameBound.CurrentRow() //
+ * current row ); }
+ *
  * @param frameType the type of frame (ROWS, RANGE, or GROUPS)
  * @param startBound the start boundary of the window frame
  * @param endBound the end boundary of the window frame

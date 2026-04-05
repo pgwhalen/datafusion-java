@@ -22,6 +22,13 @@ import org.apache.arrow.vector.PeriodDuration;
  * instanceof} with sealed subinterfaces ({@link DecimalValue}, {@link DurationValue}, {@link
  * TimestampValue}, {@link DateValue}, {@link TimeValue}) for typed access without casting.
  *
+ * <p>Example:
+ *
+ * <p>{@snippet : ScalarValue intVal = new ScalarValue.Int32(42); ScalarValue strVal = new
+ * ScalarValue.Utf8("hello"); ScalarValue boolVal = new ScalarValue.BooleanValue(true); Object obj =
+ * intVal.getObject(); // Integer(42) if (strVal instanceof ScalarValue.Utf8 utf8) { String s =
+ * utf8.value(); // "hello" } }
+ *
  * @see <a
  *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/scalar/enum.ScalarValue.html">Rust
  *     DataFusion: ScalarValue</a>

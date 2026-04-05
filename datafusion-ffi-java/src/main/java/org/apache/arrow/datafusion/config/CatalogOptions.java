@@ -7,6 +7,12 @@ import java.util.Map;
  *
  * <p>All fields are nullable. A null value means the DataFusion default is used.
  *
+ * <p>Example:
+ *
+ * <p>{@snippet : CatalogOptions catalog = CatalogOptions.builder() .informationSchema(true)
+ * .defaultCatalog("my_catalog") .build(); ConfigOptions config = ConfigOptions.builder()
+ * .catalog(catalog) .build(); }
+ *
  * @param createDefaultCatalogAndSchema Whether the default catalog and schema should be created
  *     automatically
  * @param defaultCatalog The default catalog name (default "datafusion")

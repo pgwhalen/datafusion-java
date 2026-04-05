@@ -13,20 +13,9 @@ import org.apache.arrow.vector.types.pojo.Schema;
  *
  * <p>Example:
  *
- * <pre>{@code
- * class TsvFileSource implements FileSource {
- *     @Override
- *     public FileOpener createFileOpener(Schema schema, BufferAllocator allocator,
- *                                        FileScanConfig scanConfig) {
- *         return new TsvFileOpener(schema, allocator);
- *     }
- *
- *     @Override
- *     public String fileType() {
- *         return "tsv";
- *     }
- * }
- * }</pre>
+ * <p>{@snippet : class TsvFileSource implements FileSource { @Override public FileOpener
+ * createFileOpener(Schema schema, BufferAllocator allocator, FileScanConfig scanConfig) { return
+ * new TsvFileOpener(schema, allocator); } @Override public String fileType() { return "tsv"; } } }
  *
  * @see <a
  *     href="https://docs.rs/datafusion-datasource/52.1.0/datafusion_datasource/file/trait.FileSource.html">Rust
@@ -38,6 +27,12 @@ public interface FileSource {
    *
    * <p>The scan configuration provides query-specific parameters such as column projection, row
    * limit, batch size, and partition index that implementations can use to optimize file reading.
+   *
+   * <p>Example:
+   *
+   * <p>{@snippet : FileSource source = myFormat.fileSource(); FileOpener opener =
+   * source.createFileOpener( schema, allocator, scanConfig); RecordBatchReader reader =
+   * opener.open( partitionedFile); }
    *
    * @param schema the expected output schema
    * @param allocator allocator for Arrow vectors
@@ -54,6 +49,11 @@ public interface FileSource {
    *
    * <p>This is used by DataFusion for display and logging purposes. Common values include format
    * names like "csv", "json", "parquet", etc.
+   *
+   * <p>Example:
+   *
+   * <p>{@snippet : FileSource source = myFormat.fileSource(); String type = source.fileType(); //
+   * e.g., "tsv" System.out.println("File source type: " + type); }
    *
    * @return the file type identifier
    * @see <a

@@ -14,12 +14,10 @@ import org.apache.arrow.vector.types.pojo.Schema;
  *
  * <p>Example:
  *
- * <pre>{@code
- * ListingTableConfig config = new ListingTableConfig(url)
- *     .withListingOptions(options)
- *     .withSchema(mySchema);
- * ListingTable table = new ListingTable(config);
- * }</pre>
+ * <p>{@snippet : ListingTableUrl url = ListingTableUrl.parse("/path/to/data/"); ListingOptions
+ * options = ListingOptions.builder(myFormat).build(); ListingTableConfig config = new
+ * ListingTableConfig(url) .withListingOptions(options) .withSchema(mySchema); ListingTable table =
+ * new ListingTable(config); }
  *
  * @see <a
  *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingTableConfig.html">Rust
@@ -60,6 +58,12 @@ public class ListingTableConfig {
   /**
    * Sets the listing options.
    *
+   * <p>Example:
+   *
+   * <p>{@snippet : ListingOptions options = ListingOptions.builder(myFormat) .collectStat(true)
+   * .build(); ListingTableConfig config = new ListingTableConfig(url) .withListingOptions(options);
+   * }
+   *
    * @param options the listing options
    * @return this config
    * @see <a
@@ -73,6 +77,12 @@ public class ListingTableConfig {
 
   /**
    * Sets the table schema.
+   *
+   * <p>Example:
+   *
+   * <p>{@snippet : Schema schema = new Schema(List.of( Field.nullable("id", new ArrowType.Int(32,
+   * true)), Field.nullable("name", ArrowType.Utf8.INSTANCE))); ListingTableConfig config = new
+   * ListingTableConfig(url) .withSchema(schema); }
    *
    * @param schema the Arrow schema
    * @return this config
@@ -88,6 +98,12 @@ public class ListingTableConfig {
   /**
    * Returns the table paths.
    *
+   * <p>Example:
+   *
+   * <p>{@snippet : ListingTableConfig config = new ListingTableConfig(url); List<ListingTableUrl>
+   * paths = config.tablePaths(); for (ListingTableUrl path : paths) {
+   * System.out.println(path.getUrl()); } }
+   *
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingTableConfig.html#structfield.table_paths">Rust
    *     DataFusion: ListingTableConfig::table_paths</a>
@@ -99,6 +115,12 @@ public class ListingTableConfig {
   /**
    * Returns the listing options, or {@code null} if not yet set.
    *
+   * <p>Example:
+   *
+   * <p>{@snippet : ListingTableConfig config = new ListingTableConfig(url)
+   * .withListingOptions(options); ListingOptions opts = config.listingOptions(); FileFormat format
+   * = opts.format(); }
+   *
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingTableConfig.html#structfield.options">Rust
    *     DataFusion: ListingTableConfig::options</a>
@@ -109,6 +131,11 @@ public class ListingTableConfig {
 
   /**
    * Returns the table schema, or {@code null} if not yet set.
+   *
+   * <p>Example:
+   *
+   * <p>{@snippet : ListingTableConfig config = new ListingTableConfig(url) .withSchema(mySchema);
+   * Schema schema = config.schema(); List<Field> fields = schema.getFields(); }
    *
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingTableConfig.html#structfield.file_schema">Rust

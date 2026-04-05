@@ -7,6 +7,12 @@ import java.util.Map;
  *
  * <p>All fields are nullable. A null value means the DataFusion default is used.
  *
+ * <p>Example:
+ *
+ * <p>{@snippet : FormatOptions format = FormatOptions.builder() .nullString("N/A")
+ * .timestampFormat("%Y-%m-%d %H:%M:%S") .dateFormat("%Y-%m-%d") .build(); ConfigOptions config =
+ * ConfigOptions.builder() .format(format) .build(); }
+ *
  * @param safe Whether to use safe formatting (replace errors with placeholder text)
  * @param nullString String representation of NULL values
  * @param dateFormat Format string for date values

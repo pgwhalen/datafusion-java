@@ -5,6 +5,11 @@ package org.apache.arrow.datafusion;
  *
  * <p>Use {@link #builder()} to create instances.
  *
+ * <p>Example:
+ *
+ * <p>{@snippet : JsonOptions options = JsonOptions.builder() .compressionLevel(3) .build(); byte[]
+ * encoded = options.encodeOptions(); }
+ *
  * @see <a
  *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/config/struct.JsonOptions.html">Rust
  *     DataFusion: JsonOptions</a>
@@ -21,7 +26,14 @@ public final class JsonOptions {
     return new Builder();
   }
 
-  /** Encodes the options as protobuf bytes (JsonOptions proto). */
+  /**
+   * Encodes the options as protobuf bytes (JsonOptions proto).
+   *
+   * <p>Example:
+   *
+   * <p>{@snippet : JsonOptions options = JsonOptions.builder() .compressionLevel(3) .build();
+   * byte[] encoded = options.encodeOptions(); }
+   */
   public byte[] encodeOptions() {
     org.apache.arrow.datafusion.proto.JsonOptions.Builder b =
         org.apache.arrow.datafusion.proto.JsonOptions.newBuilder();

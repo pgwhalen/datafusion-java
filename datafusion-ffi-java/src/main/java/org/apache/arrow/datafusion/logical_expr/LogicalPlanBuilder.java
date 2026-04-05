@@ -10,7 +10,7 @@ import org.apache.arrow.datafusion.execution.SessionContext;
  * LogicalPlanBuilder, mirroring Rust's ownership model where methods take {@code self}. This
  * enables fluent chaining:
  *
- * <pre>{@code
+ * {@snippet :
  * import static org.apache.arrow.datafusion.Functions.*;
  *
  * LogicalPlan plan = LogicalPlanBuilder.from(existingPlan, ctx)
@@ -20,7 +20,7 @@ import org.apache.arrow.datafusion.execution.SessionContext;
  *     .limit(0, 10)
  *     .build();
  * DataFrame df = ctx.executeLogicalPlan(plan);
- * }</pre>
+ * }
  *
  * @see <a
  *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html">Rust
@@ -37,6 +37,12 @@ public class LogicalPlanBuilder implements AutoCloseable {
   /**
    * Creates a builder for an empty relation.
    *
+   * <p>Example:
+   *
+   * {@snippet :
+   * LogicalPlan emptyPlan = LogicalPlanBuilder.empty(false, ctx).build();
+   * }
+   *
    * @param produceOneRow if true, the empty relation produces one row with no columns
    * @param ctx the session context
    * @return a new LogicalPlanBuilder
@@ -51,6 +57,14 @@ public class LogicalPlanBuilder implements AutoCloseable {
 
   /**
    * Creates a builder from an existing {@link LogicalPlan}.
+   *
+   * <p>Example:
+   *
+   * {@snippet :
+   * LogicalPlan filtered = LogicalPlanBuilder.from(plan, ctx)
+   *     .filter(col("a").gt(lit(0)))
+   *     .build();
+   * }
    *
    * @param plan the logical plan to start from
    * @param ctx the session context
@@ -69,6 +83,14 @@ public class LogicalPlanBuilder implements AutoCloseable {
    *
    * <p>This is a consuming method: the source builder is closed after the call.
    *
+   * <p>Example:
+   *
+   * {@snippet :
+   * import static org.apache.arrow.datafusion.Functions.*;
+   *
+   * LogicalPlan plan = builder.project(List.of(col("a"), col("b"))).build();
+   * }
+   *
    * @param exprs the expressions to project
    * @return a new LogicalPlanBuilder with the projection applied
    * @see <a
@@ -86,7 +108,7 @@ public class LogicalPlanBuilder implements AutoCloseable {
    *
    * <p>This is a consuming method: the source builder is closed after the call.
    *
-   * @param exprs the expressions to project
+   * @param exprs the expressions to project (see {@link #project(List)})
    * @return a new LogicalPlanBuilder with the projection applied
    * @see <a
    *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.project">Rust
@@ -100,6 +122,14 @@ public class LogicalPlanBuilder implements AutoCloseable {
    * Filters rows by the given predicate expression.
    *
    * <p>This is a consuming method: the source builder is closed after the call.
+   *
+   * <p>Example:
+   *
+   * {@snippet :
+   * import static org.apache.arrow.datafusion.Functions.*;
+   *
+   * LogicalPlan plan = builder.filter(col("age").gtEq(lit(18))).build();
+   * }
    *
    * @param predicate the filter predicate
    * @return a new LogicalPlanBuilder with the filter applied
@@ -118,6 +148,16 @@ public class LogicalPlanBuilder implements AutoCloseable {
    *
    * <p>This is a consuming method: the source builder is closed after the call.
    *
+   * <p>Example:
+   *
+   * {@snippet :
+   * import static org.apache.arrow.datafusion.Functions.*;
+   *
+   * LogicalPlan plan = builder
+   *     .sort(List.of(new SortExpr(col("name"), true, false)))
+   *     .build();
+   * }
+   *
    * @param sortExprs the sort expressions
    * @return a new LogicalPlanBuilder with the sort applied
    * @see <a
@@ -135,7 +175,7 @@ public class LogicalPlanBuilder implements AutoCloseable {
    *
    * <p>This is a consuming method: the source builder is closed after the call.
    *
-   * @param sortExprs the sort expressions
+   * @param sortExprs the sort expressions (see {@link #sort(List)})
    * @return a new LogicalPlanBuilder with the sort applied
    * @see <a
    *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.sort">Rust
@@ -149,6 +189,12 @@ public class LogicalPlanBuilder implements AutoCloseable {
    * Limits the number of rows returned.
    *
    * <p>This is a consuming method: the source builder is closed after the call.
+   *
+   * <p>Example:
+   *
+   * {@snippet :
+   * LogicalPlan plan = builder.limit(0, 100).build();  // first 100 rows
+   * }
    *
    * @param skip the number of rows to skip
    * @param fetch the maximum number of rows to return, or -1 for no limit
@@ -168,6 +214,16 @@ public class LogicalPlanBuilder implements AutoCloseable {
    *
    * <p>This is a consuming method: the source builder is closed after the call.
    *
+   * <p>Example:
+   *
+   * {@snippet :
+   * import static org.apache.arrow.datafusion.Functions.*;
+   *
+   * LogicalPlan plan = builder
+   *     .aggregate(List.of(col("category")), List.of(count(col("id"))))
+   *     .build();
+   * }
+   *
    * @param groupExprs the group-by expressions
    * @param aggrExprs the aggregate expressions
    * @return a new LogicalPlanBuilder with the aggregation applied
@@ -186,6 +242,12 @@ public class LogicalPlanBuilder implements AutoCloseable {
    *
    * <p>This is a consuming method: the source builder is closed after the call.
    *
+   * <p>Example:
+   *
+   * {@snippet :
+   * LogicalPlan plan = builder.distinct().build();
+   * }
+   *
    * @return a new LogicalPlanBuilder with the distinct applied
    * @see <a
    *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.distinct">Rust
@@ -201,6 +263,17 @@ public class LogicalPlanBuilder implements AutoCloseable {
    * Applies a HAVING filter on an aggregation result.
    *
    * <p>This is a consuming method: the source builder is closed after the call.
+   *
+   * <p>Example:
+   *
+   * {@snippet :
+   * import static org.apache.arrow.datafusion.Functions.*;
+   *
+   * LogicalPlan plan = builder
+   *     .aggregate(List.of(col("dept")), List.of(count(col("id"))))
+   *     .having(count(col("id")).gt(lit(5)))
+   *     .build();
+   * }
    *
    * @param predicate the having predicate
    * @return a new LogicalPlanBuilder with the having applied
@@ -219,6 +292,18 @@ public class LogicalPlanBuilder implements AutoCloseable {
    *
    * <p>This is a consuming method: the source builder is closed after the call.
    *
+   * <p>Example:
+   *
+   * {@snippet :
+   * import static org.apache.arrow.datafusion.Functions.*;
+   *
+   * Expr rowNum = windowFunction("row_number", List.of())
+   *     .partitionBy(List.of(col("dept")))
+   *     .orderBy(List.of(new SortExpr(col("salary"), false, true)))
+   *     .build();
+   * LogicalPlan plan = builder.window(List.of(rowNum)).build();
+   * }
+   *
    * @param windowExprs the window expressions
    * @return a new LogicalPlanBuilder with the window applied
    * @see <a
@@ -235,6 +320,12 @@ public class LogicalPlanBuilder implements AutoCloseable {
    * Applies a subquery alias.
    *
    * <p>This is a consuming method: the source builder is closed after the call.
+   *
+   * <p>Example:
+   *
+   * {@snippet :
+   * LogicalPlan plan = builder.alias("t1").build();
+   * }
    *
    * @param alias the alias name
    * @return a new LogicalPlanBuilder with the alias applied
@@ -253,6 +344,12 @@ public class LogicalPlanBuilder implements AutoCloseable {
    *
    * <p>This is a consuming method: the source builder is closed after the call.
    *
+   * <p>Example:
+   *
+   * {@snippet :
+   * LogicalPlan explained = builder.explain(true, false).build();
+   * }
+   *
    * @param verbose if true, include more details
    * @param analyze if true, actually execute and show timing
    * @return a new LogicalPlanBuilder with the explain applied
@@ -270,6 +367,14 @@ public class LogicalPlanBuilder implements AutoCloseable {
    * Joins with another plan using column name pairs.
    *
    * <p>This is a consuming method: the source builder is closed after the call.
+   *
+   * <p>Example:
+   *
+   * {@snippet :
+   * LogicalPlan plan = leftBuilder
+   *     .join(rightPlan, JoinType.INNER, List.of("id"), List.of("id"))
+   *     .build();
+   * }
    *
    * @param right the right-side plan to join with
    * @param joinType the type of join
@@ -292,6 +397,12 @@ public class LogicalPlanBuilder implements AutoCloseable {
    *
    * <p>This is a consuming method: the source builder is closed after the call.
    *
+   * <p>Example:
+   *
+   * {@snippet :
+   * LogicalPlan plan = builder.crossJoin(rightPlan).build();
+   * }
+   *
    * @param right the right-side plan to cross join with
    * @return a new LogicalPlanBuilder with the cross join applied
    * @see <a
@@ -308,6 +419,12 @@ public class LogicalPlanBuilder implements AutoCloseable {
    * Unions with another plan.
    *
    * <p>This is a consuming method: the source builder is closed after the call.
+   *
+   * <p>Example:
+   *
+   * {@snippet :
+   * LogicalPlan plan = builder.union(otherPlan).build();
+   * }
    *
    * @param other the plan to union with
    * @return a new LogicalPlanBuilder with the union applied
@@ -326,6 +443,12 @@ public class LogicalPlanBuilder implements AutoCloseable {
    *
    * <p>This is a consuming method: the source builder is closed after the call.
    *
+   * <p>Example:
+   *
+   * {@snippet :
+   * LogicalPlan plan = builder.unionDistinct(otherPlan).build();
+   * }
+   *
    * @param other the plan to union distinct with
    * @return a new LogicalPlanBuilder with the union distinct applied
    * @see <a
@@ -340,6 +463,12 @@ public class LogicalPlanBuilder implements AutoCloseable {
 
   /**
    * Intersects two plans.
+   *
+   * <p>Example:
+   *
+   * {@snippet :
+   * LogicalPlan result = LogicalPlanBuilder.intersect(leftPlan, rightPlan, false);
+   * }
    *
    * @param left the left-side plan
    * @param right the right-side plan
@@ -357,6 +486,12 @@ public class LogicalPlanBuilder implements AutoCloseable {
   /**
    * Computes the set difference of two plans.
    *
+   * <p>Example:
+   *
+   * {@snippet :
+   * LogicalPlan result = LogicalPlanBuilder.except(leftPlan, rightPlan, false);
+   * }
+   *
    * @param left the left-side plan
    * @param right the right-side plan
    * @param isAll if true, EXCEPT ALL (keeps duplicates); if false, EXCEPT
@@ -373,6 +508,13 @@ public class LogicalPlanBuilder implements AutoCloseable {
    * Builds and returns the final {@link LogicalPlan}.
    *
    * <p>This is a consuming method: the source builder is closed after the call.
+   *
+   * <p>Example:
+   *
+   * {@snippet :
+   * LogicalPlan plan = builder.build();
+   * DataFrame df = ctx.executeLogicalPlan(plan);
+   * }
    *
    * @return the built LogicalPlan
    * @see <a

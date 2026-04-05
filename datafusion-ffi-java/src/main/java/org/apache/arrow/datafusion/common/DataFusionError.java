@@ -5,6 +5,11 @@ package org.apache.arrow.datafusion.common;
  *
  * <p>This is the parent class for all exceptions thrown by the DataFusion FFI bindings.
  *
+ * <p>Example:
+ *
+ * <p>{@snippet : try { DataFrame df = ctx.sql("INVALID SQL"); } catch (DataFusionError e) {
+ * System.err.println("DataFusion error: " + e.getMessage()); } }
+ *
  * @see <a
  *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/error/enum.DataFusionError.html">Rust
  *     DataFusion: DataFusionError</a>

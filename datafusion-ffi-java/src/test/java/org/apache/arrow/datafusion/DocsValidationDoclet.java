@@ -18,7 +18,8 @@ import jdk.javadoc.doclet.DocletEnvironment;
 import jdk.javadoc.doclet.Reporter;
 
 /**
- * Custom Doclet that validates {@code @see} docs.rs links in public Javadoc.
+ * Custom Doclet that validates public Javadoc: {@code @see} docs.rs links and {@code @snippet} code
+ * examples.
  *
  * <p>Uses the Doclet API for compiler-backed access to types, methods, and parsed Javadoc tags
  * instead of fragile regex-based source file parsing.
@@ -26,7 +27,7 @@ import jdk.javadoc.doclet.Reporter;
  * <p>By default, only checks presence and format (offline, fast). Set system property {@code
  * verifyHttp=true} (via {@code -J-DverifyHttp=true}) to also validate each URL returns HTTP 200.
  */
-public class DocsLinkValidationDoclet implements Doclet {
+public class DocsValidationDoclet implements Doclet {
 
   private Reporter reporter;
   private final List<String> failures = new ArrayList<>();
@@ -66,7 +67,7 @@ public class DocsLinkValidationDoclet implements Doclet {
     return false;
   }
 
-  /** Internal class name patterns - these never need @see links. */
+  /** Internal class name patterns - these never need @see links or snippets. */
   private static boolean isInternalClass(String name) {
     return name.endsWith("Bridge")
         || name.endsWith("Adapter")
@@ -93,7 +94,7 @@ public class DocsLinkValidationDoclet implements Doclet {
   private static final Map<String, String> NAME_EXCEPTIONS =
       Map.of("Functions", "datafusion::prelude");
 
-  /** Method names that never need @see (Java infrastructure, no Rust equivalent). */
+  /** Method names that never need @see or snippets (Java infrastructure, no Rust equivalent). */
   private static final Set<String> EXCLUDED_METHODS =
       Set.of(
           "close",
@@ -182,6 +183,61 @@ public class DocsLinkValidationDoclet implements Doclet {
   /** Types whose method-level @see validation is deferred (links not yet added). */
   private static final Set<String> METHOD_VALIDATION_DEFERRED = Set.of();
 
+  // ── Snippet validation constants ──
+
+  /** Types that do not require class-level or method-level {@code @snippet} examples. */
+  private static final Set<String> NO_SNIPPET_REQUIRED =
+      Set.of(
+          // Pure Java helper record, created via CaseBuilder
+          "WhenThen",
+          // Simple (column, expr) pair used in TableProvider.update()
+          "ColumnAssignment");
+
+  /**
+   * Per-class method exclusions for snippet validation. Methods listed here do not need a
+   * {@code @snippet} or {@code @link} cross-reference in their Javadoc. Reasons include: overload
+   * secondaries that duplicate the primary overload's example, methods fully documented by the
+   * class-level snippet, or methods with no meaningful standalone example.
+   */
+  private static final Map<String, Set<String>> CLASS_SNIPPET_EXCLUSIONS =
+      Map.ofEntries(
+          // --- SessionContext: overload secondaries and simple accessors ---
+          Map.entry(
+              "SessionContext",
+              Set.of(
+                  // Java-only bridge accessor
+                  "bridge")),
+          // --- DataFrame: overload secondaries ---
+          Map.entry("DataFrame", Set.of()),
+          // --- Functions: lit() overloads cross-reference lit(int) ---
+          Map.entry("Functions", Set.of()),
+          // --- Provider interfaces: methods shown in class-level example ---
+          Map.entry("CatalogProvider", Set.of()),
+          Map.entry("SchemaProvider", Set.of()),
+          // --- SendableRecordBatchStream: Java Arrow iteration, no Rust equivalent ---
+          Map.entry(
+              "SendableRecordBatchStream",
+              Set.of("getVectorSchemaRoot", "loadNextBatch", "lookup", "getDictionaryIds")),
+          // --- SimpleScalarUDF: inherited from ScalarUDF, documented there ---
+          Map.entry(
+              "SimpleScalarUDF",
+              Set.of("name", "signature", "returnField", "invoke", "coerceTypes")),
+          // --- Misc: proto helpers and bridge accessors ---
+          Map.entry("CsvReadOptions", Set.of("encodeOptions")),
+          Map.entry("ParquetReadOptions", Set.of("encodeOptions")),
+          Map.entry("NdJsonReadOptions", Set.of("encodeOptions")),
+          Map.entry("CsvOptions", Set.of("encodeOptions")),
+          Map.entry("JsonOptions", Set.of("encodeOptions")),
+          Map.entry("ParquetOptions", Set.of("encodeOptions")),
+          Map.entry("LogicalPlan", Set.of("bridge")),
+          Map.entry("PhysicalExpr", Set.of("bridge")),
+          Map.entry("ScalarValue", Set.of("getObject")),
+          Map.entry("FileScanConfig", Set.of("projection", "partition")),
+          Map.entry("Spans", Set.of("spans")));
+
+  /** Types whose snippet validation is deferred (snippets not yet added). */
+  private static final Set<String> SNIPPET_VALIDATION_DEFERRED = Set.of();
+
   @Override
   public void init(Locale locale, Reporter reporter) {
     this.reporter = reporter;
@@ -189,7 +245,7 @@ public class DocsLinkValidationDoclet implements Doclet {
 
   @Override
   public String getName() {
-    return "DocsLinkValidationDoclet";
+    return "DocsValidationDoclet";
   }
 
   @Override
@@ -286,7 +342,9 @@ public class DocsLinkValidationDoclet implements Doclet {
     if (!failures.isEmpty()) {
       reporter.print(
           Diagnostic.Kind.ERROR,
-          failures.size() + " docs.rs link validation failure(s):\n" + String.join("\n", failures));
+          failures.size()
+              + " documentation validation failure(s):\n"
+              + String.join("\n", failures));
     }
 
     return failures.isEmpty();
@@ -343,15 +401,69 @@ public class DocsLinkValidationDoclet implements Doclet {
         }
       }
     }
+
+    // Snippet exclusion staleness checks
+    for (String name : NO_SNIPPET_REQUIRED) {
+      if (!allTypeNames.contains(name)) {
+        failures.add("Stale NO_SNIPPET_REQUIRED entry: \"" + name + "\" is not a known type");
+      }
+    }
+
+    for (String name : SNIPPET_VALIDATION_DEFERRED) {
+      if (!allTypeNames.contains(name)) {
+        failures.add(
+            "Stale SNIPPET_VALIDATION_DEFERRED entry: \"" + name + "\" is not a known type");
+      }
+    }
+
+    for (Map.Entry<String, Set<String>> entry : CLASS_SNIPPET_EXCLUSIONS.entrySet()) {
+      String typeName = entry.getKey();
+      if (!allTypeNames.contains(typeName)) {
+        failures.add(
+            "Stale CLASS_SNIPPET_EXCLUSIONS key: \"" + typeName + "\" is not a known type");
+        continue;
+      }
+      Set<String> actualMethods = allPublicMethods.getOrDefault(typeName, Set.of());
+      for (String methodName : entry.getValue()) {
+        if (!actualMethods.contains(methodName)) {
+          failures.add(
+              "Stale CLASS_SNIPPET_EXCLUSIONS entry: \""
+                  + typeName
+                  + "."
+                  + methodName
+                  + "\" is not a public method on "
+                  + typeName);
+        }
+      }
+    }
   }
 
   private void validateType(TypeElement type, DocTrees docTrees, Set<String> urls) {
     String typeName = type.getSimpleName().toString();
 
     if (isInternalClass(typeName)) return;
-    if (NO_SEE_LINK_REQUIRED.contains(typeName)) return;
 
     DocCommentTree docComment = docTrees.getDocCommentTree(type);
+
+    // --- @see link validation ---
+    if (!NO_SEE_LINK_REQUIRED.contains(typeName)) {
+      validateSeeLinks(type, typeName, docComment, docTrees, urls);
+    }
+
+    // --- Snippet validation ---
+    if (!NO_SNIPPET_REQUIRED.contains(typeName)
+        && !SNIPPET_VALIDATION_DEFERRED.contains(typeName)) {
+      validateSnippets(type, typeName, docComment, docTrees);
+    }
+  }
+
+  private void validateSeeLinks(
+      TypeElement type,
+      String typeName,
+      DocCommentTree docComment,
+      DocTrees docTrees,
+      Set<String> urls) {
+
     SeeLink classLink = extractDocsRsSeeLink(docComment);
 
     // --- Class-level @see presence ---
@@ -381,7 +493,7 @@ public class DocsLinkValidationDoclet implements Doclet {
 
     urls.add(classLink.url.replaceFirst("#.*", ""));
 
-    // --- Method-level validation ---
+    // --- Method-level @see validation ---
     if (METHOD_VALIDATION_DEFERRED.contains(typeName)) return;
 
     Set<String> classExclusions = CLASS_METHOD_EXCLUSIONS.getOrDefault(typeName, Set.of());
@@ -417,6 +529,67 @@ public class DocsLinkValidationDoclet implements Doclet {
         urls.add(methodLink.url.replaceFirst("#.*", ""));
       }
     }
+  }
+
+  private void validateSnippets(
+      TypeElement type, String typeName, DocCommentTree docComment, DocTrees docTrees) {
+
+    // --- Class-level snippet presence ---
+    if (!hasSnippetOrLink(docComment)) {
+      failures.add(typeName + ": public type missing {@snippet} example in class-level Javadoc");
+    }
+
+    // --- Method-level snippet presence ---
+    Set<String> snippetExclusions = CLASS_SNIPPET_EXCLUSIONS.getOrDefault(typeName, Set.of());
+    Set<String> recordComponents = getRecordComponentNames(type);
+
+    for (ExecutableElement method : ElementFilter.methodsIn(type.getEnclosedElements())) {
+      if (!method.getModifiers().contains(Modifier.PUBLIC)) continue;
+
+      String methodName = method.getSimpleName().toString();
+      if (EXCLUDED_METHODS.contains(methodName)) continue;
+      if (snippetExclusions.contains(methodName)) continue;
+      if (recordComponents.contains(methodName)) continue;
+
+      DocCommentTree methodDoc = docTrees.getDocCommentTree(method);
+      if (!hasSnippetOrLink(methodDoc)) {
+        failures.add(
+            typeName
+                + "."
+                + methodName
+                + ": method missing {@snippet} example or {@link} cross-reference");
+      }
+    }
+  }
+
+  /**
+   * Checks if a doc comment body contains an {@code @snippet} inline tag or an {@code @link}
+   * cross-reference (used by overload secondaries to reference the primary overload's snippet).
+   *
+   * <p>Uses both parsed tree inspection and text-based fallback because google-java-format may
+   * collapse {@code @snippet} blocks to a single line that some JDK versions parse differently.
+   */
+  private boolean hasSnippetOrLink(DocCommentTree docComment) {
+    if (docComment == null) return false;
+    // Check parsed tree nodes (works when the Javadoc parser produces SNIPPET/LINK nodes)
+    for (DocTree node : docComment.getFullBody()) {
+      if (node.getKind() == DocTree.Kind.SNIPPET || node.getKind() == DocTree.Kind.LINK) {
+        return true;
+      }
+    }
+    // Fallback: check raw text for {@snippet or {@link (handles collapsed single-line format)
+    String text = docComment.toString();
+    return text.contains("{@snippet") || text.contains("{@link");
+  }
+
+  /** Returns the names of record components for a record type, or empty set for non-records. */
+  private Set<String> getRecordComponentNames(TypeElement type) {
+    if (type.getKind() != ElementKind.RECORD) return Set.of();
+    Set<String> names = new LinkedHashSet<>();
+    for (RecordComponentElement comp : type.getRecordComponents()) {
+      names.add(comp.getSimpleName().toString());
+    }
+    return names;
   }
 
   /**

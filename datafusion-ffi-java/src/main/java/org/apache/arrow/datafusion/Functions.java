@@ -19,11 +19,11 @@ import org.apache.arrow.vector.types.pojo.ArrowType;
  * <p>This class provides the primary entry points for programmatic expression construction. With a
  * static import, expression code reads like SQL:
  *
- * <pre>{@code
+ * {@snippet :
  * import static org.apache.arrow.datafusion.Functions.*;
  *
  * col("age").gt(lit(18)).and(col("name").eq(lit("Alice")))
- * }</pre>
+ * }
  *
  * <p>This parallels Rust DataFusion's {@code prelude} module and Spark's {@code functions} class.
  *
@@ -38,6 +38,10 @@ public final class Functions {
   /**
    * Reference a column by name.
    *
+   * {@snippet :
+   * Expr ageCol = col("age");
+   * }
+   *
    * @param name the column name
    * @see <a href="https://docs.rs/datafusion/52.1.0/datafusion/prelude/fn.col.html">Rust
    *     DataFusion: col</a>
@@ -48,6 +52,10 @@ public final class Functions {
 
   /**
    * Reference a column with table qualification.
+   *
+   * {@snippet :
+   * Expr col = col("orders", "id");
+   * }
    *
    * @param relation the table name
    * @param name the column name
@@ -63,6 +71,10 @@ public final class Functions {
   /**
    * Wrap an int value as a literal expression.
    *
+   * {@snippet :
+   * Expr threshold = lit(42);
+   * }
+   *
    * @param value the int value
    * @see <a href="https://docs.rs/datafusion/52.1.0/datafusion/prelude/fn.lit.html">Rust
    *     DataFusion: lit</a>
@@ -72,7 +84,7 @@ public final class Functions {
   }
 
   /**
-   * Wrap a long value as a literal expression.
+   * Wrap a long value as a literal expression. See {@link #lit(int)} for an example.
    *
    * @param value the long value
    * @see <a href="https://docs.rs/datafusion/52.1.0/datafusion/prelude/fn.lit.html">Rust
@@ -83,7 +95,7 @@ public final class Functions {
   }
 
   /**
-   * Wrap a float value as a literal expression.
+   * Wrap a float value as a literal expression. See {@link #lit(int)} for an example.
    *
    * @param value the float value
    * @see <a href="https://docs.rs/datafusion/52.1.0/datafusion/prelude/fn.lit.html">Rust
@@ -94,7 +106,7 @@ public final class Functions {
   }
 
   /**
-   * Wrap a double value as a literal expression.
+   * Wrap a double value as a literal expression. See {@link #lit(int)} for an example.
    *
    * @param value the double value
    * @see <a href="https://docs.rs/datafusion/52.1.0/datafusion/prelude/fn.lit.html">Rust
@@ -105,7 +117,7 @@ public final class Functions {
   }
 
   /**
-   * Wrap a String value as a literal expression.
+   * Wrap a String value as a literal expression. See {@link #lit(int)} for an example.
    *
    * @param value the string value
    * @see <a href="https://docs.rs/datafusion/52.1.0/datafusion/prelude/fn.lit.html">Rust
@@ -116,7 +128,7 @@ public final class Functions {
   }
 
   /**
-   * Wrap a boolean value as a literal expression.
+   * Wrap a boolean value as a literal expression. See {@link #lit(int)} for an example.
    *
    * @param value the boolean value
    * @see <a href="https://docs.rs/datafusion/52.1.0/datafusion/prelude/fn.lit.html">Rust
@@ -128,6 +140,10 @@ public final class Functions {
 
   /**
    * Null literal.
+   *
+   * {@snippet :
+   * Expr nullExpr = litNull();
+   * }
    *
    * @see <a href="https://docs.rs/datafusion/52.1.0/datafusion/prelude/fn.lit.html">Rust
    *     DataFusion: lit</a>
@@ -141,6 +157,10 @@ public final class Functions {
   /**
    * AVG aggregate function.
    *
+   * {@snippet :
+   * Expr avgSalary = avg(col("salary"));
+   * }
+   *
    * @param expr the expression to average
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/functions_aggregate/expr_fn/fn.avg.html">Rust
@@ -152,6 +172,10 @@ public final class Functions {
 
   /**
    * SUM aggregate function.
+   *
+   * {@snippet :
+   * Expr totalRevenue = sum(col("revenue"));
+   * }
    *
    * @param expr the expression to sum
    * @see <a
@@ -165,6 +189,10 @@ public final class Functions {
   /**
    * COUNT aggregate function.
    *
+   * {@snippet :
+   * Expr numRows = count(col("id"));
+   * }
+   *
    * @param expr the expression to count
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/functions_aggregate/expr_fn/fn.count.html">Rust
@@ -176,6 +204,10 @@ public final class Functions {
 
   /**
    * MIN aggregate function.
+   *
+   * {@snippet :
+   * Expr lowest = min(col("price"));
+   * }
    *
    * @param expr the expression to find the minimum of
    * @see <a
@@ -189,6 +221,10 @@ public final class Functions {
   /**
    * MAX aggregate function.
    *
+   * {@snippet :
+   * Expr highest = max(col("price"));
+   * }
+   *
    * @param expr the expression to find the maximum of
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/functions_aggregate/expr_fn/fn.max.html">Rust
@@ -200,6 +236,10 @@ public final class Functions {
 
   /**
    * MEDIAN aggregate function.
+   *
+   * {@snippet :
+   * Expr mid = median(col("score"));
+   * }
    *
    * @param expr the expression to compute the median of
    * @see <a
@@ -213,6 +253,10 @@ public final class Functions {
   /**
    * STDDEV aggregate function.
    *
+   * {@snippet :
+   * Expr sd = stddev(col("measurement"));
+   * }
+   *
    * @param expr the expression to compute standard deviation of
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/functions_aggregate/expr_fn/fn.stddev.html">Rust
@@ -224,6 +268,10 @@ public final class Functions {
 
   /**
    * VARIANCE (sample variance) aggregate function.
+   *
+   * {@snippet :
+   * Expr var = variance(col("measurement"));
+   * }
    *
    * @param expr the expression to compute variance of
    * @see <a
@@ -237,6 +285,10 @@ public final class Functions {
   /**
    * COUNT(DISTINCT expr) aggregate function.
    *
+   * {@snippet :
+   * Expr uniqueCount = countDistinct(col("category"));
+   * }
+   *
    * @param expr the expression to count distinct values of
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/functions_aggregate/expr_fn/fn.count_distinct.html">Rust
@@ -248,6 +300,10 @@ public final class Functions {
 
   /**
    * COUNT(*) aggregate function.
+   *
+   * {@snippet :
+   * Expr totalRows = countAll();
+   * }
    *
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/functions_aggregate/expr_fn/fn.count.html">Rust
@@ -261,6 +317,12 @@ public final class Functions {
 
   /**
    * Start a CASE WHEN chain.
+   *
+   * {@snippet :
+   * Expr result = when(col("status").eq(lit("active")), lit(1))
+   *     .when(col("status").eq(lit("inactive")), lit(0))
+   *     .otherwise(lit(-1));
+   * }
    *
    * @param condition the WHEN condition
    * @param then the THEN expression
@@ -276,6 +338,10 @@ public final class Functions {
   /**
    * Cast an expression to a different Arrow data type.
    *
+   * {@snippet :
+   * Expr asDouble = cast(col("value"), new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE));
+   * }
+   *
    * @param expr the expression to cast
    * @param dataType the target Arrow data type
    * @see <a href="https://docs.rs/datafusion/52.1.0/datafusion/prelude/fn.cast.html">Rust
@@ -287,6 +353,10 @@ public final class Functions {
 
   /**
    * Try-cast an expression to a different Arrow data type (returns null on failure).
+   *
+   * {@snippet :
+   * Expr safe = tryCast(col("value"), new ArrowType.Int(32, true));
+   * }
    *
    * @param expr the expression to cast
    * @param dataType the target Arrow data type
@@ -300,6 +370,10 @@ public final class Functions {
   /**
    * Logical NOT.
    *
+   * {@snippet :
+   * Expr notActive = not(col("is_active"));
+   * }
+   *
    * @param expr the expression to negate
    * @see <a href="https://docs.rs/datafusion/52.1.0/datafusion/prelude/fn.not.html">Rust
    *     DataFusion: not</a>
@@ -312,6 +386,14 @@ public final class Functions {
 
   /**
    * Creates a simple scalar UDF with fixed input and output types.
+   *
+   * {@snippet :
+   * ScalarUDF doubleIt = createUdf("double_it", Volatility.IMMUTABLE,
+   *     List.of(new ArrowType.Int(32, true)),
+   *     new ArrowType.Int(32, true),
+   *     (args, numRows, alloc) -> { return resultVector; });
+   * ctx.registerUdf(doubleIt, allocator);
+   * }
    *
    * @param name the function name
    * @param volatility the function volatility

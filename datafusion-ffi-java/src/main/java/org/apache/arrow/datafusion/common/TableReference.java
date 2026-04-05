@@ -4,6 +4,12 @@ package org.apache.arrow.datafusion.common;
  * A reference to a table, which may be unqualified (bare), partially qualified (schema + table), or
  * fully qualified (catalog + schema + table).
  *
+ * <p>Example:
+ *
+ * <p>{@snippet : TableReference bare = new TableReference.Bare("users"); TableReference partial =
+ * new TableReference.Partial("public", "users"); TableReference full = new TableReference.Full(
+ * "my_catalog", "public", "users"); String table = full.table(); // "users" }
+ *
  * @see <a
  *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/enum.TableReference.html">Rust
  *     DataFusion: TableReference</a>

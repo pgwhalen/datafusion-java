@@ -11,7 +11,7 @@ import org.apache.arrow.datafusion.physical_plan.RecordBatchReader;
  *
  * <p>Example:
  *
- * <pre>{@code
+ * {@snippet :
  * class TsvFileOpener implements FileOpener {
  *     private final Schema schema;
  *     private final BufferAllocator allocator;
@@ -26,7 +26,7 @@ import org.apache.arrow.datafusion.physical_plan.RecordBatchReader;
  *         // Read file and parse into record batches using schema and allocator
  *     }
  * }
- * }</pre>
+ * }
  *
  * @see <a
  *     href="https://docs.rs/datafusion-datasource/52.1.0/datafusion_datasource/file_stream/trait.FileOpener.html">Rust
@@ -35,6 +35,15 @@ import org.apache.arrow.datafusion.physical_plan.RecordBatchReader;
 public interface FileOpener {
   /**
    * Opens a file and returns a RecordBatchReader yielding batches.
+   *
+   * <p>Example:
+   *
+   * {@snippet :
+   * FileOpener opener = source.createFileOpener(
+   *     schema, allocator, scanConfig);
+   * RecordBatchReader reader = opener.open(partitionedFile);
+   * // Iterate over record batches from the reader
+   * }
    *
    * @param file the partitioned file metadata including path, size, and optional byte range
    * @return a reader that produces record batches

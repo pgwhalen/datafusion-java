@@ -6,6 +6,12 @@ import java.util.List;
  * Scan configuration passed from DataFusion to {@link FileSource#createFileOpener} containing
  * query-specific parameters extracted from the upstream {@code FileScanConfig} Rust struct.
  *
+ * <p>Example:
+ *
+ * <p>{@snippet : // FileScanConfig is provided by DataFusion to FileSource.createFileOpener
+ * FileOpener opener = source.createFileOpener( schema, allocator, scanConfig); List<Integer>
+ * projection = scanConfig.projection(); Long limit = scanConfig.limit(); }
+ *
  * @param projection column indices to read (empty list means all columns)
  * @param limit maximum number of rows to return, or {@code null} for no limit
  * @param batchSize the batch size for reading, or {@code null} for the DataFusion default

@@ -5,6 +5,12 @@ package org.apache.arrow.datafusion.datasource;
  *
  * <p>Use {@link #builder(FileFormat)} to create a new configuration.
  *
+ * <p>Example:
+ *
+ * <p>{@snippet : ListingOptions options = ListingOptions.builder(myFormat) .fileExtension(".tsv")
+ * .collectStat(true) .targetPartitions(4) .build(); ListingTableConfig config = new
+ * ListingTableConfig(url) .withListingOptions(options); }
+ *
  * @see <a
  *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingOptions.html">Rust
  *     DataFusion: ListingOptions</a>
@@ -36,6 +42,12 @@ public class ListingOptions {
   /**
    * Returns the file format.
    *
+   * <p>Example:
+   *
+   * <p>{@snippet : ListingOptions options = ListingOptions.builder(myFormat).build(); FileFormat
+   * format = options.format(); String extension = format.getExtension(); System.out.println("Format
+   * extension: " + extension); }
+   *
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingOptions.html#structfield.format">Rust
    *     DataFusion: ListingOptions::format</a>
@@ -46,6 +58,11 @@ public class ListingOptions {
 
   /**
    * Returns the file extension filter.
+   *
+   * <p>Example:
+   *
+   * <p>{@snippet : ListingOptions options = ListingOptions.builder(myFormat) .fileExtension(".tsv")
+   * .build(); String ext = options.fileExtension(); // ".tsv" }
    *
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingOptions.html#structfield.file_extension">Rust
@@ -58,6 +75,11 @@ public class ListingOptions {
   /**
    * Returns whether to collect file statistics.
    *
+   * <p>Example:
+   *
+   * <p>{@snippet : ListingOptions options = ListingOptions.builder(myFormat) .collectStat(true)
+   * .build(); boolean collect = options.collectStat(); // true }
+   *
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingOptions.html#structfield.collect_stat">Rust
    *     DataFusion: ListingOptions::collect_stat</a>
@@ -68,6 +90,11 @@ public class ListingOptions {
 
   /**
    * Returns the target number of partitions.
+   *
+   * <p>Example:
+   *
+   * <p>{@snippet : ListingOptions options = ListingOptions.builder(myFormat) .targetPartitions(4)
+   * .build(); int partitions = options.targetPartitions(); // 4 }
    *
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingOptions.html#structfield.target_partitions">Rust

@@ -8,6 +8,12 @@ import org.apache.arrow.vector.types.pojo.Schema;
  *
  * <p>Mirrors Rust's {@code CsvReadOptions}. Use {@link #builder()} to create instances.
  *
+ * <p>Example:
+ *
+ * <p>{@snippet : CsvReadOptions options = CsvReadOptions.builder() .hasHeader(true)
+ * .delimiter((byte) '\t') .schemaInferMaxRecords(200) .build(); ctx.registerCsv("my_table",
+ * "/path/to/data.csv", options); }
+ *
  * @see <a
  *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/file_format/options/struct.CsvReadOptions.html">Rust
  *     DataFusion: CsvReadOptions</a>
@@ -51,6 +57,11 @@ public final class CsvReadOptions {
   /**
    * Returns the schema, or null if not set.
    *
+   * <p>Example:
+   *
+   * <p>{@snippet : CsvReadOptions options = CsvReadOptions.builder() .schema(mySchema)
+   * .hasHeader(true) .build(); Schema schema = options.schema(); // mySchema }
+   *
    * @return the schema, or null
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/file_format/options/struct.CsvReadOptions.html#method.schema">Rust
@@ -62,6 +73,11 @@ public final class CsvReadOptions {
 
   /**
    * Encodes the options (excluding schema) as protobuf bytes (CsvOptions proto).
+   *
+   * <p>Example:
+   *
+   * <p>{@snippet : CsvReadOptions options = CsvReadOptions.builder() .hasHeader(true) .build();
+   * byte[] encoded = options.encodeOptions(); }
    *
    * @return the serialized protobuf bytes
    */

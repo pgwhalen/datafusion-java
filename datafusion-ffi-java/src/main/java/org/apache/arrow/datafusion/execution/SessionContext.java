@@ -28,6 +28,20 @@ import org.apache.arrow.vector.types.pojo.Schema;
  * <p>This class wraps a native DataFusion SessionContext and provides methods for registering
  * tables and executing SQL queries.
  *
+ * <p>Example:
+ *
+ * {@snippet :
+ * import static org.apache.arrow.datafusion.Functions.*;
+ *
+ * try (SessionContext ctx = new SessionContext()) {
+ *     ctx.registerCsv("sales", "/data/sales.csv", CsvReadOptions.defaults(), allocator);
+ *     DataFrame result = ctx.sql("SELECT region, SUM(amount) FROM sales GROUP BY region")
+ *         .sort(col("region").sortAsc())
+ *         .limit(0, 10);
+ *     result.show();
+ * }
+ * }
+ *
  * @see <a
  *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html">Rust
  *     DataFusion: SessionContext</a>
@@ -60,6 +74,10 @@ public class SessionContext implements AutoCloseable {
    *
    * <p>Equivalent to {@code new SessionContext()}.
    *
+   * {@snippet :
+   * SessionContext ctx = SessionContext.create();
+   * }
+   *
    * @return a new SessionContext
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.new">Rust
@@ -73,6 +91,11 @@ public class SessionContext implements AutoCloseable {
    * Creates a new session context with the specified configuration.
    *
    * <p>Equivalent to Rust's {@code SessionContext::new_with_config(config)}.
+   *
+   * {@snippet :
+   * ConfigOptions config = ConfigOptions.defaults();
+   * SessionContext ctx = SessionContext.newWithConfig(config);
+   * }
    *
    * @param config the session configuration
    * @return a new SessionContext
@@ -92,17 +115,16 @@ public class SessionContext implements AutoCloseable {
    *
    * <p>Example:
    *
-   * <pre>{@code
+   * {@snippet :
    * RuntimeEnv rt = RuntimeEnvBuilder.builder()
    *     .withMemoryLimit(50_000_000, 1.0)
    *     .build();
    * ConfigOptions config = ConfigOptions.defaults();
    * try (SessionContext ctx = SessionContext.newWithConfigRt(config, rt)) {
    *     DataFrame df = ctx.sql("SELECT 1 + 1");
-   *     // ...
    * }
    * rt.close();
-   * }</pre>
+   * }
    *
    * @param config the session configuration
    * @param runtimeEnv the runtime environment (e.g., with memory pool configuration)
@@ -122,6 +144,14 @@ public class SessionContext implements AutoCloseable {
    * <p>This is equivalent to Rust's {@code register_batch}: it takes Arrow data directly and wraps
    * it in a MemTable.
    *
+   * {@snippet :
+   * try (SessionContext ctx = new SessionContext()) {
+   *     ctx.registerBatch("my_table", vectorSchemaRoot, allocator);
+   *     DataFrame df = ctx.sql("SELECT * FROM my_table");
+   *     df.show();
+   * }
+   * }
+   *
    * @param name The table name
    * @param root The VectorSchemaRoot containing the data
    * @param allocator The buffer allocator
@@ -138,7 +168,8 @@ public class SessionContext implements AutoCloseable {
    * Registers a VectorSchemaRoot as a table in the session context with dictionary support.
    *
    * <p>This is equivalent to Rust's {@code register_batch}: it takes Arrow data directly and wraps
-   * it in a MemTable.
+   * it in a MemTable. See {@link #registerBatch(String, VectorSchemaRoot, BufferAllocator)} for an
+   * example.
    *
    * @param name The table name
    * @param root The VectorSchemaRoot containing the data
@@ -161,6 +192,14 @@ public class SessionContext implements AutoCloseable {
    * <p>This is equivalent to Rust's {@code register_table}: it registers a {@link TableProvider}
    * implementation that DataFusion will call when the table is queried.
    *
+   * {@snippet :
+   * try (SessionContext ctx = new SessionContext()) {
+   *     ctx.registerTable("my_table", myTableProvider, allocator);
+   *     DataFrame df = ctx.sql("SELECT * FROM my_table");
+   *     df.show();
+   * }
+   * }
+   *
    * @param name The table name
    * @param provider The table provider implementation
    * @param allocator The buffer allocator to use for Arrow data transfers
@@ -177,6 +216,10 @@ public class SessionContext implements AutoCloseable {
   /**
    * Deregisters a table by name.
    *
+   * {@snippet :
+   * boolean existed = ctx.deregisterTable("my_table");
+   * }
+   *
    * @param name The table name
    * @return true if a table was previously registered with this name
    * @throws DataFusionError if deregistration fails
@@ -191,6 +234,11 @@ public class SessionContext implements AutoCloseable {
 
   /**
    * Executes a SQL query and returns a DataFrame.
+   *
+   * {@snippet :
+   * DataFrame df = ctx.sql("SELECT name, age FROM users WHERE age > 21");
+   * df.show();
+   * }
    *
    * @param query The SQL query to execute
    * @return A DataFrame representing the query result
@@ -208,6 +256,14 @@ public class SessionContext implements AutoCloseable {
    * Executes a {@link LogicalPlan} and returns a {@link DataFrame}.
    *
    * <p>The plan is cloned internally, so the same plan can be executed multiple times.
+   *
+   * {@snippet :
+   * LogicalPlan plan = LogicalPlanBuilder.scan("my_table", ctx)
+   *     .filter(col("id").gt(lit(100)))
+   *     .build();
+   * DataFrame df = ctx.executeLogicalPlan(plan);
+   * df.show();
+   * }
    *
    * @param plan the logical plan to execute
    * @return a DataFrame representing the execution result
@@ -228,9 +284,11 @@ public class SessionContext implements AutoCloseable {
    * register a catalog named "my_catalog" with a schema "my_schema" containing a table "my_table",
    * you can query it with:
    *
-   * <pre>{@code
-   * SELECT * FROM my_catalog.my_schema.my_table
-   * }</pre>
+   * {@snippet :
+   * ctx.registerCatalog("my_catalog", myCatalog, allocator);
+   * DataFrame df = ctx.sql("SELECT * FROM my_catalog.my_schema.my_table");
+   * df.show();
+   * }
    *
    * @param name The catalog name
    * @param catalog The catalog provider implementation
@@ -250,15 +308,15 @@ public class SessionContext implements AutoCloseable {
    *
    * <p>Once registered, the UDF can be used in SQL queries by name. For example:
    *
-   * <pre>{@code
-   * ScalarUDF pow = ScalarUDF.simple("pow", Volatility.IMMUTABLE,
+   * {@snippet :
+   * ScalarUDF pow = Functions.createUdf("pow", Volatility.IMMUTABLE,
    *     List.of(new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE),
    *             new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE)),
    *     new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE),
-   *     (args, numRows, allocator) -> { ... });
+   *     (args, numRows, alloc) -> { return resultVector; });
    * ctx.registerUdf(pow, allocator);
    * DataFrame result = ctx.sql("SELECT pow(a, b) FROM t");
-   * }</pre>
+   * }
    *
    * @param udf The scalar UDF implementation
    * @param allocator The buffer allocator to use for Arrow data transfers
@@ -278,7 +336,7 @@ public class SessionContext implements AutoCloseable {
    * <p>A listing table scans files in a directory using a user-provided {@link FileFormat}. For
    * example:
    *
-   * <pre>{@code
+   * {@snippet :
    * ListingTableUrl url = ListingTableUrl.parse("/path/to/data/");
    * ListingOptions options = ListingOptions.builder(myFormat).build();
    * ListingTableConfig config = new ListingTableConfig(url)
@@ -286,7 +344,7 @@ public class SessionContext implements AutoCloseable {
    *     .withSchema(mySchema);
    * ListingTable table = new ListingTable(config);
    * ctx.registerListingTable("my_table", table, allocator);
-   * }</pre>
+   * }
    *
    * @param name The table name
    * @param table The listing table configuration
@@ -303,6 +361,11 @@ public class SessionContext implements AutoCloseable {
 
   /**
    * Registers a CSV file or directory as a named table.
+   *
+   * {@snippet :
+   * ctx.registerCsv("sales", "/data/sales.csv", CsvReadOptions.defaults(), allocator);
+   * DataFrame df = ctx.sql("SELECT * FROM sales");
+   * }
    *
    * @param name The table name
    * @param path The file or directory path
@@ -322,6 +385,11 @@ public class SessionContext implements AutoCloseable {
   /**
    * Registers a Parquet file or directory as a named table.
    *
+   * {@snippet :
+   * ctx.registerParquet("events", "/data/events.parquet", ParquetReadOptions.defaults(), allocator);
+   * DataFrame df = ctx.sql("SELECT * FROM events");
+   * }
+   *
    * @param name The table name
    * @param path The file or directory path
    * @param options Parquet read options
@@ -339,6 +407,11 @@ public class SessionContext implements AutoCloseable {
 
   /**
    * Registers a JSON file or directory as a named table.
+   *
+   * {@snippet :
+   * ctx.registerJson("logs", "/data/logs.json", NdJsonReadOptions.defaults(), allocator);
+   * DataFrame df = ctx.sql("SELECT * FROM logs");
+   * }
    *
    * @param name The table name
    * @param path The file or directory path
@@ -358,6 +431,10 @@ public class SessionContext implements AutoCloseable {
   /**
    * Returns whether a table with the given name exists.
    *
+   * {@snippet :
+   * boolean exists = ctx.tableExist("my_table");
+   * }
+   *
    * @param name The table name
    * @return true if the table exists, false otherwise
    * @throws DataFusionError if the existence check fails
@@ -375,6 +452,11 @@ public class SessionContext implements AutoCloseable {
    *
    * <p>Equivalent to Rust's {@code ctx.table("name")}.
    *
+   * {@snippet :
+   * Optional<DataFrame> df = ctx.table("my_table");
+   * df.ifPresent(DataFrame::show);
+   * }
+   *
    * @param name The table name
    * @return An Optional containing a DataFrame for the specified table, or empty if not found
    * @throws DataFusionError if there is an error other than the table not being found
@@ -390,6 +472,11 @@ public class SessionContext implements AutoCloseable {
   /**
    * Reads a Parquet file/directory into a DataFrame.
    *
+   * {@snippet :
+   * DataFrame df = ctx.readParquet("/data/events.parquet");
+   * df.show();
+   * }
+   *
    * @param path The file or directory path
    * @return A DataFrame for the Parquet data
    * @throws DataFusionError if reading fails
@@ -403,7 +490,8 @@ public class SessionContext implements AutoCloseable {
   }
 
   /**
-   * Reads a Parquet file/directory into a DataFrame with options.
+   * Reads a Parquet file/directory into a DataFrame with options. See {@link #readParquet(String)}
+   * for an example.
    *
    * @param path The file or directory path
    * @param options Parquet read options
@@ -422,6 +510,11 @@ public class SessionContext implements AutoCloseable {
   /**
    * Reads a CSV file/directory into a DataFrame.
    *
+   * {@snippet :
+   * DataFrame df = ctx.readCsv("/data/sales.csv");
+   * df.show();
+   * }
+   *
    * @param path The file or directory path
    * @return A DataFrame for the CSV data
    * @throws DataFusionError if reading fails
@@ -435,7 +528,8 @@ public class SessionContext implements AutoCloseable {
   }
 
   /**
-   * Reads a CSV file/directory into a DataFrame with options.
+   * Reads a CSV file/directory into a DataFrame with options. See {@link #readCsv(String)} for an
+   * example.
    *
    * @param path The file or directory path
    * @param options CSV read options
@@ -454,6 +548,11 @@ public class SessionContext implements AutoCloseable {
   /**
    * Reads a JSON file/directory into a DataFrame.
    *
+   * {@snippet :
+   * DataFrame df = ctx.readJson("/data/logs.json");
+   * df.show();
+   * }
+   *
    * @param path The file or directory path
    * @return A DataFrame for the JSON data
    * @throws DataFusionError if reading fails
@@ -467,7 +566,8 @@ public class SessionContext implements AutoCloseable {
   }
 
   /**
-   * Reads a JSON file/directory into a DataFrame with options.
+   * Reads a JSON file/directory into a DataFrame with options. See {@link #readJson(String)} for an
+   * example.
    *
    * @param path The file or directory path
    * @param options JSON read options
@@ -486,6 +586,10 @@ public class SessionContext implements AutoCloseable {
   /**
    * Returns the names of all registered catalogs.
    *
+   * {@snippet :
+   * List<String> names = ctx.catalogNames();
+   * }
+   *
    * @return list of catalog names
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.catalog_names">Rust
@@ -502,6 +606,10 @@ public class SessionContext implements AutoCloseable {
    * <p>The returned provider supports introspection (listing schemas and tables) but does not
    * support retrieving native {@link TableProvider} instances. Use {@link #table(String)} to query
    * native tables.
+   *
+   * {@snippet :
+   * Optional<CatalogProvider> catalog = ctx.catalog("datafusion");
+   * }
    *
    * @param name The catalog name
    * @return An Optional containing the catalog provider, or empty if not found
@@ -523,6 +631,10 @@ public class SessionContext implements AutoCloseable {
    *
    * <p>The returned SessionState owns its own Tokio runtime and can outlive this SessionContext.
    *
+   * {@snippet :
+   * SessionState state = ctx.state();
+   * }
+   *
    * @return a new SessionState
    * @throws DataFusionError if the state cannot be created
    * @see <a
@@ -540,12 +652,12 @@ public class SessionContext implements AutoCloseable {
    * <p>The expression is parsed against the given schema, which defines the available column names
    * and types. For example:
    *
-   * <pre>{@code
+   * {@snippet :
    * Schema schema = new Schema(List.of(
    *     Field.nullable("a", new ArrowType.Int(32, true)),
    *     Field.nullable("b", new ArrowType.Int(32, true))));
    * Expr expr = ctx.parseSqlExpr("a + b > 10", schema);
-   * }</pre>
+   * }
    *
    * @param sql the SQL expression string to parse
    * @param schema the Arrow schema describing the available columns
@@ -563,6 +675,10 @@ public class SessionContext implements AutoCloseable {
   /**
    * Returns the unique identifier for this session.
    *
+   * {@snippet :
+   * String id = ctx.sessionId();
+   * }
+   *
    * @return the session ID string
    * @throws DataFusionError if the call fails
    * @see <a
@@ -576,6 +692,10 @@ public class SessionContext implements AutoCloseable {
 
   /**
    * Returns the time this session was created.
+   *
+   * {@snippet :
+   * Instant startTime = ctx.sessionStartTime();
+   * }
    *
    * @return the session start time as an {@link Instant}
    * @throws DataFusionError if the call fails

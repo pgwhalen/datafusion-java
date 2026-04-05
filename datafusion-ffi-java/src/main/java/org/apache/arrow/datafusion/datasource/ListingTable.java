@@ -11,15 +11,10 @@ import org.apache.arrow.vector.types.pojo.Schema;
  *
  * <p>Example:
  *
- * <pre>{@code
- * ListingTableUrl url = ListingTableUrl.parse("/path/to/data/");
- * ListingOptions options = ListingOptions.builder(myFormat).build();
- * ListingTableConfig config = new ListingTableConfig(url)
- *     .withListingOptions(options)
- *     .withSchema(mySchema);
- * ListingTable table = new ListingTable(config);
- * ctx.registerListingTable("my_table", table, allocator);
- * }</pre>
+ * <p>{@snippet : ListingTableUrl url = ListingTableUrl.parse("/path/to/data/"); ListingOptions
+ * options = ListingOptions.builder(myFormat) .collectStat(true) .build(); ListingTableConfig config
+ * = new ListingTableConfig(url) .withListingOptions(options) .withSchema(mySchema); ListingTable
+ * table = new ListingTable(config); ctx.registerListingTable("my_table", table, allocator); }
  *
  * @see <a
  *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingTable.html">Rust
@@ -52,6 +47,12 @@ public class ListingTable {
   /**
    * Returns the table paths. Mirrors Rust's {@code ListingTable.table_paths}.
    *
+   * <p>Example:
+   *
+   * <p>{@snippet : ListingTable table = new ListingTable(config); List<ListingTableUrl> paths =
+   * table.tablePaths(); String firstPath = paths.get(0).getUrl(); System.out.println("First table
+   * path: " + firstPath); }
+   *
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingTable.html#method.table_paths">Rust
    *     DataFusion: ListingTable::table_paths</a>
@@ -63,6 +64,11 @@ public class ListingTable {
   /**
    * Returns the listing options.
    *
+   * <p>Example:
+   *
+   * <p>{@snippet : ListingTable table = new ListingTable(config); ListingOptions opts =
+   * table.options(); FileFormat format = opts.format(); String extension = opts.fileExtension(); }
+   *
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingTable.html#method.options">Rust
    *     DataFusion: ListingTable::options</a>
@@ -73,6 +79,12 @@ public class ListingTable {
 
   /**
    * Returns the table schema.
+   *
+   * <p>Example:
+   *
+   * <p>{@snippet : ListingTable table = new ListingTable(config); Schema schema = table.schema();
+   * List<Field> fields = schema.getFields(); System.out.println("Table has " + fields.size() + "
+   * columns"); }
    *
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingTable.html#method.schema">Rust

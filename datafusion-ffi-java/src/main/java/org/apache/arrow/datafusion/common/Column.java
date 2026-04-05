@@ -5,6 +5,11 @@ import org.apache.arrow.datafusion.Spans;
 /**
  * A logical column reference, corresponding to DataFusion's {@code datafusion_common::Column}.
  *
+ * <p>Example:
+ *
+ * <p>{@snippet : Column col = new Column("id", null, new Spans(List.of())); String name =
+ * col.name(); // "id" TableReference relation = col.relation(); // null }
+ *
  * @param name the column name
  * @param relation the optional table reference for this column (may be null)
  * @param spans the source code spans associated with this column reference

@@ -13,6 +13,12 @@ import org.apache.arrow.datafusion.physical_plan.PhysicalExpr;
  * <p>For example, the filter {@code WHERE col IN (1, 2, 3)} produces a guarantee that {@code col}
  * must be one of {@code {1, 2, 3}} (an {@link Guarantee#IN} guarantee).
  *
+ * <p>Example:
+ *
+ * <p>{@snippet : List<LiteralGuarantee> guarantees = LiteralGuarantee.analyze(filterExpr); for
+ * (LiteralGuarantee g : guarantees) { Column col = g.column(); Guarantee type = g.guarantee();
+ * Set<ScalarValue> vals = g.literals(); } }
+ *
  * @param column the column this guarantee applies to
  * @param guarantee the type of guarantee (IN or NOT_IN)
  * @param literals the set of literal values in the guarantee
@@ -66,6 +72,12 @@ public record LiteralGuarantee(Column column, Guarantee guarantee, Set<ScalarVal
    * Analyzes a physical expression to extract literal guarantees.
    *
    * <p>This mirrors DataFusion's {@code LiteralGuarantee::analyze()} function.
+   *
+   * <p>Example:
+   *
+   * <p>{@snippet : List<LiteralGuarantee> guarantees = LiteralGuarantee.analyze(filterExpr); for
+   * (LiteralGuarantee g : guarantees) { System.out.println(g.column().name() + " " +
+   * g.guarantee()); } }
    *
    * @param expr the physical expression to analyze
    * @return the list of literal guarantees extracted from the expression

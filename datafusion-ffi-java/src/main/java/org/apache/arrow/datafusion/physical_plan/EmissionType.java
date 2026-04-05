@@ -3,6 +3,11 @@ package org.apache.arrow.datafusion.physical_plan;
 /**
  * The emission type of an execution plan, describing how it produces output.
  *
+ * <p>Example:
+ *
+ * <p>{@snippet : // Used when implementing a custom ExecutionPlan EmissionType emission =
+ * EmissionType.INCREMENTAL; // INCREMENTAL streams output, FINAL waits for all input }
+ *
  * @see <a
  *     href="https://docs.rs/datafusion/52.1.0/datafusion/physical_plan/execution_plan/enum.EmissionType.html">Rust
  *     DataFusion: EmissionType</a>

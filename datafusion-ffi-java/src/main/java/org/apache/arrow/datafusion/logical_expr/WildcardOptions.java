@@ -7,6 +7,11 @@ package org.apache.arrow.datafusion.logical_expr;
  * ({@code IlikeSelectItem}, {@code ExcludeSelectItem}, etc.) are not yet modeled in Java. They will
  * be replaced with concrete record types when needed.
  *
+ * <p>Example:
+ *
+ * <p>{@snippet : WildcardOptions opts = WildcardOptions.EMPTY; // All fields are null in the EMPTY
+ * instance Object ilike = opts.ilike(); // null Object exclude = opts.exclude(); // null }
+ *
  * @param ilike optional ILIKE pattern filter (stub, always null)
  * @param exclude optional EXCLUDE column list (stub, always null)
  * @param except optional EXCEPT column list (stub, always null)

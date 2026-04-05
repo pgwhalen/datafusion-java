@@ -8,6 +8,12 @@ import java.util.Map;
  *
  * <p>Use {@link #builder()} to create instances.
  *
+ * <p>Example:
+ *
+ * <p>{@snippet : ParquetOptions options = ParquetOptions.builder() .compression("SNAPPY")
+ * .maxRowGroupSize(1_000_000L) .dictionaryEnabled(true) .build(); byte[] encoded =
+ * options.encodeOptions(); }
+ *
  * @see <a
  *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/config/struct.ParquetOptions.html">Rust
  *     DataFusion: ParquetOptions</a>
@@ -60,7 +66,14 @@ public final class ParquetOptions {
     return new Builder();
   }
 
-  /** Encodes the options as protobuf bytes (TableParquetOptions proto). */
+  /**
+   * Encodes the options as protobuf bytes (TableParquetOptions proto).
+   *
+   * <p>Example:
+   *
+   * <p>{@snippet : ParquetOptions options = ParquetOptions.builder() .compression("SNAPPY")
+   * .build(); byte[] encoded = options.encodeOptions(); }
+   */
   public byte[] encodeOptions() {
     org.apache.arrow.datafusion.proto.ParquetOptions.Builder global =
         org.apache.arrow.datafusion.proto.ParquetOptions.newBuilder();

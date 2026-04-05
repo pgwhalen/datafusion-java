@@ -10,6 +10,13 @@ import org.apache.arrow.vector.FieldVector;
  * <p>Use this with {@link org.apache.arrow.datafusion.Functions#createUdf} to create UDFs without
  * implementing the full {@link ScalarUDF} interface.
  *
+ * <p>Example:
+ *
+ * <p>{@snippet : ScalarUDFImpl negate = (args, numRows, allocator) -> { BigIntVector input =
+ * (BigIntVector) args.get(0); BigIntVector result = new BigIntVector("result", allocator);
+ * result.allocateNew(numRows); for (int i = 0; i < numRows; i++) { result.set(i, -input.get(i)); }
+ * result.setValueCount(numRows); return result; }; }
+ *
  * @see <a
  *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/trait.ScalarUDFImpl.html">Rust
  *     DataFusion: ScalarUDFImpl</a>
@@ -18,6 +25,8 @@ import org.apache.arrow.vector.FieldVector;
 public interface ScalarUDFImpl {
   /**
    * Invokes the scalar function on the given input vectors.
+   *
+   * <p>See {@link ScalarUDFImpl} for an example.
    *
    * @param args the input vectors
    * @param numRows the number of rows to process

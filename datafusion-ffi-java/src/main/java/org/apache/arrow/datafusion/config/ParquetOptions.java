@@ -7,6 +7,12 @@ import java.util.Map;
  *
  * <p>All fields are nullable. A null value means the DataFusion default is used.
  *
+ * <p>Example:
+ *
+ * <p>{@snippet : ParquetOptions parquet = ParquetOptions.builder() .pushdownFilters(true)
+ * .pruning(true) .enablePageIndex(true) .build(); ExecutionOptions exec =
+ * ExecutionOptions.builder() .parquet(parquet) .build(); }
+ *
  * @param enablePageIndex Whether to use the page index when reading parquet files
  * @param pruning Whether to use row group pruning when reading parquet files
  * @param skipMetadata Whether to skip reading parquet file metadata from the footer

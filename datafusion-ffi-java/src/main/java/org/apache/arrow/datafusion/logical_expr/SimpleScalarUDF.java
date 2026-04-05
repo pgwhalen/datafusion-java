@@ -12,6 +12,27 @@ import org.apache.arrow.vector.types.pojo.Field;
  *
  * <p>Created via {@link org.apache.arrow.datafusion.Functions#createUdf}.
  *
+ * <p>Example:
+ *
+ * {@snippet :
+ * import static org.apache.arrow.datafusion.Functions.*;
+ *
+ * ScalarUDF doubleIt = createUdf("double_it", Volatility.IMMUTABLE,
+ *     List.of(new ArrowType.Int(64, true)),
+ *     new ArrowType.Int(64, true),
+ *     (args, numRows, allocator) -> {
+ *         BigIntVector input = (BigIntVector) args.get(0);
+ *         BigIntVector result = new BigIntVector("result", allocator);
+ *         result.allocateNew(numRows);
+ *         for (int i = 0; i < numRows; i++) {
+ *             result.set(i, input.get(i) * 2);
+ *         }
+ *         result.setValueCount(numRows);
+ *         return result;
+ *     });
+ * ctx.registerUdf(doubleIt, allocator);
+ * }
+ *
  * @see <a
  *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/struct.SimpleScalarUDF.html">Rust
  *     DataFusion: SimpleScalarUDF</a>

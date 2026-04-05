@@ -11,21 +11,10 @@ import java.util.Optional;
  *
  * <p>Example implementation:
  *
- * <pre>{@code
- * public class MyCatalogProvider implements CatalogProvider {
- *     private final Map<String, SchemaProvider> schemas;
- *
- *     @Override
- *     public List<String> schemaNames() {
- *         return new ArrayList<>(schemas.keySet());
- *     }
- *
- *     @Override
- *     public SchemaProvider schema(String name) {
- *         return schemas.get(name);
- *     }
- * }
- * }</pre>
+ * <p>{@snippet : public class MyCatalogProvider implements CatalogProvider { private final
+ * Map<String, SchemaProvider> schemas; @Override public List<String> schemaNames() { return new
+ * ArrayList<>(schemas.keySet()); } @Override public Optional<SchemaProvider> schema(String name) {
+ * return Optional.ofNullable(schemas.get(name)); } } }
  *
  * @see <a
  *     href="https://docs.rs/datafusion-catalog/52.1.0/datafusion_catalog/trait.CatalogProvider.html">Rust
@@ -34,6 +23,11 @@ import java.util.Optional;
 public interface CatalogProvider {
   /**
    * Returns the names of all schemas in this catalog.
+   *
+   * <p>Example:
+   *
+   * <p>{@snippet : @Override public List<String> schemaNames() { return new
+   * ArrayList<>(schemas.keySet()); } }
    *
    * @return List of schema names
    * @see <a
@@ -44,6 +38,11 @@ public interface CatalogProvider {
 
   /**
    * Returns the schema provider for the given schema name.
+   *
+   * <p>Example:
+   *
+   * <p>{@snippet : @Override public Optional<SchemaProvider> schema(String name) { return
+   * Optional.ofNullable(schemas.get(name)); } }
    *
    * @param name The schema name
    * @return The schema provider, or null if the schema doesn't exist

@@ -5,6 +5,11 @@ package org.apache.arrow.datafusion.logical_expr;
  *
  * <p>Matches Rust DataFusion's {@code JoinType} enum variants.
  *
+ * <p>Example:
+ *
+ * <p>{@snippet : DataFrame joined = left.join(right, JoinType.INNER, new String[]{"id"}, new
+ * String[]{"id"}); }
+ *
  * @see <a href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.JoinType.html">Rust
  *     DataFusion: JoinType</a>
  */

@@ -11,6 +11,12 @@ import org.apache.arrow.vector.dictionary.DictionaryProvider;
  * <p>This class provides zero-copy access to Arrow data returned from DataFusion through the Arrow
  * C Data Interface. Implements DictionaryProvider to allow decoding of dictionary-encoded columns.
  *
+ * <p>Example:
+ *
+ * <p>{@snippet : try (SendableRecordBatchStream stream = df.execute(allocator)) { VectorSchemaRoot
+ * root = stream.getVectorSchemaRoot(); while (stream.loadNextBatch()) { int rowCount =
+ * root.getRowCount(); // process zero-copy Arrow data } } }
+ *
  * @see <a
  *     href="https://docs.rs/datafusion/52.1.0/datafusion/physical_plan/type.SendableRecordBatchStream.html">Rust
  *     DataFusion: SendableRecordBatchStream</a>

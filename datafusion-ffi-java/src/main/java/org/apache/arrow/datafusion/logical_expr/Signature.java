@@ -5,6 +5,10 @@ package org.apache.arrow.datafusion.logical_expr;
  *
  * <p>Currently only exposes {@link #volatility()}. {@code TypeSignature} is not yet supported.
  *
+ * <p>Example:
+ *
+ * <p>{@snippet : Signature sig = new Signature(Volatility.IMMUTABLE); }
+ *
  * @see <a
  *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/struct.Signature.html">Rust
  *     DataFusion: Signature</a>

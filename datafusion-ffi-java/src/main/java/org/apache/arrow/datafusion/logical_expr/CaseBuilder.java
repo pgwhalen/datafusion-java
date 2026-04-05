@@ -8,13 +8,13 @@ import java.util.List;
  *
  * <p>Mirrors Rust DataFusion's {@code CaseBuilder}. Usage:
  *
- * <pre>{@code
+ * {@snippet :
  * import static org.apache.arrow.datafusion.Functions.*;
  *
  * when(col("status").eq(lit("active")), lit(1))
  *     .when(col("status").eq(lit("pending")), lit(0))
  *     .otherwise(lit(-1))
- * }</pre>
+ * }
  *
  * @see <a
  *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/conditional_expressions/struct.CaseBuilder.html">Rust
@@ -28,6 +28,17 @@ public final class CaseBuilder {
 
   /**
    * Add a WHEN/THEN branch.
+   *
+   * <p>Example:
+   *
+   * {@snippet :
+   * import static org.apache.arrow.datafusion.Functions.*;
+   *
+   * Expr expr = new CaseBuilder()
+   *     .when(col("x").gt(lit(0)), lit("positive"))
+   *     .when(col("x").lt(lit(0)), lit("negative"))
+   *     .otherwise(lit("zero"));
+   * }
    *
    * @param condition the condition expression
    * @param then the result expression when condition is true
@@ -44,6 +55,14 @@ public final class CaseBuilder {
   /**
    * Terminal: build the CASE expression with an ELSE clause.
    *
+   * <p>Example:
+   *
+   * {@snippet :
+   * import static org.apache.arrow.datafusion.Functions.*;
+   *
+   * Expr expr = when(col("a").gt(lit(10)), lit("high")).otherwise(lit("low"));
+   * }
+   *
    * @param elseExpr the else expression
    * @return the built CASE expression
    * @see <a
@@ -56,6 +75,14 @@ public final class CaseBuilder {
 
   /**
    * Terminal: build the CASE expression without an ELSE clause (result is NULL).
+   *
+   * <p>Example:
+   *
+   * {@snippet :
+   * import static org.apache.arrow.datafusion.Functions.*;
+   *
+   * Expr expr = when(col("a").gt(lit(10)), lit("high")).end();
+   * }
    *
    * @return the built CASE expression
    * @see <a

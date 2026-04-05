@@ -3,6 +3,11 @@ package org.apache.arrow.datafusion.logical_expr;
 /**
  * Operators for binary expressions, corresponding to DataFusion's {@code Operator} enum.
  *
+ * <p>Example:
+ *
+ * <p>{@snippet : Operator eq = Operator.Eq; Operator gt = Operator.Gt; Operator and = Operator.And;
+ * // Used in binary expression construction }
+ *
  * @see <a href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Operator.html">Rust
  *     DataFusion: Operator</a>
  */

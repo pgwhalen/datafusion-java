@@ -9,15 +9,9 @@ package org.apache.arrow.datafusion.execution;
  *
  * <p>Example:
  *
- * <pre>{@code
- * RuntimeEnv rt = RuntimeEnvBuilder.builder()
- *     .withMemoryLimit(50_000_000, 1.0)
- *     .build();
- * SessionContext ctx = SessionContext.newWithConfigRt(ConfigOptions.defaults(), rt);
- * // ... use ctx ...
- * ctx.close();
- * rt.close();
- * }</pre>
+ * <p>{@snippet : RuntimeEnv rt = RuntimeEnvBuilder.builder() .withMemoryLimit(50_000_000, 1.0)
+ * .build(); SessionContext ctx = SessionContext.newWithConfigRt(ConfigOptions.defaults(), rt); //
+ * ... use ctx ... ctx.close(); rt.close(); }
  *
  * @see <a
  *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/runtime_env/struct.RuntimeEnv.html">Rust

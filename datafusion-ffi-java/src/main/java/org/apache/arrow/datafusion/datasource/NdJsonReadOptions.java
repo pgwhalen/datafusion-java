@@ -7,6 +7,12 @@ import org.apache.arrow.vector.types.pojo.Schema;
  *
  * <p>Mirrors Rust's {@code NdJsonReadOptions}. Use {@link #builder()} to create instances.
  *
+ * <p>Example:
+ *
+ * <p>{@snippet : NdJsonReadOptions options = NdJsonReadOptions.builder()
+ * .schemaInferMaxRecords(200) .schema(mySchema) .build(); ctx.registerJson("my_table",
+ * "/path/to/data.json", options); }
+ *
  * @see <a
  *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/file_format/options/struct.NdJsonReadOptions.html">Rust
  *     DataFusion: NdJsonReadOptions</a>
@@ -28,6 +34,11 @@ public final class NdJsonReadOptions {
   /**
    * Returns the schema, or null if not set.
    *
+   * <p>Example:
+   *
+   * <p>{@snippet : NdJsonReadOptions options = NdJsonReadOptions.builder() .schema(mySchema)
+   * .build(); Schema schema = options.schema(); }
+   *
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/file_format/options/struct.NdJsonReadOptions.html#method.schema">Rust
    *     DataFusion: NdJsonReadOptions::schema</a>
@@ -36,7 +47,14 @@ public final class NdJsonReadOptions {
     return schema;
   }
 
-  /** Encodes the options (excluding schema) as protobuf bytes (JsonOptions proto). */
+  /**
+   * Encodes the options (excluding schema) as protobuf bytes (JsonOptions proto).
+   *
+   * <p>Example:
+   *
+   * <p>{@snippet : NdJsonReadOptions options = NdJsonReadOptions.builder()
+   * .schemaInferMaxRecords(200) .build(); byte[] encoded = options.encodeOptions(); }
+   */
   public byte[] encodeOptions() {
     org.apache.arrow.datafusion.proto.JsonOptions.Builder b =
         org.apache.arrow.datafusion.proto.JsonOptions.newBuilder();

@@ -21,22 +21,10 @@ import org.apache.arrow.vector.types.pojo.Schema;
  *
  * <p>Example implementation:
  *
- * <pre>{@code
- * public class MyTableProvider implements TableProvider {
- *     private final Schema schema;
- *     private final List<VectorSchemaRoot> data;
- *
- *     @Override
- *     public Schema schema() {
- *         return schema;
- *     }
- *
- *     @Override
- *     public ExecutionPlan scanWithArgs(Session session, ScanArgs args) {
- *         return new MyExecutionPlan(schema, data, args.projection(), args.limit());
- *     }
- * }
- * }</pre>
+ * <p>{@snippet : public class MyTableProvider implements TableProvider { private final Schema
+ * schema; private final List<VectorSchemaRoot> data; @Override public Schema schema() { return
+ * schema; } @Override public ExecutionPlan scanWithArgs(Session session, ScanArgs args) { return
+ * new MyExecutionPlan(schema, data, args.projection(), args.limit()); } } }
  *
  * @see <a
  *     href="https://docs.rs/datafusion-catalog/52.1.0/datafusion_catalog/trait.TableProvider.html">Rust
@@ -45,6 +33,11 @@ import org.apache.arrow.vector.types.pojo.Schema;
 public interface TableProvider {
   /**
    * Returns the schema of this table.
+   *
+   * <p>Example:
+   *
+   * <p>{@snippet : @Override public Schema schema() { return new
+   * Schema(List.of(Field.nullable("id", new ArrowType.Int(32, true)))); } }
    *
    * @return The Arrow schema describing the table's columns
    * @see <a
@@ -57,6 +50,10 @@ public interface TableProvider {
    * Returns the type of this table.
    *
    * <p>Default implementation returns {@link TableType#BASE}.
+   *
+   * <p>Example:
+   *
+   * <p>{@snippet : @Override public TableType tableType() { return TableType.BASE; } }
    *
    * @return The table type
    * @see <a
@@ -76,6 +73,12 @@ public interface TableProvider {
    *
    * <p>See {@link ScanArgs} for detailed documentation on the filter, projection, and limit
    * parameters.
+   *
+   * <p>Example:
+   *
+   * <p>{@snippet : @Override public ExecutionPlan scanWithArgs(Session session, ScanArgs args) {
+   * List<Integer> proj = args.projection(); Long limit = args.limit(); return new
+   * MyExecutionPlan(schema(), data, proj, limit); } }
    *
    * @param session The session context for this scan (borrowed, valid only during this call)
    * @param args The scan arguments containing filters, projection, and limit
@@ -97,6 +100,12 @@ public interface TableProvider {
    * <p>The default implementation returns {@link TableProviderFilterPushDown#INEXACT} for all
    * filters, meaning all filters are passed to {@link #scanWithArgs} but DataFusion will also
    * re-apply them after scan to ensure correctness.
+   *
+   * <p>Example:
+   *
+   * <p>{@snippet : @Override public List<TableProviderFilterPushDown>
+   * supportsFiltersPushdown(List<Expr> filters) { return filters.stream() .map(f ->
+   * TableProviderFilterPushDown.EXACT) .toList(); } }
    *
    * @param filters the filter expressions to evaluate (borrowed, valid only during this call)
    * @return a list of pushdown support values, one per filter
@@ -120,6 +129,12 @@ public interface TableProvider {
    *
    * <p>The default implementation throws {@link UnsupportedOperationException}.
    *
+   * <p>Example:
+   *
+   * <p>{@snippet : @Override public ExecutionPlan insertInto(Session session, RecordBatchReader
+   * input, InsertOp insertOp) { int count = 0; while (input.loadNextBatch()) { count +=
+   * input.getVectorSchemaRoot().getRowCount(); } return new CountResultPlan(schema(), count); } }
+   *
    * @param session the session context (borrowed, valid only during this call)
    * @param input the data to insert (borrowed, valid only during this call)
    * @param insertOp the insert operation type (append, overwrite, or replace)
@@ -141,6 +156,11 @@ public interface TableProvider {
    *
    * <p>The default implementation throws {@link UnsupportedOperationException}.
    *
+   * <p>Example:
+   *
+   * <p>{@snippet : @Override public ExecutionPlan deleteFrom(Session session, List<Expr> filters) {
+   * int deleted = storage.deleteWhere(filters); return new CountResultPlan(schema(), deleted); } }
+   *
    * @param session the session context (borrowed, valid only during this call)
    * @param filters the filter predicates for rows to delete (empty means delete all)
    * @return an execution plan producing the delete count
@@ -160,6 +180,12 @@ public interface TableProvider {
    * (UInt64) indicating the number of rows updated. An empty filter list updates all rows.
    *
    * <p>The default implementation throws {@link UnsupportedOperationException}.
+   *
+   * <p>Example:
+   *
+   * <p>{@snippet : @Override public ExecutionPlan update(Session session, List<ColumnAssignment>
+   * assignments, List<Expr> filters) { int updated = storage.updateWhere(assignments, filters);
+   * return new CountResultPlan(schema(), updated); } }
    *
    * @param session the session context (borrowed, valid only during this call)
    * @param assignments the column assignments to apply (column name + new value expression)

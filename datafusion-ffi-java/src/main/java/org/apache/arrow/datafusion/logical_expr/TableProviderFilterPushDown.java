@@ -6,7 +6,13 @@ import org.apache.arrow.datafusion.catalog.TableProvider;
  * Indicates whether a filter expression can be handled by a {@link TableProvider}.
  *
  * <p>This enum is returned from {@link TableProvider#supportsFiltersPushdown} to tell DataFusion
- * how a provider handles each filter:
+ * how a provider handles each filter.
+ *
+ * <p>Example:
+ *
+ * <p>{@snippet : // In a TableProvider implementation public List<TableProviderFilterPushDown>
+ * supportsFiltersPushdown( List<Expr> filters) { return filters.stream() .map(f ->
+ * TableProviderFilterPushDown.INEXACT) .toList(); } }
  *
  * <ul>
  *   <li>{@link #UNSUPPORTED} — The provider cannot apply this filter. DataFusion will apply it

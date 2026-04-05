@@ -18,6 +18,12 @@ import org.apache.arrow.vector.VectorSchemaRoot;
  * get the schema and buffer container, then call {@link #loadNextBatch()} to populate it with each
  * batch of data.
  *
+ * <p>Example:
+ *
+ * <p>{@snippet : try (RecordBatchReader reader = plan.execute(0, allocator)) { VectorSchemaRoot
+ * root = reader.getVectorSchemaRoot(); while (reader.loadNextBatch()) { int rowCount =
+ * root.getRowCount(); // process batch data from root } } }
+ *
  * @see <a href="https://docs.rs/arrow/54.0.0/arrow/record_batch/struct.RecordBatch.html">Rust
  *     Arrow: RecordBatch</a>
  * @see SendableRecordBatchStream
@@ -29,6 +35,11 @@ public interface RecordBatchReader extends AutoCloseable {
    * <p>The returned VectorSchemaRoot is reused across batches. Each call to {@link
    * #loadNextBatch()} updates its contents.
    *
+   * <p>Example:
+   *
+   * <p>{@snippet : VectorSchemaRoot root = reader.getVectorSchemaRoot(); Schema schema =
+   * root.getSchema(); // inspect column metadata }
+   *
    * @return The VectorSchemaRoot containing the schema and current batch data
    */
   VectorSchemaRoot getVectorSchemaRoot();
@@ -39,6 +50,11 @@ public interface RecordBatchReader extends AutoCloseable {
    * <p>After this method returns true, the VectorSchemaRoot from {@link #getVectorSchemaRoot()}
    * will contain the new batch data. When this method returns false, the stream is exhausted and no
    * more data is available.
+   *
+   * <p>Example:
+   *
+   * <p>{@snippet : VectorSchemaRoot root = reader.getVectorSchemaRoot(); while
+   * (reader.loadNextBatch()) { System.out.println("Batch has " + root.getRowCount() + " rows"); } }
    *
    * @return true if a batch was loaded, false if no more batches are available
    * @throws DataFusionError if loading fails

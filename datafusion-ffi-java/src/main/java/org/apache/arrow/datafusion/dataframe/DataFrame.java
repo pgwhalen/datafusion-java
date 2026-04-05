@@ -29,7 +29,7 @@ import org.apache.arrow.vector.types.pojo.Schema;
  * Terminal operations do NOT consume the source. This enables fluent method chaining without
  * leaking native resources.
  *
- * <pre>{@code
+ * {@snippet :
  * import static org.apache.arrow.datafusion.Functions.*;
  *
  * DataFrame result = ctx.sql("SELECT * FROM employees")
@@ -40,7 +40,7 @@ import org.apache.arrow.vector.types.pojo.Schema;
  *         List.of(avg(col("salary")).alias("avg_salary")))
  *     .sort(col("avg_salary").sortDesc())
  *     .limit(0, 10);
- * }</pre>
+ * }
  *
  * @see <a href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html">Rust
  *     DataFusion: DataFrame</a>
@@ -64,6 +64,12 @@ public class DataFrame implements AutoCloseable {
    *
    * <p>Consumes this DataFrame. The source must not be used after this call.
    *
+   * {@snippet :
+   * import static org.apache.arrow.datafusion.Functions.*;
+   *
+   * DataFrame projected = df.select(col("name"), col("age"));
+   * }
+   *
    * @param exprs the expressions to select
    * @return a new DataFrame with the selected columns
    * @see <a
@@ -75,7 +81,7 @@ public class DataFrame implements AutoCloseable {
   }
 
   /**
-   * Select expressions from a list.
+   * Select expressions from a list. See {@link #select(Expr...)} for an example.
    *
    * <p>Consumes this DataFrame. The source must not be used after this call.
    *
@@ -96,6 +102,10 @@ public class DataFrame implements AutoCloseable {
    *
    * <p>Consumes this DataFrame. The source must not be used after this call.
    *
+   * {@snippet :
+   * DataFrame projected = df.selectColumns("name", "age", "salary");
+   * }
+   *
    * @param columns the column names to select
    * @return a new DataFrame with the selected columns
    * @see <a
@@ -113,6 +123,12 @@ public class DataFrame implements AutoCloseable {
    * Filter rows matching a predicate. Equivalent to Rust's {@code df.filter(expr)}.
    *
    * <p>Consumes this DataFrame. The source must not be used after this call.
+   *
+   * {@snippet :
+   * import static org.apache.arrow.datafusion.Functions.*;
+   *
+   * DataFrame adults = df.filter(col("age").gt(lit(18)));
+   * }
    *
    * @param predicate the filter expression
    * @return a new DataFrame with matching rows
@@ -133,6 +149,12 @@ public class DataFrame implements AutoCloseable {
    *
    * <p>Consumes this DataFrame. The source must not be used after this call.
    *
+   * {@snippet :
+   * import static org.apache.arrow.datafusion.Functions.*;
+   *
+   * DataFrame sorted = df.sort(col("age").sortDesc(), col("name").sortAsc());
+   * }
+   *
    * @param sortExprs the sort expressions
    * @return a new sorted DataFrame
    * @see <a
@@ -144,7 +166,8 @@ public class DataFrame implements AutoCloseable {
   }
 
   /**
-   * Sort by expressions with explicit sort parameters.
+   * Sort by expressions with explicit sort parameters. See {@link #sort(SortExpr...)} for an
+   * example.
    *
    * <p>Consumes this DataFrame. The source must not be used after this call.
    *
@@ -167,6 +190,10 @@ public class DataFrame implements AutoCloseable {
    *
    * <p>Consumes this DataFrame. The source must not be used after this call.
    *
+   * {@snippet :
+   * DataFrame top10 = df.limit(0, 10);
+   * }
+   *
    * @param skip number of rows to skip
    * @param fetch maximum number of rows to return, or null for no limit
    * @return a new DataFrame with the limit applied
@@ -187,6 +214,15 @@ public class DataFrame implements AutoCloseable {
    * Aggregate with grouping.
    *
    * <p>Consumes this DataFrame. The source must not be used after this call.
+   *
+   * {@snippet :
+   * import static org.apache.arrow.datafusion.Functions.*;
+   *
+   * DataFrame result = df.aggregate(
+   *     List.of(col("department")),
+   *     List.of(avg(col("salary")).alias("avg_salary"),
+   *             count(col("id")).alias("count")));
+   * }
    *
    * @param groupExprs GROUP BY expressions (empty list for global aggregation)
    * @param aggrExprs aggregate expressions (e.g., {@code avg(col("salary"))})
@@ -209,6 +245,13 @@ public class DataFrame implements AutoCloseable {
    * <p>Consumes this DataFrame. The source must not be used after this call. The right DataFrame is
    * NOT consumed.
    *
+   * {@snippet :
+   * DataFrame orders = ctx.sql("SELECT * FROM orders");
+   * DataFrame customers = ctx.sql("SELECT * FROM customers");
+   * DataFrame joined = orders.join(customers, JoinType.INNER,
+   *     List.of("customer_id"), List.of("id"));
+   * }
+   *
    * @param right the right DataFrame
    * @param joinType the join type
    * @param leftCols left join column names
@@ -226,7 +269,8 @@ public class DataFrame implements AutoCloseable {
   }
 
   /**
-   * Join with another DataFrame on column names with an additional filter.
+   * Join with another DataFrame on column names with an additional filter. See {@link
+   * #join(DataFrame, JoinType, List, List)} for an example.
    *
    * <p>Consumes this DataFrame. The source must not be used after this call. The right DataFrame is
    * NOT consumed.
@@ -258,6 +302,13 @@ public class DataFrame implements AutoCloseable {
    * <p>Consumes this DataFrame. The source must not be used after this call. The right DataFrame is
    * NOT consumed.
    *
+   * {@snippet :
+   * import static org.apache.arrow.datafusion.Functions.*;
+   *
+   * DataFrame joined = left.joinOn(right, JoinType.INNER,
+   *     List.of(col("left_id").eq(col("right_id"))));
+   * }
+   *
    * @param right the right DataFrame
    * @param joinType the join type
    * @param onExprs join condition expressions
@@ -279,6 +330,10 @@ public class DataFrame implements AutoCloseable {
    *
    * <p>Consumes this DataFrame. The source must not be used after this call.
    *
+   * {@snippet :
+   * DataFrame combined = df1.union(df2);
+   * }
+   *
    * @param other the other DataFrame
    * @return a new DataFrame containing all rows from both
    * @see <a
@@ -295,6 +350,10 @@ public class DataFrame implements AutoCloseable {
    * Union distinct of this DataFrame and another.
    *
    * <p>Consumes this DataFrame. The source must not be used after this call.
+   *
+   * {@snippet :
+   * DataFrame combined = df1.unionDistinct(df2);
+   * }
    *
    * @param other the other DataFrame
    * @return a new DataFrame containing distinct rows from both
@@ -313,6 +372,10 @@ public class DataFrame implements AutoCloseable {
    *
    * <p>Consumes this DataFrame. The source must not be used after this call.
    *
+   * {@snippet :
+   * DataFrame common = df1.intersect(df2);
+   * }
+   *
    * @param other the other DataFrame
    * @return a new DataFrame containing rows present in both
    * @see <a
@@ -329,6 +392,10 @@ public class DataFrame implements AutoCloseable {
    * Set difference (EXCEPT) of this DataFrame and another.
    *
    * <p>Consumes this DataFrame. The source must not be used after this call.
+   *
+   * {@snippet :
+   * DataFrame onlyInFirst = df1.except(df2);
+   * }
    *
    * @param other the other DataFrame
    * @return a new DataFrame containing rows in this but not in other
@@ -349,6 +416,10 @@ public class DataFrame implements AutoCloseable {
    *
    * <p>Consumes this DataFrame. The source must not be used after this call.
    *
+   * {@snippet :
+   * DataFrame unique = df.distinct();
+   * }
+   *
    * @return a new DataFrame with duplicate rows removed
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.distinct">Rust
@@ -366,6 +437,12 @@ public class DataFrame implements AutoCloseable {
    * Add or replace a column. Equivalent to Rust's {@code df.with_column(name, expr)}.
    *
    * <p>Consumes this DataFrame. The source must not be used after this call.
+   *
+   * {@snippet :
+   * import static org.apache.arrow.datafusion.Functions.*;
+   *
+   * DataFrame withTotal = df.withColumn("total", col("price").mul(col("qty")));
+   * }
    *
    * @param name column name
    * @param expr expression to compute the column value
@@ -385,6 +462,10 @@ public class DataFrame implements AutoCloseable {
    *
    * <p>Consumes this DataFrame. The source must not be used after this call.
    *
+   * {@snippet :
+   * DataFrame renamed = df.withColumnRenamed("old_name", "new_name");
+   * }
+   *
    * @param oldName current column name
    * @param newName new column name
    * @return a new DataFrame with the renamed column
@@ -403,6 +484,10 @@ public class DataFrame implements AutoCloseable {
    *
    * <p>Consumes this DataFrame. The source must not be used after this call.
    *
+   * {@snippet :
+   * DataFrame trimmed = df.dropColumns("temp_col", "debug_col");
+   * }
+   *
    * @param columns column names to drop
    * @return a new DataFrame without the specified columns
    * @see <a
@@ -420,6 +505,10 @@ public class DataFrame implements AutoCloseable {
   /**
    * Write results to a Parquet file.
    *
+   * {@snippet :
+   * df.writeParquet("/output/results.parquet");
+   * }
+   *
    * @param path path to write the Parquet file to
    * @throws DataFusionError if writing fails
    * @see <a
@@ -431,7 +520,8 @@ public class DataFrame implements AutoCloseable {
   }
 
   /**
-   * Write results to a Parquet file with write options.
+   * Write results to a Parquet file with write options. See {@link #writeParquet(String)} for an
+   * example.
    *
    * @param path path to write the Parquet file to
    * @param options write options controlling output behavior
@@ -445,7 +535,8 @@ public class DataFrame implements AutoCloseable {
   }
 
   /**
-   * Write results to a Parquet file with write and format options.
+   * Write results to a Parquet file with write and format options. See {@link
+   * #writeParquet(String)} for an example.
    *
    * @param path path to write the Parquet file to
    * @param options write options controlling output behavior
@@ -463,6 +554,10 @@ public class DataFrame implements AutoCloseable {
   /**
    * Write results to a CSV file.
    *
+   * {@snippet :
+   * df.writeCsv("/output/results.csv");
+   * }
+   *
    * @param path path to write the CSV file to
    * @throws DataFusionError if writing fails
    * @see <a
@@ -474,7 +569,7 @@ public class DataFrame implements AutoCloseable {
   }
 
   /**
-   * Write results to a CSV file with write options.
+   * Write results to a CSV file with write options. See {@link #writeCsv(String)} for an example.
    *
    * @param path path to write the CSV file to
    * @param options write options controlling output behavior
@@ -488,7 +583,8 @@ public class DataFrame implements AutoCloseable {
   }
 
   /**
-   * Write results to a CSV file with write and format options.
+   * Write results to a CSV file with write and format options. See {@link #writeCsv(String)} for
+   * an example.
    *
    * @param path path to write the CSV file to
    * @param options write options controlling output behavior
@@ -505,6 +601,10 @@ public class DataFrame implements AutoCloseable {
   /**
    * Write results to a JSON file.
    *
+   * {@snippet :
+   * df.writeJson("/output/results.json");
+   * }
+   *
    * @param path path to write the JSON file to
    * @throws DataFusionError if writing fails
    * @see <a
@@ -516,7 +616,8 @@ public class DataFrame implements AutoCloseable {
   }
 
   /**
-   * Write results to a JSON file with write options.
+   * Write results to a JSON file with write options. See {@link #writeJson(String)} for an
+   * example.
    *
    * @param path path to write the JSON file to
    * @param options write options controlling output behavior
@@ -530,7 +631,8 @@ public class DataFrame implements AutoCloseable {
   }
 
   /**
-   * Write results to a JSON file with write and format options.
+   * Write results to a JSON file with write and format options. See {@link #writeJson(String)} for
+   * an example.
    *
    * @param path path to write the JSON file to
    * @param options write options controlling output behavior
@@ -548,6 +650,15 @@ public class DataFrame implements AutoCloseable {
 
   /**
    * Executes the DataFrame and returns a stream of record batches.
+   *
+   * {@snippet :
+   * try (SendableRecordBatchStream stream = df.executeStream(allocator)) {
+   *     while (stream.loadNextBatch()) {
+   *         VectorSchemaRoot root = stream.getVectorSchemaRoot();
+   *         // process batch
+   *     }
+   * }
+   * }
    *
    * @param allocator The buffer allocator for Arrow data
    * @return A SendableRecordBatchStream for iterating over results
@@ -567,6 +678,12 @@ public class DataFrame implements AutoCloseable {
    * returned stream lets the caller iterate batches as usual, but the data is already fully
    * materialized in memory.
    *
+   * {@snippet :
+   * try (SendableRecordBatchStream stream = df.collect(allocator)) {
+   *     // all data is already materialized in memory
+   * }
+   * }
+   *
    * @param allocator The buffer allocator for Arrow data
    * @return A SendableRecordBatchStream with all results materialized
    * @throws DataFusionError if execution fails
@@ -581,6 +698,10 @@ public class DataFrame implements AutoCloseable {
   /**
    * Execute and print results to stdout.
    *
+   * {@snippet :
+   * df.show();
+   * }
+   *
    * @throws DataFusionError if execution fails
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.show">Rust
@@ -592,6 +713,10 @@ public class DataFrame implements AutoCloseable {
 
   /**
    * Execute and return the row count.
+   *
+   * {@snippet :
+   * long numRows = df.count();
+   * }
    *
    * @return the number of rows
    * @throws DataFusionError if execution fails
@@ -605,6 +730,10 @@ public class DataFrame implements AutoCloseable {
 
   /**
    * Get the schema of this DataFrame.
+   *
+   * {@snippet :
+   * Schema schema = df.schema();
+   * }
    *
    * @return the Arrow schema
    * @throws DataFusionError if the schema cannot be retrieved

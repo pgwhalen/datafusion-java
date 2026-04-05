@@ -9,6 +9,13 @@ import org.apache.arrow.datafusion.logical_expr.Expr;
  * <p>Contains the filter expressions, column projection, and row limit that DataFusion passes to a
  * {@link TableProvider} when creating an execution plan.
  *
+ * <p>Example:
+ *
+ * <p>{@snippet : @Override public ExecutionPlan scanWithArgs(Session session, ScanArgs args) {
+ * List<Integer> proj = args.projection(); // columns to read, or null for all Long limit =
+ * args.limit(); // max rows, or null for no limit List<Expr> filters = args.filters(); // pushdown
+ * filters, or null return new MyExecutionPlan(schema(), proj, limit); } }
+ *
  * @param filters filter expressions for potential pushdown, or {@code null} if no filter
  *     information is available. An empty list means filters were evaluated but none apply.
  * @param projection column indices to include in the scan results, or {@code null} for all columns.

@@ -25,7 +25,7 @@ import java.util.Map;
  *
  * <p>Example:
  *
- * <pre>{@code
+ * {@snippet :
  * ConfigOptions config = ConfigOptions.builder()
  *     .execution(ExecutionOptions.builder()
  *         .batchSize(4096)
@@ -39,7 +39,7 @@ import java.util.Map;
  * try (SessionContext ctx = new SessionContext(config)) {
  *     DataFrame df = ctx.sql("SELECT 1");
  * }
- * }</pre>
+ * }
  *
  * @see <a
  *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/config/struct.ConfigOptions.html">Rust
@@ -88,6 +88,15 @@ public final class ConfigOptions {
   /**
    * Returns the default configuration (reads from environment variables).
    *
+   * <p>Example:
+   *
+   * {@snippet :
+   * ConfigOptions config = ConfigOptions.defaults();
+   * try (SessionContext ctx = new SessionContext(config)) {
+   *     DataFrame df = ctx.sql("SELECT 1");
+   * }
+   * }
+   *
    * @return the default configuration
    */
   public static ConfigOptions defaults() {
@@ -108,6 +117,17 @@ public final class ConfigOptions {
    *
    * <p>Keys should use DataFusion's dotted notation (e.g., {@code
    * "datafusion.execution.batch_size"}).
+   *
+   * <p>Example:
+   *
+   * {@snippet :
+   * ConfigOptions config = ConfigOptions.fromStringMap(Map.of(
+   *     "datafusion.execution.batch_size", "4096",
+   *     "datafusion.execution.target_partitions", "8"));
+   * try (SessionContext ctx = new SessionContext(config)) {
+   *     DataFrame df = ctx.sql("SELECT 1");
+   * }
+   * }
    *
    * @param options the configuration options map
    * @return a new ConfigOptions

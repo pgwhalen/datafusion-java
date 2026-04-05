@@ -10,7 +10,7 @@ import org.apache.arrow.datafusion.common.DataFusionError;
  *
  * <p>Example:
  *
- * <pre>{@code
+ * {@snippet :
  * // Create a runtime env with a 50MB memory limit
  * RuntimeEnv rt = RuntimeEnvBuilder.builder()
  *     .withMemoryLimit(50_000_000, 1.0)
@@ -18,7 +18,7 @@ import org.apache.arrow.datafusion.common.DataFusionError;
  *
  * // Create a default runtime env (no memory limit)
  * RuntimeEnv defaultRt = RuntimeEnvBuilder.builder().build();
- * }</pre>
+ * }
  *
  * @see <a
  *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/runtime_env/struct.RuntimeEnvBuilder.html">Rust
@@ -40,6 +40,16 @@ public final class RuntimeEnvBuilder {
    *
    * <p>This configures a {@code GreedyMemoryPool} that limits total memory usage. Queries that
    * exceed this limit will fail with an out-of-memory error.
+   *
+   * <p>Example:
+   *
+   * {@snippet :
+   * RuntimeEnv rt = RuntimeEnvBuilder.builder()
+   *     .withMemoryLimit(50_000_000, 1.0)
+   *     .build();
+   * SessionContext ctx = SessionContext.newWithConfigRt(
+   *     ConfigOptions.defaults(), rt);
+   * }
    *
    * @param maxMemory the maximum memory in bytes (must be positive)
    * @param memoryFraction the fraction of maxMemory to use (must be between 0.0 exclusive and 1.0

@@ -3,6 +3,16 @@ package org.apache.arrow.datafusion.logical_expr;
 /**
  * A sort expression, corresponding to DataFusion's {@code SortExpr}.
  *
+ * <p>Example:
+ *
+ * {@snippet :
+ * import static org.apache.arrow.datafusion.Functions.*;
+ *
+ * SortExpr ascending = new SortExpr(col("name"), true, false);
+ * SortExpr descNullsFirst = new SortExpr(col("score"), false, true);
+ * LogicalPlan sorted = builder.sort(List.of(ascending, descNullsFirst)).build();
+ * }
+ *
  * @param expr the expression to sort by
  * @param asc true for ascending order, false for descending
  * @param nullsFirst true to sort nulls before non-null values

@@ -11,21 +11,10 @@ import java.util.Optional;
  *
  * <p>Example implementation:
  *
- * <pre>{@code
- * public class MySchemaProvider implements SchemaProvider {
- *     private final Map<String, TableProvider> tables;
- *
- *     @Override
- *     public List<String> tableNames() {
- *         return new ArrayList<>(tables.keySet());
- *     }
- *
- *     @Override
- *     public TableProvider table(String name) {
- *         return tables.get(name);
- *     }
- * }
- * }</pre>
+ * <p>{@snippet : public class MySchemaProvider implements SchemaProvider { private final
+ * Map<String, TableProvider> tables; @Override public List<String> tableNames() { return new
+ * ArrayList<>(tables.keySet()); } @Override public Optional<TableProvider> table(String name) {
+ * return Optional.ofNullable(tables.get(name)); } } }
  *
  * @see <a
  *     href="https://docs.rs/datafusion-catalog/52.1.0/datafusion_catalog/trait.SchemaProvider.html">Rust
@@ -34,6 +23,11 @@ import java.util.Optional;
 public interface SchemaProvider {
   /**
    * Returns the names of all tables in this schema.
+   *
+   * <p>Example:
+   *
+   * <p>{@snippet : @Override public List<String> tableNames() { return new
+   * ArrayList<>(tables.keySet()); } }
    *
    * @return List of table names
    * @see <a
@@ -44,6 +38,11 @@ public interface SchemaProvider {
 
   /**
    * Returns the table provider for the given table name.
+   *
+   * <p>Example:
+   *
+   * <p>{@snippet : @Override public Optional<TableProvider> table(String name) { return
+   * Optional.ofNullable(tables.get(name)); } }
    *
    * @param name The table name
    * @return The table provider, or null if the table doesn't exist
@@ -59,6 +58,11 @@ public interface SchemaProvider {
    * <p>If a table of the same name was already registered, returns the previously registered table.
    *
    * <p>Default implementation throws {@link UnsupportedOperationException}.
+   *
+   * <p>Example:
+   *
+   * <p>{@snippet : @Override public Optional<TableProvider> registerTable(String name,
+   * TableProvider table) { return Optional.ofNullable(tables.put(name, table)); } }
    *
    * @param name The table name
    * @param table The table provider to register
@@ -80,6 +84,11 @@ public interface SchemaProvider {
    *
    * <p>Default implementation throws {@link UnsupportedOperationException}.
    *
+   * <p>Example:
+   *
+   * <p>{@snippet : @Override public Optional<TableProvider> deregisterTable(String name) { return
+   * Optional.ofNullable(tables.remove(name)); } }
+   *
    * @param name The table name
    * @return The previously registered table, if any
    * @throws UnsupportedOperationException if this schema does not support deregistering tables
@@ -96,6 +105,10 @@ public interface SchemaProvider {
    * Checks if a table exists in this schema.
    *
    * <p>Default implementation checks if {@link #table(String)} returns non-null.
+   *
+   * <p>Example:
+   *
+   * <p>{@snippet : boolean exists = schemaProvider.tableExists("my_table"); }
    *
    * @param name The table name
    * @return true if the table exists

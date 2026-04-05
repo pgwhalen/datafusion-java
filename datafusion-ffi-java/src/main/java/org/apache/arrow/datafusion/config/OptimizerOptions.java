@@ -7,6 +7,12 @@ import java.util.Map;
  *
  * <p>All fields are nullable. A null value means the DataFusion default is used.
  *
+ * <p>Example:
+ *
+ * <p>{@snippet : OptimizerOptions optimizer = OptimizerOptions.builder() .preferHashJoin(true)
+ * .maxPasses(5) .repartitionJoins(true) .build(); ConfigOptions config = ConfigOptions.builder()
+ * .optimizer(optimizer) .build(); }
+ *
  * @param enableDistinctAggregationSoftLimit Whether to enable the distinct aggregation soft limit
  *     optimization
  * @param enableRoundRobinRepartition Whether to use round-robin repartitioning (default true)

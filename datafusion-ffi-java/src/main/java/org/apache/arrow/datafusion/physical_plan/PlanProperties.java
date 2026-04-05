@@ -3,6 +3,12 @@ package org.apache.arrow.datafusion.physical_plan;
 /**
  * Properties of an execution plan that describe its output characteristics.
  *
+ * <p>Example:
+ *
+ * <p>{@snippet : PlanProperties props = new PlanProperties(4, EmissionType.INCREMENTAL,
+ * Boundedness.BOUNDED); // or use defaults: 1 partition, incremental, bounded PlanProperties
+ * defaults = new PlanProperties(); }
+ *
  * @param outputPartitioning The number of output partitions
  * @param emissionType How the plan produces output
  * @param boundedness Whether the plan's input data is finite or infinite

@@ -10,6 +10,11 @@ import org.apache.arrow.datafusion.execution.SessionState;
  * data structure with no runtime dependency, so it can outlive both the SessionState and
  * SessionContext that created it.
  *
+ * <p>Example:
+ *
+ * <p>{@snippet : try (SessionState state = ctx.sessionState()) { LogicalPlan plan =
+ * state.createLogicalPlan("SELECT * FROM t"); DataFrame df = ctx.executeLogicalPlan(plan); } }
+ *
  * @see <a
  *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.LogicalPlan.html">Rust
  *     DataFusion: LogicalPlan</a>

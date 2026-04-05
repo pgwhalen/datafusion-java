@@ -15,7 +15,7 @@ import org.apache.arrow.vector.types.pojo.Field;
  *
  * <p>Example usage:
  *
- * <pre>{@code
+ * {@snippet :
  * import static org.apache.arrow.datafusion.Functions.*;
  *
  * ScalarUDF pow = createUdf("pow", Volatility.IMMUTABLE,
@@ -34,7 +34,7 @@ import org.apache.arrow.vector.types.pojo.Field;
  *         return result;
  *     });
  * ctx.registerUdf(pow, allocator);
- * }</pre>
+ * }
  *
  * @see <a
  *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/struct.ScalarUDF.html">Rust
@@ -45,6 +45,15 @@ public interface ScalarUDF {
   /**
    * Returns the name of this function as it will appear in SQL.
    *
+   * <p>Example:
+   *
+   * {@snippet :
+   * @Override
+   * public String name() {
+   *     return "my_function";
+   * }
+   * }
+   *
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/struct.ScalarUDF.html#method.name">Rust
    *     DataFusion: ScalarUDF::name</a>
@@ -54,6 +63,15 @@ public interface ScalarUDF {
   /**
    * Returns the signature of this function, including its volatility.
    *
+   * <p>Example:
+   *
+   * {@snippet :
+   * @Override
+   * public Signature signature() {
+   *     return new Signature(Volatility.IMMUTABLE);
+   * }
+   * }
+   *
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/struct.ScalarUDF.html#method.signature">Rust
    *     DataFusion: ScalarUDF::signature</a>
@@ -62,6 +80,15 @@ public interface ScalarUDF {
 
   /**
    * Determines the return field (name + type) given the argument fields.
+   *
+   * <p>Example:
+   *
+   * {@snippet :
+   * @Override
+   * public Field returnField(List<Field> argFields) {
+   *     return Field.nullable("result", new ArrowType.Int(64, true));
+   * }
+   * }
    *
    * @param argFields the fields of the input arguments
    * @return the field describing the return type
@@ -73,6 +100,23 @@ public interface ScalarUDF {
 
   /**
    * Invokes the function on the given input vectors.
+   *
+   * <p>Example:
+   *
+   * {@snippet :
+   * @Override
+   * public FieldVector invoke(List<FieldVector> args, List<Field> argFields,
+   *         int numRows, Field returnField, BufferAllocator allocator) {
+   *     BigIntVector input = (BigIntVector) args.get(0);
+   *     BigIntVector result = new BigIntVector("result", allocator);
+   *     result.allocateNew(numRows);
+   *     for (int i = 0; i < numRows; i++) {
+   *         result.set(i, input.get(i) * 2);
+   *     }
+   *     result.setValueCount(numRows);
+   *     return result;
+   * }
+   * }
    *
    * @param args the input vectors
    * @param argFields the fields describing each input argument
@@ -94,6 +138,15 @@ public interface ScalarUDF {
   /**
    * Performs type coercion on the input argument fields. The default implementation returns the
    * argument fields unchanged.
+   *
+   * <p>Example:
+   *
+   * {@snippet :
+   * @Override
+   * public List<Field> coerceTypes(List<Field> argFields) {
+   *     return List.of(Field.nullable("arg0", new ArrowType.Int(64, true)));
+   * }
+   * }
    *
    * @param argFields the fields of the input arguments
    * @return the coerced fields

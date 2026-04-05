@@ -16,6 +16,13 @@ import org.apache.arrow.vector.types.pojo.Schema;
  * filters. It is NOT {@link AutoCloseable} because it does not own the underlying memory. It is
  * only valid during the scan callback.
  *
+ * <p>Example:
+ *
+ * <p>{@snippet : @Override public ExecutionPlan scanWithArgs(Session session, ScanArgs args) { if
+ * (args.filters() != null && !args.filters().isEmpty()) { PhysicalExpr expr =
+ * session.createPhysicalExpr(schema(), args.filters()); // use expr for filter pushdown } return
+ * new MyExecutionPlan(schema()); } }
+ *
  * @see <a href="https://docs.rs/datafusion/52.1.0/datafusion/catalog/trait.Session.html">Rust
  *     DataFusion: Session</a>
  */
@@ -33,6 +40,11 @@ public class Session {
    * <p>This conjoins all filter expressions with AND and compiles them into a physical expression
    * using the provided table schema. The returned {@link PhysicalExpr} is owned and must be closed
    * when no longer needed.
+   *
+   * <p>Example:
+   *
+   * <p>{@snippet : PhysicalExpr expr = session.createPhysicalExpr(tableSchema, args.filters()); //
+   * use expr, then close when done expr.close(); }
    *
    * @param tableSchema the schema of the table being scanned
    * @param filters the filter expressions to compile (borrowed, from the scan callback)
