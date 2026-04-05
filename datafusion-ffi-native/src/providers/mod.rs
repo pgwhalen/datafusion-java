@@ -100,10 +100,9 @@ pub(crate) type Upcall<'a> = dyn FnOnce(/*error_addr:*/ usize, /*error_cap:*/ us
 /// Creates an internal error buffer, calls `f` with `(error_addr, error_cap)`,
 /// and reconstructs `Box<T>` on success or returns a `DataFusionError` on failure.
 ///
-/// # Safety
 /// The pointer returned by `f` must be a valid `Box<T>` pointer created
 /// by `Box::into_raw` on the Java side (via `Df*.createRaw()`).
-pub(crate) unsafe fn do_returning_upcall<'a, T>(
+pub(crate) fn do_returning_upcall<'a, T>(
     context: &str,
     f: Box<Upcall<'a>>,
 ) -> Result<Box<T>, DataFusionError> {
@@ -114,7 +113,65 @@ pub(crate) unsafe fn do_returning_upcall<'a, T>(
             format!("{}: {}", context, err.read()).into(),
         ));
     }
-    Ok(Box::from_raw(ptr as *mut T))
+    Ok(unsafe { Box::from_raw(ptr as *mut T) })
+}
+
+/// Invoke a Java upcall that returns a raw pointer which may validly be null.
+/// Null with a populated error buffer means failure; null with an empty error
+/// buffer means `Ok(None)`; non-null means `Ok(Some(Box<T>))`.
+///
+/// The non-null pointer returned by `f` must be a valid `Box<T>` pointer created
+/// by `Box::into_raw` on the Java side (via `Df*.createRaw()`).
+pub(crate) fn do_option_returning_upcall<'a, T>(
+    context: &str,
+    f: Box<Upcall<'a>>,
+) -> Result<Option<Box<T>>, DataFusionError> {
+    let err = ErrorBuffer::new();
+    let ptr = f(err.addr(), err.cap());
+    if ptr == 0 {
+        let msg = err.read();
+        if !msg.is_empty() {
+            return Err(DataFusionError::External(
+                format!("{}: {}", context, msg).into(),
+            ));
+        }
+        return Ok(None);
+    }
+    Ok(Some(unsafe { Box::from_raw(ptr as *mut T) }))
+}
+
+/// Invoke a Java upcall that returns 0 on success, non-zero on error.
+/// Creates an internal error buffer, calls `f` with `(error_addr, error_cap)`,
+/// and returns `Ok(())` on success or a `DataFusionError` on failure.
+pub(crate) fn do_upcall(
+    context: &str,
+    f: impl FnOnce(/*error_addr:*/ usize, /*error_cap:*/ usize) -> i32,
+) -> Result<(), DataFusionError> {
+    let err = ErrorBuffer::new();
+    let result = f(err.addr(), err.cap());
+    if result != 0 {
+        return Err(DataFusionError::External(
+            format!("{}: {}", context, err.read()).into(),
+        ));
+    }
+    Ok(())
+}
+
+/// Invoke a Java upcall that returns a non-negative count on success, or negative on error.
+/// Creates an internal error buffer, calls `f` with `(error_addr, error_cap)`,
+/// and returns the count as `usize` on success or a `DataFusionError` on failure.
+pub(crate) fn do_counted_upcall(
+    context: &str,
+    f: impl FnOnce(/*error_addr:*/ usize, /*error_cap:*/ usize) -> i32,
+) -> Result<usize, DataFusionError> {
+    let err = ErrorBuffer::new();
+    let result = f(err.addr(), err.cap());
+    if result < 0 {
+        return Err(DataFusionError::External(
+            format!("{}: {}", context, err.read()).into(),
+        ));
+    }
+    Ok(result as usize)
 }
 
 /// Read an error message from the error buffer. Returns empty string if addr is 0.

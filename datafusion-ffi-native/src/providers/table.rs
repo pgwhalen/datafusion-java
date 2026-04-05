@@ -1,11 +1,10 @@
 use crate::bridge::ffi::{DfExecutionPlan, DfTableTrait};
 use crate::bridge::{ffi::DfLazyRecordBatchStream, ffi::DfStringArray, LazyStreamState};
-use super::{do_returning_upcall, ErrorBuffer, ExecutionPlanBridge, TableProviderBridge};
+use super::{do_counted_upcall, do_returning_upcall, ExecutionPlanBridge, TableProviderBridge};
 use arrow::datatypes::Schema as ArrowSchema;
 use arrow::ffi::FFI_ArrowSchema;
 use async_trait::async_trait;
 use datafusion::catalog::TableProvider;
-use datafusion::common::DataFusionError;
 use datafusion::datasource::TableType;
 use datafusion::logical_expr::{dml::InsertOp, TableProviderFilterPushDown};
 use datafusion::physical_plan::ExecutionPlan;
@@ -30,8 +29,8 @@ fn encode_exprs(exprs: &[Expr]) -> datafusion::error::Result<Vec<u8>> {
 }
 
 /// Convert a boxed `DfExecutionPlan` into an `Arc<dyn ExecutionPlan>`.
-fn reconstruct_plan_from(boxed: Box<DfExecutionPlan>) -> Arc<dyn ExecutionPlan> {
-    let bridge: Box<dyn ExecutionPlanBridge> = boxed.0;
+fn reconstruct_plan_from(plan: Box<DfExecutionPlan>) -> Arc<dyn ExecutionPlan> {
+    let bridge: Box<dyn ExecutionPlanBridge> = plan.0;
     let arc: Arc<dyn ExecutionPlanBridge> = Arc::from(bridge);
     arc as Arc<dyn ExecutionPlan>
 }
@@ -119,24 +118,21 @@ impl<T: DfTableTrait + 'static> TableProvider for ForeignDfTable<T> {
             None => -1,
         };
 
-        let boxed = unsafe {
-            do_returning_upcall::<DfExecutionPlan>(
-                "Java scan callback failed",
-                Box::new(|ea, ec| {
-                    self.inner.scan(
-                        session_addr,
-                        filter_bytes.as_ptr() as usize,
-                        filter_bytes.len(),
-                        proj_u32.as_ptr() as usize,
-                        proj_u32.len(),
-                        limit_val,
-                        ea,
-                        ec,
-                    )
-                }),
-            )
-        }?;
-        Ok(reconstruct_plan_from(boxed))
+        Ok(reconstruct_plan_from(do_returning_upcall::<DfExecutionPlan>(
+            "Java scan callback failed",
+            Box::new(|ea, ec| {
+                self.inner.scan(
+                    session_addr,
+                    filter_bytes.as_ptr() as usize,
+                    filter_bytes.len(),
+                    proj_u32.as_ptr() as usize,
+                    proj_u32.len(),
+                    limit_val,
+                    ea,
+                    ec,
+                )
+            }),
+        )?))
     }
 
     fn supports_filters_pushdown(
@@ -155,25 +151,16 @@ impl<T: DfTableTrait + 'static> TableProvider for ForeignDfTable<T> {
         let mut result_buf = vec![0i32; result_cap];
         let result_addr = result_buf.as_mut_ptr() as usize;
 
-        let err = ErrorBuffer::new();
-
-        let count = self.inner.supports_filters_pushdown(
-            filter_bytes.as_ptr() as usize,
-            filter_bytes.len(),
-            result_addr,
-            result_cap,
-            err.addr(),
-            err.cap(),
-        );
-
-        if count < 0 {
-            let msg = err.read();
-            return Err(DataFusionError::External(
-                format!("Java supports_filters_pushdown failed: {}", msg).into(),
-            ));
-        }
-
-        let count = count as usize;
+        let count = do_counted_upcall("Java supports_filters_pushdown failed", |ea, ec| {
+            self.inner.supports_filters_pushdown(
+                filter_bytes.as_ptr() as usize,
+                filter_bytes.len(),
+                result_addr,
+                result_cap,
+                ea,
+                ec,
+            )
+        })?;
         Ok(result_buf[..count]
             .iter()
             .map(|&d| match d {
@@ -215,15 +202,12 @@ impl<T: DfTableTrait + 'static> TableProvider for ForeignDfTable<T> {
             InsertOp::Replace => 2,
         };
 
-        let boxed = unsafe {
-            do_returning_upcall::<DfExecutionPlan>(
-                "Java insert_into callback failed",
-                Box::new(|ea, ec| {
-                    self.inner.insert_into(session_addr, stream_ptr, insert_op_i32, ea, ec)
-                }),
-            )
-        }?;
-        Ok(reconstruct_plan_from(boxed))
+        Ok(reconstruct_plan_from(do_returning_upcall::<DfExecutionPlan>(
+            "Java insert_into callback failed",
+            Box::new(|ea, ec| {
+                self.inner.insert_into(session_addr, stream_ptr, insert_op_i32, ea, ec)
+            }),
+        )?))
     }
 
     async fn delete_from(
@@ -236,21 +220,18 @@ impl<T: DfTableTrait + 'static> TableProvider for ForeignDfTable<T> {
 
         let filter_bytes = encode_exprs(&filters)?;
 
-        let boxed = unsafe {
-            do_returning_upcall::<DfExecutionPlan>(
-                "Java delete_from callback failed",
-                Box::new(|ea, ec| {
-                    self.inner.delete_from(
-                        session_addr,
-                        filter_bytes.as_ptr() as usize,
-                        filter_bytes.len(),
-                        ea,
-                        ec,
-                    )
-                }),
-            )
-        }?;
-        Ok(reconstruct_plan_from(boxed))
+        Ok(reconstruct_plan_from(do_returning_upcall::<DfExecutionPlan>(
+            "Java delete_from callback failed",
+            Box::new(|ea, ec| {
+                self.inner.delete_from(
+                    session_addr,
+                    filter_bytes.as_ptr() as usize,
+                    filter_bytes.len(),
+                    ea,
+                    ec,
+                )
+            }),
+        )?))
     }
 
     async fn update(
@@ -273,23 +254,20 @@ impl<T: DfTableTrait + 'static> TableProvider for ForeignDfTable<T> {
         let assign_bytes = encode_exprs(&assign_exprs)?;
         let filter_bytes = encode_exprs(&filters)?;
 
-        let boxed = unsafe {
-            do_returning_upcall::<DfExecutionPlan>(
-                "Java update callback failed",
-                Box::new(|ea, ec| {
-                    self.inner.update(
-                        session_addr,
-                        col_names_ptr,
-                        assign_bytes.as_ptr() as usize,
-                        assign_bytes.len(),
-                        filter_bytes.as_ptr() as usize,
-                        filter_bytes.len(),
-                        ea,
-                        ec,
-                    )
-                }),
-            )
-        }?;
-        Ok(reconstruct_plan_from(boxed))
+        Ok(reconstruct_plan_from(do_returning_upcall::<DfExecutionPlan>(
+            "Java update callback failed",
+            Box::new(|ea, ec| {
+                self.inner.update(
+                    session_addr,
+                    col_names_ptr,
+                    assign_bytes.as_ptr() as usize,
+                    assign_bytes.len(),
+                    filter_bytes.as_ptr() as usize,
+                    filter_bytes.len(),
+                    ea,
+                    ec,
+                )
+            }),
+        )?))
     }
 }

@@ -112,13 +112,11 @@ impl<T: DfExecutionPlanTrait + 'static> ExecutionPlan for ForeignDfPlan<T> {
         partition: usize,
         _context: Arc<datafusion::execution::TaskContext>,
     ) -> datafusion::error::Result<SendableRecordBatchStream> {
-        let boxed = unsafe {
-            do_returning_upcall::<DfRecordBatchReader>(
-                "Java execute callback failed",
-                Box::new(|ea, ec| self.inner.execute(partition as i32, ea, ec)),
-            )
-        }?;
-        let reader_bridge = boxed.0;
+        let reader = do_returning_upcall::<DfRecordBatchReader>(
+            "Java execute callback failed",
+            Box::new(|ea, ec| self.inner.execute(partition as i32, ea, ec)),
+        )?;
+        let reader_bridge = reader.0;
         let reader_schema = reader_bridge.schema();
 
         // Create a stream from the reader

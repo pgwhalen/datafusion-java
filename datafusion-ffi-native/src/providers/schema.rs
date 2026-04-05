@@ -1,8 +1,7 @@
 use crate::bridge::ffi::{DfSchemaTrait, DfStringArray, DfTableProvider};
-use super::{ErrorBuffer, SchemaProviderBridge, TableProviderBridge};
+use super::{do_option_returning_upcall, SchemaProviderBridge, TableProviderBridge};
 use async_trait::async_trait;
 use datafusion::catalog::{SchemaProvider, TableProvider};
-use datafusion::common::DataFusionError;
 use std::any::Any;
 use std::fmt;
 use std::sync::Arc;
@@ -48,23 +47,15 @@ impl<T: DfSchemaTrait + 'static> SchemaProvider for ForeignDfSchema<T> {
     async fn table(&self, name: &str) -> datafusion::error::Result<Option<Arc<dyn TableProvider>>> {
         let name_bytes = name.as_bytes();
 
-        let err = ErrorBuffer::new();
+        let table = do_option_returning_upcall::<DfTableProvider>(
+            "Java SchemaProvider.table() failed",
+            Box::new(|ea, ec| self.inner.table(name_bytes.as_ptr() as usize, name_bytes.len(), ea, ec)),
+        )?;
 
-        let ptr = self.inner.table(name_bytes.as_ptr() as usize, name_bytes.len(), err.addr(), err.cap());
-        if ptr == 0 {
-            // Check if Java reported an error
-            let msg = err.read();
-            if !msg.is_empty() {
-                return Err(DataFusionError::External(
-                    format!("Java SchemaProvider.table() failed: {}", msg).into(),
-                ));
-            }
-            return Ok(None);
-        }
-        // Reconstruct the DfTableProvider from the raw pointer
-        let boxed = unsafe { Box::from_raw(ptr as *mut DfTableProvider) };
-        let bridge: Box<dyn TableProviderBridge> = boxed.0;
-        let arc: Arc<dyn TableProviderBridge> = Arc::from(bridge);
-        Ok(Some(arc as Arc<dyn TableProvider>))
+        Ok(table.map(|t| {
+            let bridge: Box<dyn TableProviderBridge> = t.0;
+            let arc: Arc<dyn TableProviderBridge> = Arc::from(bridge);
+            arc as Arc<dyn TableProvider>
+        }))
     }
 }

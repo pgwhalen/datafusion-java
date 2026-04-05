@@ -179,17 +179,53 @@ Most Rust→Java upcalls follow the same pattern: allocate an error buffer, call
 ```rust
 use super::do_returning_upcall;
 
-let boxed = unsafe {
-    do_returning_upcall::<DfExecutionPlan>(
-        "Java scan callback failed",
-        Box::new(|ea, ec| self.inner.scan(session_addr, ..., ea, ec)),
-    )
-}?;
+let boxed = do_returning_upcall::<DfExecutionPlan>(
+    "Java scan callback failed",
+    Box::new(|ea, ec| self.inner.scan(session_addr, ..., ea, ec)),
+)?;
 ```
 
-The `Upcall` type alias documents the closure signature: `(error_addr: usize, error_cap: usize) -> usize`. The function creates the `ErrorBuffer` internally, checks for null, and returns `Result<Box<T>, DataFusionError>`.
+The `Upcall` type alias documents the closure signature: `(error_addr: usize, error_cap: usize) -> usize`. The function creates the `ErrorBuffer` internally, checks for null, and returns `Result<Box<T>, DataFusionError>`. The `unsafe` for `Box::from_raw` is contained within the function since the null check is the only meaningful validation.
 
-For upcalls with non-standard error handling (e.g., `schema.rs` where ptr==0 can mean `Ok(None)`), use `ErrorBuffer` directly:
+#### `do_upcall` (`providers/mod.rs`)
+
+For upcalls that return 0 on success, non-zero on error (no pointer reconstruction needed). Returns `Result<(), DataFusionError>`:
+
+```rust
+use super::do_upcall;
+
+do_upcall("Java return_field failed", |ea, ec| {
+    self.inner.return_field(arg1, arg2, ea, ec)
+})?;
+```
+
+#### `do_counted_upcall` (`providers/mod.rs`)
+
+For upcalls that return a non-negative count on success, or negative on error. Returns `Result<usize, DataFusionError>`:
+
+```rust
+use super::do_counted_upcall;
+
+let count = do_counted_upcall("Java coerce_types failed", |ea, ec| {
+    self.inner.coerce_types(arg1, arg2, result_addr, result_cap, ea, ec)
+})?;
+```
+
+#### `do_option_returning_upcall` (`providers/mod.rs`)
+
+For upcalls that return a raw pointer where null is valid (means "not found"), and only a populated error buffer indicates failure. Returns `Result<Option<Box<T>>, DataFusionError>`:
+
+```rust
+use super::do_option_returning_upcall;
+
+let boxed = do_option_returning_upcall::<DfTableProvider>(
+    "Java SchemaProvider.table() failed",
+    Box::new(|ea, ec| self.inner.table(name_addr, name_len, ea, ec)),
+)?;
+// boxed is Option<Box<DfTableProvider>>
+```
+
+For upcalls with non-standard error handling (e.g., `stream.rs` with tri-state returns), use `ErrorBuffer` directly:
 
 ```rust
 use super::ErrorBuffer;

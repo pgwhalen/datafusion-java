@@ -58,23 +58,21 @@ impl<T: DfFileSourceTrait + 'static> FileSourceBridge for ForeignDfFileSource<T>
             None => -1,
         };
 
-        let boxed = unsafe {
-            do_returning_upcall::<DfFileOpener>(
-                "Java create_file_opener failed",
-                Box::new(|ea, ec| {
-                    self.inner.create_file_opener(
-                        schema_addr,
-                        proj_u32.as_ptr() as usize,
-                        proj_u32.len(),
-                        limit_val,
-                        batch_size_val,
-                        ea,
-                        ec,
-                    )
-                }),
-            )
-        }?;
-        Ok(boxed.0)
+        Ok(do_returning_upcall::<DfFileOpener>(
+            "Java create_file_opener failed",
+            Box::new(|ea, ec| {
+                self.inner.create_file_opener(
+                    schema_addr,
+                    proj_u32.as_ptr() as usize,
+                    proj_u32.len(),
+                    limit_val,
+                    batch_size_val,
+                    ea,
+                    ec,
+                )
+            }),
+        )?
+        .0)
     }
 
 }
