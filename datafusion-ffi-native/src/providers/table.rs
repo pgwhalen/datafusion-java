@@ -1,8 +1,7 @@
 use crate::bridge::ffi::{DfExecutionPlan, DfTableTrait};
 use crate::bridge::{ffi::DfLazyRecordBatchStream, ffi::DfStringArray, LazyStreamState};
-use super::{do_counted_upcall, do_returning_upcall, ExecutionPlanBridge, TableProviderBridge};
+use super::{do_counted_upcall, do_returning_upcall, import_schema, ExecutionPlanBridge, TableProviderBridge};
 use arrow::datatypes::Schema as ArrowSchema;
-use arrow::ffi::FFI_ArrowSchema;
 use async_trait::async_trait;
 use datafusion::catalog::TableProvider;
 use datafusion::datasource::TableType;
@@ -38,22 +37,8 @@ pub struct ForeignDfTable<T: DfTableTrait> {
 
 impl<T: DfTableTrait> ForeignDfTable<T> {
     pub fn new(inner: T) -> Self {
-        // Import the schema from the address provided by Java.
-        // Use a reference (not ptr::read) so Rust doesn't take ownership of the FFI struct
-        // and Java can safely close its ArrowSchema after this call.
-        let schema_addr = inner.schema_address();
-        let schema = if schema_addr != 0 {
-            unsafe {
-                let ffi_schema = &*(schema_addr as *const FFI_ArrowSchema);
-                ArrowSchema::try_from(ffi_schema).unwrap_or_else(|_| ArrowSchema::empty())
-            }
-        } else {
-            ArrowSchema::empty()
-        };
-        Self {
-            inner,
-            schema: Arc::new(schema),
-        }
+        let schema = import_schema(inner.schema_address());
+        Self { inner, schema }
     }
 }
 

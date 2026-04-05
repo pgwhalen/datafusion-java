@@ -24,9 +24,23 @@ pub use table::*;
 pub use udf::*;
 
 use arrow::datatypes::Schema as ArrowSchema;
+use arrow::ffi::FFI_ArrowSchema;
 use arrow::record_batch::RecordBatch;
 use datafusion::common::DataFusionError;
 use std::sync::Arc;
+
+/// Import an Arrow schema from an FFI address.
+/// Returns an empty schema if `addr` is 0 or conversion fails.
+pub(crate) fn import_schema(addr: usize) -> Arc<ArrowSchema> {
+    if addr != 0 {
+        unsafe {
+            let ffi_schema = &*(addr as *const FFI_ArrowSchema);
+            Arc::new(ArrowSchema::try_from(ffi_schema).unwrap_or_else(|_| ArrowSchema::empty()))
+        }
+    } else {
+        Arc::new(ArrowSchema::empty())
+    }
+}
 
 // ── Bridge traits (marker traits for type erasure) ──
 

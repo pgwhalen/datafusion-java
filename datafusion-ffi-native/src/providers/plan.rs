@@ -1,7 +1,5 @@
 use crate::bridge::ffi::{DfExecutionPlanTrait, DfRecordBatchReader};
-use super::{do_returning_upcall, ExecutionPlanBridge};
-use arrow::datatypes::Schema as ArrowSchema;
-use arrow::ffi::FFI_ArrowSchema;
+use super::{do_returning_upcall, import_schema, ExecutionPlanBridge};
 use datafusion::execution::SendableRecordBatchStream;
 use datafusion::physical_plan::execution_plan::{Boundedness, EmissionType};
 use datafusion::physical_plan::stream::RecordBatchStreamAdapter;
@@ -23,18 +21,7 @@ pub struct ForeignDfPlan<T: DfExecutionPlanTrait> {
 
 impl<T: DfExecutionPlanTrait> ForeignDfPlan<T> {
     pub fn new(inner: T) -> Self {
-        // Import the schema via reference (Java owns the FFI struct and closes it after createRaw)
-        let schema_addr = inner.schema_address();
-        let schema = if schema_addr != 0 {
-            unsafe {
-                let ffi_schema = &*(schema_addr as *const FFI_ArrowSchema);
-                Arc::new(
-                    ArrowSchema::try_from(ffi_schema).unwrap_or_else(|_| ArrowSchema::empty()),
-                )
-            }
-        } else {
-            Arc::new(ArrowSchema::empty())
-        };
+        let schema = import_schema(inner.schema_address());
 
         // Build properties from trait callbacks
         let partitions = inner.output_partitioning();

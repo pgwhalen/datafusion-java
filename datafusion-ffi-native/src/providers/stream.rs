@@ -1,5 +1,5 @@
 use crate::bridge::ffi::DfRecordBatchReaderTrait;
-use super::{ErrorBuffer, RecordBatchReaderBridge};
+use super::{import_schema, ErrorBuffer, RecordBatchReaderBridge};
 use arrow::datatypes::Schema as ArrowSchema;
 use arrow::ffi::{from_ffi, FFI_ArrowArray, FFI_ArrowSchema};
 use arrow::record_batch::RecordBatch;
@@ -16,18 +16,7 @@ pub struct ForeignDfStream<T: DfRecordBatchReaderTrait> {
 
 impl<T: DfRecordBatchReaderTrait> ForeignDfStream<T> {
     pub fn new(inner: T) -> Self {
-        // Import the schema via reference (Java owns the FFI struct and closes it after createRaw)
-        let schema_addr = inner.schema_address();
-        let schema = if schema_addr != 0 {
-            unsafe {
-                let ffi_schema = &*(schema_addr as *const FFI_ArrowSchema);
-                Arc::new(
-                    ArrowSchema::try_from(ffi_schema).unwrap_or_else(|_| ArrowSchema::empty()),
-                )
-            }
-        } else {
-            Arc::new(ArrowSchema::empty())
-        };
+        let schema = import_schema(inner.schema_address());
         Self { inner, schema }
     }
 }
