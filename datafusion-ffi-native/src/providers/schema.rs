@@ -53,8 +53,7 @@ impl<T: DfSchemaTrait + 'static> SchemaProvider for ForeignDfSchema<T> {
         )?;
 
         Ok(table.map(|t| {
-            let bridge: Box<dyn TableProviderBridge> = t.0;
-            let arc: Arc<dyn TableProviderBridge> = Arc::from(bridge);
+            let arc: Arc<dyn TableProviderBridge> = Arc::from(t.0);
             arc as Arc<dyn TableProvider>
         }))
     }

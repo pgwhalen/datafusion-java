@@ -28,13 +28,6 @@ fn encode_exprs(exprs: &[Expr]) -> datafusion::error::Result<Vec<u8>> {
     Ok(proto_list.encode_to_vec())
 }
 
-/// Convert a boxed `DfExecutionPlan` into an `Arc<dyn ExecutionPlan>`.
-fn reconstruct_plan_from(plan: Box<DfExecutionPlan>) -> Arc<dyn ExecutionPlan> {
-    let bridge: Box<dyn ExecutionPlanBridge> = plan.0;
-    let arc: Arc<dyn ExecutionPlanBridge> = Arc::from(bridge);
-    arc as Arc<dyn ExecutionPlan>
-}
-
 // ── ForeignDfTable ──
 
 pub struct ForeignDfTable<T: DfTableTrait> {
@@ -118,7 +111,7 @@ impl<T: DfTableTrait + 'static> TableProvider for ForeignDfTable<T> {
             None => -1,
         };
 
-        Ok(reconstruct_plan_from(do_returning_upcall::<DfExecutionPlan>(
+        let plan = do_returning_upcall::<DfExecutionPlan>(
             "Java scan callback failed",
             Box::new(|ea, ec| {
                 self.inner.scan(
@@ -132,7 +125,9 @@ impl<T: DfTableTrait + 'static> TableProvider for ForeignDfTable<T> {
                     ec,
                 )
             }),
-        )?))
+        )?;
+        let arc: Arc<dyn ExecutionPlanBridge> = Arc::from(plan.0);
+        Ok(arc as Arc<dyn ExecutionPlan>)
     }
 
     fn supports_filters_pushdown(
@@ -202,12 +197,14 @@ impl<T: DfTableTrait + 'static> TableProvider for ForeignDfTable<T> {
             InsertOp::Replace => 2,
         };
 
-        Ok(reconstruct_plan_from(do_returning_upcall::<DfExecutionPlan>(
+        let plan = do_returning_upcall::<DfExecutionPlan>(
             "Java insert_into callback failed",
             Box::new(|ea, ec| {
                 self.inner.insert_into(session_addr, stream_ptr, insert_op_i32, ea, ec)
             }),
-        )?))
+        )?;
+        let arc: Arc<dyn ExecutionPlanBridge> = Arc::from(plan.0);
+        Ok(arc as Arc<dyn ExecutionPlan>)
     }
 
     async fn delete_from(
@@ -220,7 +217,7 @@ impl<T: DfTableTrait + 'static> TableProvider for ForeignDfTable<T> {
 
         let filter_bytes = encode_exprs(&filters)?;
 
-        Ok(reconstruct_plan_from(do_returning_upcall::<DfExecutionPlan>(
+        let plan = do_returning_upcall::<DfExecutionPlan>(
             "Java delete_from callback failed",
             Box::new(|ea, ec| {
                 self.inner.delete_from(
@@ -231,7 +228,9 @@ impl<T: DfTableTrait + 'static> TableProvider for ForeignDfTable<T> {
                     ec,
                 )
             }),
-        )?))
+        )?;
+        let arc: Arc<dyn ExecutionPlanBridge> = Arc::from(plan.0);
+        Ok(arc as Arc<dyn ExecutionPlan>)
     }
 
     async fn update(
@@ -254,7 +253,7 @@ impl<T: DfTableTrait + 'static> TableProvider for ForeignDfTable<T> {
         let assign_bytes = encode_exprs(&assign_exprs)?;
         let filter_bytes = encode_exprs(&filters)?;
 
-        Ok(reconstruct_plan_from(do_returning_upcall::<DfExecutionPlan>(
+        let plan = do_returning_upcall::<DfExecutionPlan>(
             "Java update callback failed",
             Box::new(|ea, ec| {
                 self.inner.update(
@@ -268,6 +267,8 @@ impl<T: DfTableTrait + 'static> TableProvider for ForeignDfTable<T> {
                     ec,
                 )
             }),
-        )?))
+        )?;
+        let arc: Arc<dyn ExecutionPlanBridge> = Arc::from(plan.0);
+        Ok(arc as Arc<dyn ExecutionPlan>)
     }
 }
