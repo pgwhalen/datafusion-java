@@ -140,6 +140,20 @@ pub(crate) fn do_option_returning_upcall<'a, T>(
     Ok(Some(unsafe { Box::from_raw(ptr as *mut T) }))
 }
 
+/// Invoke a Java upcall that returns a raw pointer where null means "not found".
+/// No error buffer is involved — this is for trait methods that have no way to
+/// report errors (e.g. `CatalogProvider::schema`).
+///
+/// The non-null pointer returned by `f` must be a valid `Box<T>` pointer created
+/// by `Box::into_raw` on the Java side (via `Df*.createRaw()`).
+pub(crate) fn do_option_upcall<T>(f: impl FnOnce() -> usize) -> Option<Box<T>> {
+    let ptr = f();
+    if ptr == 0 {
+        return None;
+    }
+    Some(unsafe { Box::from_raw(ptr as *mut T) })
+}
+
 /// Invoke a Java upcall that returns 0 on success, non-zero on error.
 /// Creates an internal error buffer, calls `f` with `(error_addr, error_cap)`,
 /// and returns `Ok(())` on success or a `DataFusionError` on failure.

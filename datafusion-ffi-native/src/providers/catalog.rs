@@ -38,14 +38,10 @@ impl<T: DfCatalogTrait + 'static> CatalogProvider for ForeignDfCatalog<T> {
 
     fn schema(&self, name: &str) -> Option<Arc<dyn SchemaProvider>> {
         let name_bytes = name.as_bytes();
-        let ptr = self.inner.schema(name_bytes.as_ptr() as usize, name_bytes.len());
-        if ptr == 0 {
-            return None;
-        }
-        // Reconstruct the DfSchemaProvider from the raw pointer
-        let boxed = unsafe { Box::from_raw(ptr as *mut DfSchemaProvider) };
-        // Extract the inner SchemaProviderBridge and convert to Arc<dyn SchemaProvider>
-        let bridge: Box<dyn SchemaProviderBridge> = boxed.0;
+        let schema_provider = super::do_option_upcall::<DfSchemaProvider>(|| {
+            self.inner.schema(name_bytes.as_ptr() as usize, name_bytes.len())
+        })?;
+        let bridge: Box<dyn SchemaProviderBridge> = schema_provider.0;
         let arc: Arc<dyn SchemaProviderBridge> = Arc::from(bridge);
         Some(arc as Arc<dyn SchemaProvider>)
     }
