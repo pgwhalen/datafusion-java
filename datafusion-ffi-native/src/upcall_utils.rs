@@ -23,7 +23,11 @@ impl ErrorBuffer {
     }
 
     pub fn read(&self) -> String {
-        unsafe { read_error(self.addr(), self.cap()) }
+        let len = self.buf.iter().position(|&b| b == 0).unwrap_or(self.buf.len());
+        if len == 0 {
+            return String::new();
+        }
+        String::from_utf8_lossy(&self.buf[..len]).into_owned()
     }
 }
 
@@ -93,16 +97,4 @@ pub(crate) fn do_counted_upcall(
         ));
     }
     Ok(result as usize)
-}
-
-unsafe fn read_error(addr: usize, cap: usize) -> String {
-    if addr == 0 || cap == 0 {
-        return String::new();
-    }
-    let slice = std::slice::from_raw_parts(addr as *const u8, cap);
-    let len = slice.iter().position(|&b| b == 0).unwrap_or(cap);
-    if len == 0 {
-        return String::new();
-    }
-    String::from_utf8_lossy(&slice[..len]).into_owned()
 }
