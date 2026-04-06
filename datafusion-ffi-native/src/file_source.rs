@@ -35,7 +35,7 @@ pub mod ffi {
 use self::ffi::DfFileSourceTrait;
 use crate::file_opener::ffi::DfFileOpener;
 use crate::bridge::{FileOpenerBridge, FileSourceBridge};
-use crate::upcall_utils::do_returning_upcall;
+use crate::upcall_utils::{do_returning_upcall, ErrorBuffer};
 use arrow::datatypes::Schema as ArrowSchema;
 use arrow::ffi::FFI_ArrowSchema;
 use datafusion::common::DataFusionError;
@@ -96,15 +96,15 @@ impl<T: DfFileSourceTrait + 'static> FileSourceBridge for ForeignDfFileSource<T>
 
         Ok(do_returning_upcall::<DfFileOpener>(
             "Java create_file_opener failed",
-            Box::new(|ea, ec| {
+            Box::new(|err: &ErrorBuffer| {
                 self.inner.create_file_opener(
                     schema_addr,
                     proj_u32.as_ptr() as usize,
                     proj_u32.len(),
                     limit_val,
                     batch_size_val,
-                    ea,
-                    ec,
+                    err.addr(),
+                    err.cap(),
                 )
             }),
         )?

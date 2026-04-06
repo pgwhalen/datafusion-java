@@ -29,10 +29,10 @@ impl ErrorBuffer {
 
 pub(crate) fn do_returning_upcall<'a, T>(
     context: &str,
-    f: Box<dyn FnOnce(usize, usize) -> usize + 'a>,
+    f: Box<dyn FnOnce(&ErrorBuffer) -> usize + 'a>,
 ) -> Result<Box<T>, DataFusionError> {
     let err = ErrorBuffer::new();
-    let ptr = f(err.addr(), err.cap());
+    let ptr = f(&err);
     if ptr == 0 {
         return Err(DataFusionError::External(
             format!("{}: {}", context, err.read()).into(),
@@ -43,10 +43,10 @@ pub(crate) fn do_returning_upcall<'a, T>(
 
 pub(crate) fn do_option_returning_upcall<'a, T>(
     context: &str,
-    f: Box<dyn FnOnce(usize, usize) -> usize + 'a>,
+    f: Box<dyn FnOnce(&ErrorBuffer) -> usize + 'a>,
 ) -> Result<Option<Box<T>>, DataFusionError> {
     let err = ErrorBuffer::new();
-    let ptr = f(err.addr(), err.cap());
+    let ptr = f(&err);
     if ptr == 0 {
         let msg = err.read();
         if !msg.is_empty() {
@@ -69,10 +69,10 @@ pub(crate) fn do_option_upcall<T>(f: impl FnOnce() -> usize) -> Option<Box<T>> {
 
 pub(crate) fn do_upcall(
     context: &str,
-    f: impl FnOnce(usize, usize) -> i32,
+    f: impl FnOnce(&ErrorBuffer) -> i32,
 ) -> Result<(), DataFusionError> {
     let err = ErrorBuffer::new();
-    let result = f(err.addr(), err.cap());
+    let result = f(&err);
     if result != 0 {
         return Err(DataFusionError::External(
             format!("{}: {}", context, err.read()).into(),
@@ -83,10 +83,10 @@ pub(crate) fn do_upcall(
 
 pub(crate) fn do_counted_upcall(
     context: &str,
-    f: impl FnOnce(usize, usize) -> i32,
+    f: impl FnOnce(&ErrorBuffer) -> i32,
 ) -> Result<usize, DataFusionError> {
     let err = ErrorBuffer::new();
-    let result = f(err.addr(), err.cap());
+    let result = f(&err);
     if result < 0 {
         return Err(DataFusionError::External(
             format!("{}: {}", context, err.read()).into(),

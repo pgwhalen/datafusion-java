@@ -34,7 +34,7 @@ pub mod ffi {
 use self::ffi::DfFileOpenerTrait;
 use crate::stream::ffi::DfRecordBatchReader;
 use crate::bridge::{FileOpenerBridge, RecordBatchReaderBridge};
-use crate::upcall_utils::do_returning_upcall;
+use crate::upcall_utils::{do_returning_upcall, ErrorBuffer};
 use datafusion::common::DataFusionError;
 use std::fmt;
 
@@ -71,15 +71,15 @@ impl<T: DfFileOpenerTrait + 'static> FileOpenerBridge for ForeignDfFileOpener<T>
 
         Ok(do_returning_upcall::<DfRecordBatchReader>(
             "Java open failed",
-            Box::new(|ea, ec| {
+            Box::new(|err: &ErrorBuffer| {
                 self.inner.open(
                     path_bytes.as_ptr() as usize,
                     path_bytes.len(),
                     file_size,
                     range_start,
                     range_end,
-                    ea,
-                    ec,
+                    err.addr(),
+                    err.cap(),
                 )
             }),
         )?

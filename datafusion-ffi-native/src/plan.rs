@@ -33,7 +33,7 @@ pub mod ffi {
 use self::ffi::DfExecutionPlanTrait;
 use crate::stream::ffi::DfRecordBatchReader;
 use crate::bridge::{import_schema, ExecutionPlanBridge};
-use crate::upcall_utils::do_returning_upcall;
+use crate::upcall_utils::{do_returning_upcall, ErrorBuffer};
 use datafusion::execution::SendableRecordBatchStream;
 use datafusion::physical_plan::execution_plan::{Boundedness, EmissionType};
 use datafusion::physical_plan::stream::RecordBatchStreamAdapter;
@@ -135,7 +135,7 @@ impl<T: DfExecutionPlanTrait + 'static> ExecutionPlan for ForeignDfPlan<T> {
     ) -> datafusion::error::Result<SendableRecordBatchStream> {
         let reader = do_returning_upcall::<DfRecordBatchReader>(
             "Java execute callback failed",
-            Box::new(|ea, ec| self.inner.execute(partition as i32, ea, ec)),
+            Box::new(|err: &ErrorBuffer| self.inner.execute(partition as i32, err.addr(), err.cap())),
         )?;
         let reader_bridge = reader.0;
         let reader_schema = reader_bridge.schema();

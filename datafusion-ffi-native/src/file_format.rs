@@ -1,5 +1,5 @@
 use crate::bridge::{FileOpenerBridge, FileSourceBridge};
-use crate::upcall_utils::do_returning_upcall;
+use crate::upcall_utils::{do_returning_upcall, ErrorBuffer};
 use arrow::datatypes::Schema as ArrowSchema;
 use arrow::ffi::FFI_ArrowSchema;
 use arrow::record_batch::RecordBatch;
@@ -91,8 +91,8 @@ impl<T: crate::bridge::ffi::DfFileFormatTrait + 'static> DataFusionFileFormat
         let source_bridge: Result<Arc<dyn FileSourceBridge>, String> =
             do_returning_upcall::<crate::file_source::ffi::DfFileSource>(
                 "Java file_source failed",
-                Box::new(|err_addr, err_cap| {
-                    self.inner.file_source(schema_addr, err_addr, err_cap)
+                Box::new(|err: &ErrorBuffer| {
+                    self.inner.file_source(schema_addr, err.addr(), err.cap())
                 }),
             )
             .map(|boxed| Arc::from(boxed.0) as Arc<dyn FileSourceBridge>)

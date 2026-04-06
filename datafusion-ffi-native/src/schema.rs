@@ -32,7 +32,7 @@ use self::ffi::DfSchemaTrait;
 use crate::bridge::ffi::DfStringArray;
 use crate::bridge::ffi::DfTableProvider;
 use crate::bridge::{SchemaProviderBridge, TableProviderBridge};
-use crate::upcall_utils::do_option_returning_upcall;
+use crate::upcall_utils::{do_option_returning_upcall, ErrorBuffer};
 use async_trait::async_trait;
 use datafusion::catalog::{SchemaProvider, TableProvider};
 use std::any::Any;
@@ -82,7 +82,7 @@ impl<T: DfSchemaTrait + 'static> SchemaProvider for ForeignDfSchema<T> {
 
         let table = do_option_returning_upcall::<DfTableProvider>(
             "Java SchemaProvider.table() failed",
-            Box::new(|ea, ec| self.inner.table(name_bytes.as_ptr() as usize, name_bytes.len(), ea, ec)),
+            Box::new(|err: &ErrorBuffer| self.inner.table(name_bytes.as_ptr() as usize, name_bytes.len(), err.addr(), err.cap())),
         )?;
 
         Ok(table.map(|t| {

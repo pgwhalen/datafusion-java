@@ -1,5 +1,5 @@
 use crate::bridge::ffi::DfScalarUdfTrait;
-use crate::upcall_utils::{do_counted_upcall, do_upcall};
+use crate::upcall_utils::{do_counted_upcall, do_upcall, ErrorBuffer};
 use arrow::array::{Array, StructArray};
 use arrow::datatypes::{DataType, Field, FieldRef, Schema as ArrowSchema};
 use arrow::ffi::{from_ffi, to_ffi, FFI_ArrowArray, FFI_ArrowSchema};
@@ -111,9 +111,9 @@ impl<T: DfScalarUdfTrait + 'static> ScalarUDFImpl for ForeignDfUdf<T> {
         let mut out_schema = FFI_ArrowSchema::empty();
         let out_schema_addr = &mut out_schema as *mut FFI_ArrowSchema as usize;
 
-        do_upcall("Java return_field failed", |ea, ec| {
+        do_upcall("Java return_field failed", |err: &ErrorBuffer| {
             self.inner
-                .return_field(arg_types_addr, arg_types_len, out_schema_addr, ea, ec)
+                .return_field(arg_types_addr, arg_types_len, out_schema_addr, err.addr(), err.cap())
         })?;
 
         // Import the result schema
@@ -174,7 +174,7 @@ impl<T: DfScalarUdfTrait + 'static> ScalarUDFImpl for ForeignDfUdf<T> {
         let out_array_addr = &mut out_array as *mut FFI_ArrowArray as usize;
         let out_schema_addr = &mut out_schema as *mut FFI_ArrowSchema as usize;
 
-        do_upcall("Java invoke failed", |ea, ec| {
+        do_upcall("Java invoke failed", |err: &ErrorBuffer| {
             self.inner.invoke(
                 args_addr,
                 num_args,
@@ -183,8 +183,8 @@ impl<T: DfScalarUdfTrait + 'static> ScalarUDFImpl for ForeignDfUdf<T> {
                 return_field_addr,
                 out_array_addr,
                 out_schema_addr,
-                ea,
-                ec,
+                err.addr(),
+                err.cap(),
             )
         })?;
 
@@ -218,9 +218,9 @@ impl<T: DfScalarUdfTrait + 'static> ScalarUDFImpl for ForeignDfUdf<T> {
             (0..result_cap).map(|_| FFI_ArrowSchema::empty()).collect();
         let result_addr = result_schemas.as_mut_ptr() as usize;
 
-        let count = do_counted_upcall("Java coerce_types failed", |ea, ec| {
+        let count = do_counted_upcall("Java coerce_types failed", |err: &ErrorBuffer| {
             self.inner
-                .coerce_types(arg_types_addr, arg_types_len, result_addr, result_cap, ea, ec)
+                .coerce_types(arg_types_addr, arg_types_len, result_addr, result_cap, err.addr(), err.cap())
         })?;
         let mut coerced = Vec::with_capacity(count);
         for schema in &result_schemas[..count] {

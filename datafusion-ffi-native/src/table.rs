@@ -2,7 +2,7 @@ use crate::bridge::ffi::DfTableTrait;
 use crate::plan::ffi::DfExecutionPlan;
 use crate::bridge::{ffi::DfLazyRecordBatchStream, ffi::DfStringArray, LazyStreamState};
 use crate::bridge::{import_schema, ExecutionPlanBridge, TableProviderBridge};
-use crate::upcall_utils::{do_counted_upcall, do_returning_upcall};
+use crate::upcall_utils::{do_counted_upcall, do_returning_upcall, ErrorBuffer};
 use arrow::datatypes::Schema as ArrowSchema;
 use async_trait::async_trait;
 use datafusion::catalog::TableProvider;
@@ -100,7 +100,7 @@ impl<T: DfTableTrait + 'static> TableProvider for ForeignDfTable<T> {
 
         let plan = do_returning_upcall::<DfExecutionPlan>(
             "Java scan callback failed",
-            Box::new(|ea, ec| {
+            Box::new(|err: &ErrorBuffer| {
                 self.inner.scan(
                     session_addr,
                     filter_bytes.as_ptr() as usize,
@@ -108,8 +108,8 @@ impl<T: DfTableTrait + 'static> TableProvider for ForeignDfTable<T> {
                     proj_u32.as_ptr() as usize,
                     proj_u32.len(),
                     limit_val,
-                    ea,
-                    ec,
+                    err.addr(),
+                    err.cap(),
                 )
             }),
         )?;
@@ -133,14 +133,14 @@ impl<T: DfTableTrait + 'static> TableProvider for ForeignDfTable<T> {
         let mut result_buf = vec![0i32; result_cap];
         let result_addr = result_buf.as_mut_ptr() as usize;
 
-        let count = do_counted_upcall("Java supports_filters_pushdown failed", |ea, ec| {
+        let count = do_counted_upcall("Java supports_filters_pushdown failed", |err: &ErrorBuffer| {
             self.inner.supports_filters_pushdown(
                 filter_bytes.as_ptr() as usize,
                 filter_bytes.len(),
                 result_addr,
                 result_cap,
-                ea,
-                ec,
+                err.addr(),
+                err.cap(),
             )
         })?;
         Ok(result_buf[..count]
@@ -186,8 +186,8 @@ impl<T: DfTableTrait + 'static> TableProvider for ForeignDfTable<T> {
 
         let plan = do_returning_upcall::<DfExecutionPlan>(
             "Java insert_into callback failed",
-            Box::new(|ea, ec| {
-                self.inner.insert_into(session_addr, stream_ptr, insert_op_i32, ea, ec)
+            Box::new(|err: &ErrorBuffer| {
+                self.inner.insert_into(session_addr, stream_ptr, insert_op_i32, err.addr(), err.cap())
             }),
         )?;
         let arc: Arc<dyn ExecutionPlanBridge> = Arc::from(plan.0);
@@ -206,13 +206,13 @@ impl<T: DfTableTrait + 'static> TableProvider for ForeignDfTable<T> {
 
         let plan = do_returning_upcall::<DfExecutionPlan>(
             "Java delete_from callback failed",
-            Box::new(|ea, ec| {
+            Box::new(|err: &ErrorBuffer| {
                 self.inner.delete_from(
                     session_addr,
                     filter_bytes.as_ptr() as usize,
                     filter_bytes.len(),
-                    ea,
-                    ec,
+                    err.addr(),
+                    err.cap(),
                 )
             }),
         )?;
@@ -242,7 +242,7 @@ impl<T: DfTableTrait + 'static> TableProvider for ForeignDfTable<T> {
 
         let plan = do_returning_upcall::<DfExecutionPlan>(
             "Java update callback failed",
-            Box::new(|ea, ec| {
+            Box::new(|err: &ErrorBuffer| {
                 self.inner.update(
                     session_addr,
                     col_names_ptr,
@@ -250,8 +250,8 @@ impl<T: DfTableTrait + 'static> TableProvider for ForeignDfTable<T> {
                     assign_bytes.len(),
                     filter_bytes.as_ptr() as usize,
                     filter_bytes.len(),
-                    ea,
-                    ec,
+                    err.addr(),
+                    err.cap(),
                 )
             }),
         )?;
