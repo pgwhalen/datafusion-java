@@ -29,7 +29,7 @@ For callbacks (Java-implemented providers):
 ```
 DataFusion Rust library
     ↓
-Rust providers/*.rs (ForeignCatalog, ForeignTable, etc.)
+Rust Foreign* structs (catalog.rs, table.rs, plan.rs, etc.)
     ↓  (Diplomat trait upcalls)
 Diplomat-generated trait interfaces (DfCatalogTrait, DfTableTrait, ...)
     ↓
@@ -170,14 +170,14 @@ Enforced by `DiplomatEncapsulationTest` (ArchUnit):
 4. **`NativeLoader` confined to internal classes** — Only Diplomat-generated and bridge classes may reference it
 5. **Constructors taking internal types are package-private** — `*Ffi`, `*Bridge` parameters require package-private constructors
 
-### Rust Helpers (`providers/`)
+### Rust Helpers
 
-#### `do_returning_upcall` (`providers/mod.rs`)
+#### `do_returning_upcall` (`upcall_utils.rs`)
 
 Most Rust→Java upcalls follow the same pattern: allocate an error buffer, call Java, check for null pointer, reconstruct `Box<T>` on success. **Use `do_returning_upcall`** for any upcall that returns a raw pointer (0 on error):
 
 ```rust
-use super::do_returning_upcall;
+use crate::upcall_utils::do_returning_upcall;
 
 let boxed = do_returning_upcall::<DfExecutionPlan>(
     "Java scan callback failed",
@@ -187,36 +187,36 @@ let boxed = do_returning_upcall::<DfExecutionPlan>(
 
 The `Upcall` type alias documents the closure signature: `(error_addr: usize, error_cap: usize) -> usize`. The function creates the `ErrorBuffer` internally, checks for null, and returns `Result<Box<T>, DataFusionError>`. The `unsafe` for `Box::from_raw` is contained within the function since the null check is the only meaningful validation.
 
-#### `do_upcall` (`providers/mod.rs`)
+#### `do_upcall` (`upcall_utils.rs`)
 
 For upcalls that return 0 on success, non-zero on error (no pointer reconstruction needed). Returns `Result<(), DataFusionError>`:
 
 ```rust
-use super::do_upcall;
+use crate::upcall_utils::do_upcall;
 
 do_upcall("Java return_field failed", |ea, ec| {
     self.inner.return_field(arg1, arg2, ea, ec)
 })?;
 ```
 
-#### `do_counted_upcall` (`providers/mod.rs`)
+#### `do_counted_upcall` (`upcall_utils.rs`)
 
 For upcalls that return a non-negative count on success, or negative on error. Returns `Result<usize, DataFusionError>`:
 
 ```rust
-use super::do_counted_upcall;
+use crate::upcall_utils::do_counted_upcall;
 
 let count = do_counted_upcall("Java coerce_types failed", |ea, ec| {
     self.inner.coerce_types(arg1, arg2, result_addr, result_cap, ea, ec)
 })?;
 ```
 
-#### `do_option_returning_upcall` (`providers/mod.rs`)
+#### `do_option_returning_upcall` (`upcall_utils.rs`)
 
 For upcalls that return a raw pointer where null is valid (means "not found"), and only a populated error buffer indicates failure. Returns `Result<Option<Box<T>>, DataFusionError>`:
 
 ```rust
-use super::do_option_returning_upcall;
+use crate::upcall_utils::do_option_returning_upcall;
 
 let boxed = do_option_returning_upcall::<DfTableProvider>(
     "Java SchemaProvider.table() failed",
@@ -228,7 +228,7 @@ let boxed = do_option_returning_upcall::<DfTableProvider>(
 For upcalls with non-standard error handling (e.g., `stream.rs` with tri-state returns), use `ErrorBuffer` directly:
 
 ```rust
-use super::ErrorBuffer;
+use crate::upcall_utils::ErrorBuffer;
 
 let err = ErrorBuffer::new();
 let ptr = self.inner.some_callback(arg1, arg2, err.addr(), err.cap());
@@ -239,7 +239,7 @@ if ptr == 0 {
 }
 ```
 
-#### `encode_exprs` (`providers/table.rs`)
+#### `encode_exprs` (`table.rs`)
 
 Serializes `&[Expr]` to protobuf `LogicalExprList` bytes for passing to Java. Returns empty `Vec` for empty input. Use this instead of manually creating a `DefaultLogicalExtensionCodec` + `serialize_exprs` + `LogicalExprList` + `encode_to_vec`:
 
@@ -247,15 +247,6 @@ Serializes `&[Expr]` to protobuf `LogicalExprList` bytes for passing to Java. Re
 let filter_bytes = encode_exprs(filters)?;
 // Pass to Java as (addr, len) pair:
 self.inner.callback(filter_bytes.as_ptr() as usize, filter_bytes.len(), ...);
-```
-
-#### `reconstruct_plan` (`providers/table.rs`)
-
-Reconstructs an `Arc<dyn ExecutionPlan>` from a raw pointer returned by Java's `DfExecutionPlan.createRaw()`. Use this instead of manually calling `Box::from_raw` + extracting the bridge + converting to `Arc`:
-
-```rust
-if ptr == 0 { /* handle error */ }
-Ok(unsafe { reconstruct_plan(ptr) })
 ```
 
 ### NativeUtil (Java)
