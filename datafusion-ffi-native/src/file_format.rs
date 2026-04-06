@@ -1,4 +1,5 @@
-use super::{ErrorBuffer, FileOpenerBridge, FileSourceBridge};
+use crate::bridge::{FileOpenerBridge, FileSourceBridge};
+use crate::upcall_utils::ErrorBuffer;
 use arrow::datatypes::Schema as ArrowSchema;
 use arrow::ffi::FFI_ArrowSchema;
 use arrow::record_batch::RecordBatch;
@@ -94,7 +95,7 @@ impl<T: crate::bridge::ffi::DfFileFormatTrait + 'static> DataFusionFileFormat
         // file_source() is infallible, so defer error
         let source_bridge: Result<Arc<dyn FileSourceBridge>, String> = if ptr != 0 {
             let boxed =
-                unsafe { Box::from_raw(ptr as *mut crate::bridge::ffi::DfFileSource) };
+                unsafe { Box::from_raw(ptr as *mut crate::file_source::ffi::DfFileSource) };
             Ok(Arc::from(boxed.0))
         } else {
             Err(format!("Java file_source failed: {}", err.read()))

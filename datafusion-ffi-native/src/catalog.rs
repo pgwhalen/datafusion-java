@@ -1,5 +1,6 @@
-use crate::bridge::ffi::{DfCatalogTrait, DfSchemaProvider, DfStringArray};
-use super::SchemaProviderBridge;
+use crate::bridge::ffi::{DfCatalogTrait, DfStringArray};
+use crate::schema::ffi::DfSchemaProvider;
+use crate::bridge::SchemaProviderBridge;
 
 use datafusion::catalog::{CatalogProvider, SchemaProvider};
 use std::any::Any;
@@ -38,7 +39,7 @@ impl<T: DfCatalogTrait + 'static> CatalogProvider for ForeignDfCatalog<T> {
 
     fn schema(&self, name: &str) -> Option<Arc<dyn SchemaProvider>> {
         let name_bytes = name.as_bytes();
-        let sp = super::do_option_upcall::<DfSchemaProvider>(|| {
+        let sp = crate::upcall_utils::do_option_upcall::<DfSchemaProvider>(|| {
             self.inner.schema(name_bytes.as_ptr() as usize, name_bytes.len())
         })?;
         let arc: Arc<dyn SchemaProviderBridge> = Arc::from(sp.0);

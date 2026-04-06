@@ -1,5 +1,38 @@
-use crate::bridge::ffi::{DfSchemaTrait, DfStringArray, DfTableProvider};
-use super::{do_option_returning_upcall, SchemaProviderBridge, TableProviderBridge};
+#[diplomat::bridge]
+#[diplomat::abi_rename = "datafusion_{0}"]
+pub mod ffi {
+    /// Schema provider trait: returns table names and table providers.
+    pub trait DfSchemaTrait {
+        /// Returns a raw pointer to a DfStringArray containing table names.
+        /// The caller takes ownership and must free via Box::from_raw.
+        fn table_names_raw(&self) -> usize;
+        /// Returns true if table exists.
+        fn table_exists(&self, name_addr: usize, name_len: usize) -> bool;
+        /// Returns DfTableProvider raw ptr, or 0 for not found/error (check error buffer).
+        fn table(&self, name_addr: usize, name_len: usize, error_addr: usize, error_cap: usize) -> usize;
+    }
+
+    /// Opaque wrapper for a schema provider backed by a Diplomat trait.
+    #[diplomat::opaque]
+    pub struct DfSchemaProvider(pub(crate) Box<dyn crate::bridge::SchemaProviderBridge>);
+
+    impl DfSchemaProvider {
+        /// Create from a DfSchemaTrait impl and return the raw pointer address.
+        /// Java uses this in re-entrant downcalls during upcalls.
+        pub fn create_raw(t: impl DfSchemaTrait + 'static) -> usize {
+            let wrapper = crate::schema::ForeignDfSchema::new(t);
+            let boxed: Box<dyn crate::bridge::SchemaProviderBridge> = Box::new(wrapper);
+            let ptr = Box::into_raw(Box::new(DfSchemaProvider(boxed)));
+            ptr as usize
+        }
+    }
+}
+
+use self::ffi::DfSchemaTrait;
+use crate::bridge::ffi::DfStringArray;
+use crate::bridge::ffi::DfTableProvider;
+use crate::bridge::{SchemaProviderBridge, TableProviderBridge};
+use crate::upcall_utils::do_option_returning_upcall;
 use async_trait::async_trait;
 use datafusion::catalog::{SchemaProvider, TableProvider};
 use std::any::Any;

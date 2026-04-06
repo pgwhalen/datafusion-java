@@ -1,5 +1,39 @@
-use crate::bridge::ffi::{DfExecutionPlanTrait, DfRecordBatchReader};
-use super::{do_returning_upcall, import_schema, ExecutionPlanBridge};
+#[diplomat::bridge]
+#[diplomat::abi_rename = "datafusion_{0}"]
+pub mod ffi {
+    /// Execution plan trait: returns properties and executes partitions.
+    pub trait DfExecutionPlanTrait {
+        /// Returns FFI_ArrowSchema address for this plan's output schema.
+        fn schema_address(&self) -> usize;
+        /// Returns number of output partitions.
+        fn output_partitioning(&self) -> i32;
+        /// Returns emission type: 0=Incremental, 1=Final, 2=Both.
+        fn emission_type(&self) -> i32;
+        /// Returns boundedness: 0=Bounded, 1=Unbounded.
+        fn boundedness(&self) -> i32;
+        /// Returns DfRecordBatchReader raw ptr, or 0 on error (check error buffer).
+        fn execute(&self, partition: i32, error_addr: usize, error_cap: usize) -> usize;
+    }
+
+    /// Opaque wrapper for an execution plan backed by a Diplomat trait.
+    #[diplomat::opaque]
+    pub struct DfExecutionPlan(pub(crate) Box<dyn crate::bridge::ExecutionPlanBridge>);
+
+    impl DfExecutionPlan {
+        /// Create from a DfExecutionPlanTrait impl and return the raw pointer address.
+        pub fn create_raw(t: impl DfExecutionPlanTrait + 'static) -> usize {
+            let wrapper = crate::plan::ForeignDfPlan::new(t);
+            let boxed: Box<dyn crate::bridge::ExecutionPlanBridge> = Box::new(wrapper);
+            let ptr = Box::into_raw(Box::new(DfExecutionPlan(boxed)));
+            ptr as usize
+        }
+    }
+}
+
+use self::ffi::DfExecutionPlanTrait;
+use crate::stream::ffi::DfRecordBatchReader;
+use crate::bridge::{import_schema, ExecutionPlanBridge};
+use crate::upcall_utils::do_returning_upcall;
 use datafusion::execution::SendableRecordBatchStream;
 use datafusion::physical_plan::execution_plan::{Boundedness, EmissionType};
 use datafusion::physical_plan::stream::RecordBatchStreamAdapter;

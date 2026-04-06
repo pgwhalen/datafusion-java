@@ -1,5 +1,38 @@
-use crate::bridge::ffi::DfRecordBatchReaderTrait;
-use super::{import_schema, ErrorBuffer, RecordBatchReaderBridge};
+#[diplomat::bridge]
+#[diplomat::abi_rename = "datafusion_{0}"]
+pub mod ffi {
+    /// Record batch reader trait: iterates Arrow record batches.
+    pub trait DfRecordBatchReaderTrait {
+        /// Returns FFI_ArrowSchema address for this reader's schema.
+        fn schema_address(&self) -> usize;
+        /// Writes Arrow FFI data to provided addresses. Returns 1=data, 0=end, -1=error.
+        fn next(
+            &self,
+            array_out_addr: usize,
+            schema_out_addr: usize,
+            error_addr: usize,
+            error_cap: usize,
+        ) -> i32;
+    }
+
+    /// Opaque wrapper for a record batch reader backed by a Diplomat trait.
+    #[diplomat::opaque]
+    pub struct DfRecordBatchReader(pub(crate) Box<dyn crate::bridge::RecordBatchReaderBridge>);
+
+    impl DfRecordBatchReader {
+        /// Create from a DfRecordBatchReaderTrait impl and return the raw pointer address.
+        pub fn create_raw(t: impl DfRecordBatchReaderTrait + 'static) -> usize {
+            let wrapper = crate::stream::ForeignDfStream::new(t);
+            let boxed: Box<dyn crate::bridge::RecordBatchReaderBridge> = Box::new(wrapper);
+            let ptr = Box::into_raw(Box::new(DfRecordBatchReader(boxed)));
+            ptr as usize
+        }
+    }
+}
+
+use self::ffi::DfRecordBatchReaderTrait;
+use crate::bridge::{import_schema, RecordBatchReaderBridge};
+use crate::upcall_utils::ErrorBuffer;
 use arrow::datatypes::Schema as ArrowSchema;
 use arrow::ffi::{from_ffi, FFI_ArrowArray, FFI_ArrowSchema};
 use arrow::record_batch::RecordBatch;

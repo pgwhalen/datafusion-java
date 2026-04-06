@@ -1,5 +1,5 @@
 use crate::bridge::ffi::DfScalarUdfTrait;
-use super::{do_counted_upcall, do_upcall};
+use crate::upcall_utils::{do_counted_upcall, do_upcall};
 use arrow::array::{Array, StructArray};
 use arrow::datatypes::{DataType, Field, FieldRef, Schema as ArrowSchema};
 use arrow::ffi::{from_ffi, to_ffi, FFI_ArrowArray, FFI_ArrowSchema};

@@ -1,2 +1,11 @@
 mod bridge;
-mod providers;
+mod upcall_utils;
+mod catalog;
+mod file_format;
+mod file_opener;
+mod file_source;
+mod plan;
+mod schema;
+mod stream;
+mod table;
+mod udf;

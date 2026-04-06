@@ -145,7 +145,8 @@ pub mod ffi {
     }
 
     // ============================================================================
-    // Diplomat traits
+    // Diplomat traits (only those used by DfSessionContext methods stay here;
+    // the rest have moved to their respective providers/*.rs files)
     // ============================================================================
 
     // -- Scalar UDF --
@@ -157,8 +158,6 @@ pub mod ffi {
         /// Returns volatility: 0=Immutable, 1=Stable, 2=Volatile.
         fn volatility(&self) -> i32;
         /// Compute return field from arg types. Writes FFI_ArrowSchema to out_schema_addr.
-        /// arg_types_addr points to an array of FFI_ArrowSchema, arg_types_len is count.
-        /// Returns 0 on success, -1 on error (check error buffer).
         fn return_field(
             &self,
             arg_types_addr: usize,
@@ -167,9 +166,7 @@ pub mod ffi {
             error_addr: usize,
             error_cap: usize,
         ) -> i32;
-        /// Invoke the function. args_addr points to array of {FFI_ArrowArray, FFI_ArrowSchema} pairs.
-        /// Writes result to out_array_addr (FFI_ArrowArray) and out_schema_addr (FFI_ArrowSchema).
-        /// Returns 0 on success, -1 on error.
+        /// Invoke the function.
         fn invoke(
             &self,
             args_addr: usize,
@@ -182,8 +179,7 @@ pub mod ffi {
             error_addr: usize,
             error_cap: usize,
         ) -> i32;
-        /// Coerce argument types. Reads FFI_ArrowSchema array at arg_types_addr,
-        /// writes coerced schemas to result_addr. Returns count on success, -1 on error.
+        /// Coerce argument types.
         fn coerce_types(
             &self,
             arg_types_addr: usize,
@@ -209,58 +205,7 @@ pub mod ffi {
         ) -> usize;
     }
 
-    /// File source trait: creates file openers.
-    pub trait DfFileSourceTrait {
-        /// Create a file opener with scan parameters.
-        /// Returns DfFileOpener raw ptr, or 0 on error (check error buffer).
-        fn create_file_opener(
-            &self,
-            schema_addr: usize,
-            projection_addr: usize,
-            projection_len: usize,
-            limit: i64,
-            batch_size: i64,
-            error_addr: usize,
-            error_cap: usize,
-        ) -> usize;
-    }
-
-    /// File opener trait: opens files and returns record batch readers.
-    pub trait DfFileOpenerTrait {
-        /// Open a file and return a DfRecordBatchReader raw ptr, or 0 on error.
-        fn open(
-            &self,
-            path_addr: usize,
-            path_len: usize,
-            file_size: u64,
-            range_start: i64,
-            range_end: i64,
-            error_addr: usize,
-            error_cap: usize,
-        ) -> usize;
-    }
-
-    // -- Catalog provider chain --
-
-    /// Catalog provider trait: returns schema names and schema providers.
-    pub trait DfCatalogTrait {
-        /// Returns a raw pointer to a DfStringArray containing schema names.
-        /// The caller takes ownership and must free via Box::from_raw.
-        fn schema_names_raw(&self) -> usize;
-        /// Returns DfSchemaProvider raw ptr (via createRaw downcall), or 0 for not found.
-        fn schema(&self, name_addr: usize, name_len: usize) -> usize;
-    }
-
-    /// Schema provider trait: returns table names and table providers.
-    pub trait DfSchemaTrait {
-        /// Returns a raw pointer to a DfStringArray containing table names.
-        /// The caller takes ownership and must free via Box::from_raw.
-        fn table_names_raw(&self) -> usize;
-        /// Returns true if table exists.
-        fn table_exists(&self, name_addr: usize, name_len: usize) -> bool;
-        /// Returns DfTableProvider raw ptr, or 0 for not found/error (check error buffer).
-        fn table(&self, name_addr: usize, name_len: usize, error_addr: usize, error_cap: usize) -> usize;
-    }
+    // -- Table provider --
 
     /// Table provider trait: returns schema, type, and creates execution plans.
     pub trait DfTableTrait {
@@ -292,12 +237,7 @@ pub mod ffi {
             error_addr: usize,
             error_cap: usize,
         ) -> i32;
-
-        /// Insert data into this table. The input_stream_ptr is a raw
-        /// `Box<DfLazyRecordBatchStream>` pointer that Java wraps in a
-        /// SendableRecordBatchStream to iterate lazily.
-        /// insert_op: 0=Append, 1=Overwrite, 2=Replace.
-        /// Returns DfExecutionPlan raw ptr, or 0 on error (check error buffer).
+        /// Insert data into this table.
         fn insert_into(
             &self,
             session_addr: usize,
@@ -306,9 +246,7 @@ pub mod ffi {
             error_addr: usize,
             error_cap: usize,
         ) -> usize;
-
         /// Delete rows matching the filter predicates.
-        /// Returns DfExecutionPlan raw ptr, or 0 on error (check error buffer).
         fn delete_from(
             &self,
             session_addr: usize,
@@ -317,12 +255,7 @@ pub mod ffi {
             error_addr: usize,
             error_cap: usize,
         ) -> usize;
-
         /// Update rows matching the filter predicates with the given assignments.
-        /// col_names_ptr: raw DfStringArray pointer (Java takes ownership).
-        /// assign_exprs_addr/assign_exprs_len: protobuf LogicalExprList for assignment values.
-        /// filters_addr/filters_len: protobuf LogicalExprList for WHERE filters.
-        /// Returns DfExecutionPlan raw ptr, or 0 on error (check error buffer).
         fn update(
             &self,
             session_addr: usize,
@@ -336,121 +269,30 @@ pub mod ffi {
         ) -> usize;
     }
 
-    /// Execution plan trait: returns properties and executes partitions.
-    pub trait DfExecutionPlanTrait {
-        /// Returns FFI_ArrowSchema address for this plan's output schema.
-        fn schema_address(&self) -> usize;
-        /// Returns number of output partitions.
-        fn output_partitioning(&self) -> i32;
-        /// Returns emission type: 0=Incremental, 1=Final, 2=Both.
-        fn emission_type(&self) -> i32;
-        /// Returns boundedness: 0=Bounded, 1=Unbounded.
-        fn boundedness(&self) -> i32;
-        /// Returns DfRecordBatchReader raw ptr, or 0 on error (check error buffer).
-        fn execute(&self, partition: i32, error_addr: usize, error_cap: usize) -> usize;
-    }
+    // -- Catalog provider chain --
 
-    /// Record batch reader trait: iterates Arrow record batches.
-    pub trait DfRecordBatchReaderTrait {
-        /// Returns FFI_ArrowSchema address for this reader's schema.
-        fn schema_address(&self) -> usize;
-        /// Writes Arrow FFI data to provided addresses. Returns 1=data, 0=end, -1=error.
-        fn next(
-            &self,
-            array_out_addr: usize,
-            schema_out_addr: usize,
-            error_addr: usize,
-            error_cap: usize,
-        ) -> i32;
+    /// Catalog provider trait: returns schema names and schema providers.
+    pub trait DfCatalogTrait {
+        /// Returns a raw pointer to a DfStringArray containing schema names.
+        fn schema_names_raw(&self) -> usize;
+        /// Returns DfSchemaProvider raw ptr (via createRaw downcall), or 0 for not found.
+        fn schema(&self, name_addr: usize, name_len: usize) -> usize;
     }
 
     // ============================================================================
     // Opaque wrappers with create_raw factories
     // ============================================================================
 
-    /// Opaque wrapper for a schema provider backed by a Diplomat trait.
-    #[diplomat::opaque]
-    pub struct DfSchemaProvider(pub(crate) Box<dyn crate::providers::SchemaProviderBridge>);
-
-    impl DfSchemaProvider {
-        /// Create from a DfSchemaTrait impl and return the raw pointer address.
-        /// Java uses this in re-entrant downcalls during upcalls.
-        pub fn create_raw(t: impl DfSchemaTrait + 'static) -> usize {
-            let wrapper = crate::providers::ForeignDfSchema::new(t);
-            let boxed: Box<dyn crate::providers::SchemaProviderBridge> = Box::new(wrapper);
-            let ptr = Box::into_raw(Box::new(DfSchemaProvider(boxed)));
-            ptr as usize
-        }
-    }
-
     /// Opaque wrapper for a table provider backed by a Diplomat trait.
     #[diplomat::opaque]
-    pub struct DfTableProvider(pub(crate) Box<dyn crate::providers::TableProviderBridge>);
+    pub struct DfTableProvider(pub(crate) Box<dyn super::TableProviderBridge>);
 
     impl DfTableProvider {
         /// Create from a DfTableTrait impl and return the raw pointer address.
         pub fn create_raw(t: impl DfTableTrait + 'static) -> usize {
-            let wrapper = crate::providers::ForeignDfTable::new(t);
-            let boxed: Box<dyn crate::providers::TableProviderBridge> = Box::new(wrapper);
+            let wrapper = crate::table::ForeignDfTable::new(t);
+            let boxed: Box<dyn super::TableProviderBridge> = Box::new(wrapper);
             let ptr = Box::into_raw(Box::new(DfTableProvider(boxed)));
-            ptr as usize
-        }
-    }
-
-    /// Opaque wrapper for an execution plan backed by a Diplomat trait.
-    #[diplomat::opaque]
-    pub struct DfExecutionPlan(pub(crate) Box<dyn crate::providers::ExecutionPlanBridge>);
-
-    impl DfExecutionPlan {
-        /// Create from a DfExecutionPlanTrait impl and return the raw pointer address.
-        pub fn create_raw(t: impl DfExecutionPlanTrait + 'static) -> usize {
-            let wrapper = crate::providers::ForeignDfPlan::new(t);
-            let boxed: Box<dyn crate::providers::ExecutionPlanBridge> = Box::new(wrapper);
-            let ptr = Box::into_raw(Box::new(DfExecutionPlan(boxed)));
-            ptr as usize
-        }
-    }
-
-    /// Opaque wrapper for a record batch reader backed by a Diplomat trait.
-    #[diplomat::opaque]
-    pub struct DfRecordBatchReader(pub(crate) Box<dyn crate::providers::RecordBatchReaderBridge>);
-
-    impl DfRecordBatchReader {
-        /// Create from a DfRecordBatchReaderTrait impl and return the raw pointer address.
-        pub fn create_raw(t: impl DfRecordBatchReaderTrait + 'static) -> usize {
-            let wrapper = crate::providers::ForeignDfStream::new(t);
-            let boxed: Box<dyn crate::providers::RecordBatchReaderBridge> = Box::new(wrapper);
-            let ptr = Box::into_raw(Box::new(DfRecordBatchReader(boxed)));
-            ptr as usize
-        }
-    }
-
-    // ── Opaque wrappers for file format chain ──
-
-    /// Opaque wrapper for a file source backed by a Diplomat trait.
-    #[diplomat::opaque]
-    pub struct DfFileSource(pub(crate) Box<dyn crate::providers::FileSourceBridge>);
-
-    impl DfFileSource {
-        /// Create from a DfFileSourceTrait impl and return the raw pointer address.
-        pub fn create_raw(t: impl DfFileSourceTrait + 'static) -> usize {
-            let wrapper = crate::providers::ForeignDfFileSource::new(t);
-            let boxed: Box<dyn crate::providers::FileSourceBridge> = Box::new(wrapper);
-            let ptr = Box::into_raw(Box::new(DfFileSource(boxed)));
-            ptr as usize
-        }
-    }
-
-    /// Opaque wrapper for a file opener backed by a Diplomat trait.
-    #[diplomat::opaque]
-    pub struct DfFileOpener(pub(crate) Box<dyn crate::providers::FileOpenerBridge>);
-
-    impl DfFileOpener {
-        /// Create from a DfFileOpenerTrait impl and return the raw pointer address.
-        pub fn create_raw(t: impl DfFileOpenerTrait + 'static) -> usize {
-            let wrapper = crate::providers::ForeignDfFileOpener::new(t);
-            let boxed: Box<dyn crate::providers::FileOpenerBridge> = Box::new(wrapper);
-            let ptr = Box::into_raw(Box::new(DfFileOpener(boxed)));
             ptr as usize
         }
     }
@@ -1302,8 +1144,8 @@ pub mod ffi {
 
     #[diplomat::opaque]
     pub struct DfSessionContext {
-        pub(super) ctx: SessionContext,
-        pub(super) rt: Arc<Runtime>,
+        pub(crate) ctx: SessionContext,
+        pub(crate) rt: Arc<Runtime>,
     }
 
     impl DfSessionContext {
@@ -1393,33 +1235,16 @@ pub mod ffi {
             Ok(())
         }
 
-        /// Register a catalog backed by a Java-implemented DfCatalogTrait.
-        pub fn register_catalog(
+        /// Register a table provider backed by a Java-implemented DfTableTrait.
+        pub fn register_table_provider(
             &self,
             name: &DiplomatStr,
-            catalog: impl DfCatalogTrait + 'static,
+            table: impl DfTableTrait + 'static,
         ) -> Result<(), Box<DfError>> {
             let name_str = diplomat_str(name)?;
-            let foreign = crate::providers::ForeignDfCatalog::new(catalog);
-            self.ctx.register_catalog(name_str, Arc::new(foreign));
+            let foreign = crate::table::ForeignDfTable::new(table);
+            self.ctx.register_table(name_str, Arc::new(foreign))?;
             Ok(())
-        }
-
-        /// Parse a SQL expression against a schema, returning serialized protobuf bytes.
-        pub fn parse_sql_expr(
-            &self,
-            sql: &DiplomatStr,
-            schema: &DfArrowSchema,
-        ) -> Result<Box<DfExprBytes>, Box<DfError>> {
-            let sql_str = diplomat_str(sql)?;
-            let df_schema = DFSchema::try_from(schema.schema.as_ref().clone())?;
-            let state = self.ctx.state();
-            let expr = state.create_logical_expr(sql_str, &df_schema)?;
-            let codec = DefaultLogicalExtensionCodec {};
-            let serialized = serialize_exprs(&[expr], &codec)?;
-            let proto_list = LogicalExprList { expr: serialized };
-            let bytes = proto_list.encode_to_vec();
-            Ok(Box::new(DfExprBytes { bytes }))
         }
 
         /// Register a scalar UDF backed by a Java-implemented DfScalarUdfTrait.
@@ -1427,7 +1252,7 @@ pub mod ffi {
             &self,
             udf: impl DfScalarUdfTrait + 'static,
         ) -> Result<(), Box<DfError>> {
-            let foreign = crate::providers::ForeignDfUdf::new(udf);
+            let foreign = crate::udf::ForeignDfUdf::new(udf);
             let scalar_udf =
                 datafusion::logical_expr::ScalarUDF::new_from_impl(foreign);
             self.ctx.register_udf(scalar_udf);
@@ -1451,11 +1276,8 @@ pub mod ffi {
             };
 
             let name_str = diplomat_str(name)?;
-
             let extension_str = diplomat_str(extension)?.to_string();
 
-            // Import schema by reference. The caller (Java) must call the release callback
-            // on the FFI_ArrowSchema after this function returns to free exported buffers.
             if schema_addr == 0 {
                 return Err("Null schema address".into());
             }
@@ -1464,21 +1286,18 @@ pub mod ffi {
                 Arc::new(ArrowSchema::try_from(ffi_schema)?)
             };
 
-            // Create the foreign file format
-            let foreign_format = crate::providers::ForeignDfFileFormat::new(
+            let foreign_format = crate::file_format::ForeignDfFileFormat::new(
                 format,
                 Arc::clone(&arrow_schema),
                 extension_str.clone(),
             );
             let format_arc: Arc<dyn FileFormat> = Arc::new(foreign_format);
 
-            // Build listing options
             let options = ListingOptions::new(format_arc)
                 .with_file_extension(extension_str)
                 .with_collect_stat(collect_stat != 0)
                 .with_target_partitions(target_partitions);
 
-            // Parse URLs from string slices
             let url_strs = diplomat_str_slice_to_vec(urls)?;
             let mut table_urls = Vec::with_capacity(url_strs.len());
             for url_str in &url_strs {
@@ -1494,6 +1313,35 @@ pub mod ffi {
             self.ctx.register_table(name_str, Arc::new(table))?;
 
             Ok(())
+        }
+
+        /// Register a catalog backed by a Java-implemented DfCatalogTrait.
+        pub fn register_catalog(
+            &self,
+            name: &DiplomatStr,
+            catalog: impl DfCatalogTrait + 'static,
+        ) -> Result<(), Box<DfError>> {
+            let name_str = diplomat_str(name)?;
+            let foreign = crate::catalog::ForeignDfCatalog::new(catalog);
+            self.ctx.register_catalog(name_str, Arc::new(foreign));
+            Ok(())
+        }
+
+        /// Parse a SQL expression against a schema, returning serialized protobuf bytes.
+        pub fn parse_sql_expr(
+            &self,
+            sql: &DiplomatStr,
+            schema: &DfArrowSchema,
+        ) -> Result<Box<DfExprBytes>, Box<DfError>> {
+            let sql_str = diplomat_str(sql)?;
+            let df_schema = DFSchema::try_from(schema.schema.as_ref().clone())?;
+            let state = self.ctx.state();
+            let expr = state.create_logical_expr(sql_str, &df_schema)?;
+            let codec = DefaultLogicalExtensionCodec {};
+            let serialized = serialize_exprs(&[expr], &codec)?;
+            let proto_list = LogicalExprList { expr: serialized };
+            let bytes = proto_list.encode_to_vec();
+            Ok(Box::new(DfExprBytes { bytes }))
         }
 
         /// Check if a table exists by name.
@@ -1542,18 +1390,6 @@ pub mod ffi {
                 .rt
                 .block_on(self.ctx.read_json(path_str, Default::default()))?;
             Ok(self.wrap_df(df))
-        }
-
-        /// Register a table provider backed by a Java-implemented DfTableTrait.
-        pub fn register_table_provider(
-            &self,
-            name: &DiplomatStr,
-            table: impl DfTableTrait + 'static,
-        ) -> Result<(), Box<DfError>> {
-            let name_str = diplomat_str(name)?;
-            let foreign = crate::providers::ForeignDfTable::new(table);
-            self.ctx.register_table(name_str, Arc::new(foreign))?;
-            Ok(())
         }
 
         /// Deregister a table by name. Returns true if a table was previously registered.
@@ -2401,3 +2237,55 @@ pub(crate) struct LazyStreamState {
     >,
     pub(crate) rt: Option<std::sync::Arc<tokio::runtime::Runtime>>,
 }
+
+// ============================================================================
+// Bridge traits and upcall helpers (formerly in providers/mod.rs)
+// ============================================================================
+
+use arrow::datatypes::Schema as ArrowSchema;
+use arrow::record_batch::RecordBatch;
+
+/// Import an Arrow schema from an FFI address.
+/// Returns an empty schema if `addr` is 0 or conversion fails.
+pub(crate) fn import_schema(addr: usize) -> std::sync::Arc<ArrowSchema> {
+    if addr != 0 {
+        unsafe {
+            let ffi_schema = &*(addr as *const arrow::ffi::FFI_ArrowSchema);
+            std::sync::Arc::new(
+                ArrowSchema::try_from(ffi_schema).unwrap_or_else(|_| ArrowSchema::empty()),
+            )
+        }
+    } else {
+        std::sync::Arc::new(ArrowSchema::empty())
+    }
+}
+
+// ── Bridge traits (marker traits for type erasure) ──
+
+pub trait SchemaProviderBridge: datafusion::catalog::SchemaProvider + Send + Sync {}
+pub trait TableProviderBridge: datafusion::catalog::TableProvider + Send + Sync {}
+pub trait ExecutionPlanBridge: datafusion::physical_plan::ExecutionPlan + Send + Sync {}
+pub trait RecordBatchReaderBridge: Send + Sync {
+    fn schema(&self) -> std::sync::Arc<ArrowSchema>;
+    fn next_batch(&self) -> Result<Option<RecordBatch>, datafusion::common::DataFusionError>;
+}
+
+pub trait FileSourceBridge: Send + Sync {
+    fn create_file_opener(
+        &self,
+        schema: &ArrowSchema,
+        projection: Option<&[usize]>,
+        limit: Option<usize>,
+        batch_size: Option<usize>,
+    ) -> Result<Box<dyn FileOpenerBridge>, datafusion::common::DataFusionError>;
+}
+
+pub trait FileOpenerBridge: Send + Sync {
+    fn open(
+        &self,
+        path: &str,
+        file_size: u64,
+        range: Option<(i64, i64)>,
+    ) -> Result<Box<dyn RecordBatchReaderBridge>, datafusion::common::DataFusionError>;
+}
+

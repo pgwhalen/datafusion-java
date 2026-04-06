@@ -1,5 +1,41 @@
-use crate::bridge::ffi::{DfFileOpener, DfFileSourceTrait};
-use super::{do_returning_upcall, FileOpenerBridge, FileSourceBridge};
+#[diplomat::bridge]
+#[diplomat::abi_rename = "datafusion_{0}"]
+pub mod ffi {
+    /// File source trait: creates file openers.
+    pub trait DfFileSourceTrait {
+        /// Create a file opener with scan parameters.
+        /// Returns DfFileOpener raw ptr, or 0 on error (check error buffer).
+        fn create_file_opener(
+            &self,
+            schema_addr: usize,
+            projection_addr: usize,
+            projection_len: usize,
+            limit: i64,
+            batch_size: i64,
+            error_addr: usize,
+            error_cap: usize,
+        ) -> usize;
+    }
+
+    /// Opaque wrapper for a file source backed by a Diplomat trait.
+    #[diplomat::opaque]
+    pub struct DfFileSource(pub(crate) Box<dyn crate::bridge::FileSourceBridge>);
+
+    impl DfFileSource {
+        /// Create from a DfFileSourceTrait impl and return the raw pointer address.
+        pub fn create_raw(t: impl DfFileSourceTrait + 'static) -> usize {
+            let wrapper = crate::file_source::ForeignDfFileSource::new(t);
+            let boxed: Box<dyn crate::bridge::FileSourceBridge> = Box::new(wrapper);
+            let ptr = Box::into_raw(Box::new(DfFileSource(boxed)));
+            ptr as usize
+        }
+    }
+}
+
+use self::ffi::DfFileSourceTrait;
+use crate::file_opener::ffi::DfFileOpener;
+use crate::bridge::{FileOpenerBridge, FileSourceBridge};
+use crate::upcall_utils::do_returning_upcall;
 use arrow::datatypes::Schema as ArrowSchema;
 use arrow::ffi::FFI_ArrowSchema;
 use datafusion::common::DataFusionError;
