@@ -12,9 +12,14 @@ import org.apache.arrow.datafusion.logical_expr.LogicalPlan;
  *
  * <p>Example:
  *
- * <p>{@snippet : try (SessionContext ctx = new SessionContext()) { try (SessionState state =
- * ctx.state()) { LogicalPlan plan = state.createLogicalPlan( "SELECT 1 + 1");
- * System.out.println(plan); } } }
+ * {@snippet :
+ * try (SessionContext ctx = new SessionContext()) {
+ *     try (SessionState state = ctx.state()) {
+ *         LogicalPlan plan = state.createLogicalPlan("SELECT 1 + 1");
+ *         System.out.println(plan);
+ *     }
+ * }
+ * }
  *
  * @see <a
  *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/session_state/struct.SessionState.html">Rust
@@ -33,9 +38,12 @@ public class SessionState implements AutoCloseable {
    *
    * <p>Example:
    *
-   * <p>{@snippet : try (SessionState state = ctx.state()) { LogicalPlan plan =
-   * state.createLogicalPlan( "SELECT id, name FROM users WHERE age > 30");
-   * System.out.println(plan); } }
+   * {@snippet :
+   * try (SessionState state = ctx.state()) {
+   *     LogicalPlan plan = state.createLogicalPlan("SELECT id, name FROM users WHERE age > 30");
+   *     System.out.println(plan);
+   * }
+   * }
    *
    * @param sql the SQL query to parse into a logical plan
    * @return a LogicalPlan representing the parsed query

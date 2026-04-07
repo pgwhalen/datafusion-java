@@ -13,9 +13,17 @@ import org.apache.arrow.vector.types.pojo.Schema;
  *
  * <p>Example:
  *
- * <p>{@snippet : class TsvFileSource implements FileSource { @Override public FileOpener
- * createFileOpener(Schema schema, BufferAllocator allocator, FileScanConfig scanConfig) { return
- * new TsvFileOpener(schema, allocator); } @Override public String fileType() { return "tsv"; } } }
+ * {@snippet :
+ * class TsvFileSource implements FileSource {
+ *     @Override public FileOpener createFileOpener(
+ *             Schema schema, BufferAllocator allocator, FileScanConfig scanConfig) {
+ *         return new TsvFileOpener(schema, allocator);
+ *     }
+ *     @Override public String fileType() {
+ *         return "tsv";
+ *     }
+ * }
+ * }
  *
  * @see <a
  *     href="https://docs.rs/datafusion-datasource/52.1.0/datafusion_datasource/file/trait.FileSource.html">Rust
@@ -30,9 +38,13 @@ public interface FileSource {
    *
    * <p>Example:
    *
-   * <p>{@snippet : FileSource source = myFormat.fileSource(); FileOpener opener =
-   * source.createFileOpener( schema, allocator, scanConfig); RecordBatchReader reader =
-   * opener.open( partitionedFile); }
+   * {@snippet :
+   * FileSource source = myFormat.fileSource();
+   * FileOpener opener = source.createFileOpener(
+   *     schema, allocator, scanConfig);
+   * RecordBatchReader reader = opener.open(
+   *     partitionedFile);
+   * }
    *
    * @param schema the expected output schema
    * @param allocator allocator for Arrow vectors
@@ -52,8 +64,11 @@ public interface FileSource {
    *
    * <p>Example:
    *
-   * <p>{@snippet : FileSource source = myFormat.fileSource(); String type = source.fileType(); //
-   * e.g., "tsv" System.out.println("File source type: " + type); }
+   * {@snippet :
+   * FileSource source = myFormat.fileSource();
+   * String type = source.fileType(); // e.g., "tsv"
+   * System.out.println("File source type: " + type);
+   * }
    *
    * @return the file type identifier
    * @see <a

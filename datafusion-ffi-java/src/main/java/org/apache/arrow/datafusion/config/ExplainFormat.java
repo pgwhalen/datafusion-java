@@ -5,9 +5,15 @@ package org.apache.arrow.datafusion.config;
  *
  * <p>Example:
  *
- * <p>{@snippet : ExplainOptions explain = ExplainOptions.builder() .format(ExplainFormat.TREE)
- * .showStatistics(true) .build(); ConfigOptions config = ConfigOptions.builder() .explain(explain)
- * .build(); }
+ * {@snippet :
+ * ExplainOptions explain = ExplainOptions.builder()
+ *     .format(ExplainFormat.TREE)
+ *     .showStatistics(true)
+ *     .build();
+ * ConfigOptions config = ConfigOptions.builder()
+ *     .explain(explain)
+ *     .build();
+ * }
  *
  * @see <a
  *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.ExplainFormat.html">Rust

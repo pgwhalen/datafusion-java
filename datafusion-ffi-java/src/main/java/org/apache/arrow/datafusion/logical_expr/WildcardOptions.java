@@ -9,8 +9,12 @@ package org.apache.arrow.datafusion.logical_expr;
  *
  * <p>Example:
  *
- * <p>{@snippet : WildcardOptions opts = WildcardOptions.EMPTY; // All fields are null in the EMPTY
- * instance Object ilike = opts.ilike(); // null Object exclude = opts.exclude(); // null }
+ * {@snippet :
+ * WildcardOptions opts = WildcardOptions.EMPTY;
+ * // All fields are null in the EMPTY instance
+ * Object ilike = opts.ilike(); // null
+ * Object exclude = opts.exclude(); // null
+ * }
  *
  * @param ilike optional ILIKE pattern filter (stub, always null)
  * @param exclude optional EXCLUDE column list (stub, always null)

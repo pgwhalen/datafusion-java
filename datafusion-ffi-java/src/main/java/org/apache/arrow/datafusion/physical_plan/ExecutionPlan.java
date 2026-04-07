@@ -13,10 +13,20 @@ import org.apache.arrow.vector.types.pojo.Schema;
  *
  * <p>Example implementation:
  *
- * <p>{@snippet : public class MyExecutionPlan implements ExecutionPlan { private final Schema
- * schema; private final List<VectorSchemaRoot> batches; @Override public Schema schema() { return
- * schema; } @Override public RecordBatchReader execute(int partition, BufferAllocator allocator) {
- * return new MyBatchReader(batches); } } }
+ * {@snippet :
+ * public class MyExecutionPlan implements ExecutionPlan {
+ *     private final Schema schema;
+ *     private final List<VectorSchemaRoot> batches;
+ *
+ *     @Override
+ *     public Schema schema() { return schema; }
+ *
+ *     @Override
+ *     public RecordBatchReader execute(int partition, BufferAllocator allocator) {
+ *         return new MyBatchReader(batches);
+ *     }
+ * }
+ * }
  *
  * @see <a
  *     href="https://docs.rs/datafusion/52.1.0/datafusion/physical_plan/trait.ExecutionPlan.html">Rust
@@ -28,8 +38,12 @@ public interface ExecutionPlan {
    *
    * <p>Example:
    *
-   * <p>{@snippet : @Override public Schema schema() { return new
-   * Schema(List.of(Field.nullable("value", new ArrowType.Utf8()))); } }
+   * {@snippet :
+   * @Override
+   * public Schema schema() {
+   *     return new Schema(List.of(Field.nullable("value", new ArrowType.Utf8())));
+   * }
+   * }
    *
    * @return The Arrow schema
    * @see <a
@@ -45,7 +59,12 @@ public interface ExecutionPlan {
    *
    * <p>Example:
    *
-   * <p>{@snippet : @Override public int outputPartitioning() { return dataPartitions.size(); } }
+   * {@snippet :
+   * @Override
+   * public int outputPartitioning() {
+   *     return dataPartitions.size();
+   * }
+   * }
    *
    * @return The number of partitions
    * @see <a
@@ -64,8 +83,12 @@ public interface ExecutionPlan {
    *
    * <p>Example:
    *
-   * <p>{@snippet : @Override public PlanProperties properties() { return new PlanProperties(2,
-   * EmissionType.FINAL, Boundedness.BOUNDED); } }
+   * {@snippet :
+   * @Override
+   * public PlanProperties properties() {
+   *     return new PlanProperties(2, EmissionType.FINAL, Boundedness.BOUNDED);
+   * }
+   * }
    *
    * @return The plan properties
    * @see <a
@@ -84,9 +107,14 @@ public interface ExecutionPlan {
    *
    * <p>Example:
    *
-   * <p>{@snippet : @Override public RecordBatchReader execute(int partition, BufferAllocator
-   * allocator) { VectorSchemaRoot root = VectorSchemaRoot.create(schema(), allocator); // populate
-   * root with data for this partition return new SingleBatchReader(root); } }
+   * {@snippet :
+   * @Override
+   * public RecordBatchReader execute(int partition, BufferAllocator allocator) {
+   *     VectorSchemaRoot root = VectorSchemaRoot.create(schema(), allocator);
+   *     // populate root with data for this partition
+   *     return new SingleBatchReader(root);
+   * }
+   * }
    *
    * @param partition The partition index (0-based)
    * @param allocator The buffer allocator to use for Arrow memory

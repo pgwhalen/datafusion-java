@@ -9,9 +9,16 @@ import java.util.Map;
  *
  * <p>Example:
  *
- * <p>{@snippet : ExplainOptions explain = ExplainOptions.builder() .showStatistics(true)
- * .showSchema(true) .format(ExplainFormat.TREE) .build(); ConfigOptions config =
- * ConfigOptions.builder() .explain(explain) .build(); }
+ * {@snippet :
+ * ExplainOptions explain = ExplainOptions.builder()
+ *     .showStatistics(true)
+ *     .showSchema(true)
+ *     .format(ExplainFormat.TREE)
+ *     .build();
+ * ConfigOptions config = ConfigOptions.builder()
+ *     .explain(explain)
+ *     .build();
+ * }
  *
  * @param logicalPlanOnly Whether EXPLAIN should only show the logical plan
  * @param physicalPlanOnly Whether EXPLAIN should only show the physical plan

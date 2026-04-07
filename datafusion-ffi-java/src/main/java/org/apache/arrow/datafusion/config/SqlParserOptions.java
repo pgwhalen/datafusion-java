@@ -9,9 +9,16 @@ import java.util.Map;
  *
  * <p>Example:
  *
- * <p>{@snippet : SqlParserOptions parser = SqlParserOptions.builder() .dialect(Dialect.POSTGRESQL)
- * .enableIdentNormalization(false) .supportVarcharWithLength(true) .build(); ConfigOptions config =
- * ConfigOptions.builder() .sqlParser(parser) .build(); }
+ * {@snippet :
+ * SqlParserOptions parser = SqlParserOptions.builder()
+ *     .dialect(Dialect.POSTGRESQL)
+ *     .enableIdentNormalization(false)
+ *     .supportVarcharWithLength(true)
+ *     .build();
+ * ConfigOptions config = ConfigOptions.builder()
+ *     .sqlParser(parser)
+ *     .build();
+ * }
  *
  * @param parseFloatAsDecimal Whether to parse floating-point numbers as decimal type instead of
  *     float64

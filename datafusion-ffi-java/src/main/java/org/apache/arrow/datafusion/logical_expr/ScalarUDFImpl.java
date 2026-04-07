@@ -12,10 +12,18 @@ import org.apache.arrow.vector.FieldVector;
  *
  * <p>Example:
  *
- * <p>{@snippet : ScalarUDFImpl negate = (args, numRows, allocator) -> { BigIntVector input =
- * (BigIntVector) args.get(0); BigIntVector result = new BigIntVector("result", allocator);
- * result.allocateNew(numRows); for (int i = 0; i < numRows; i++) { result.set(i, -input.get(i)); }
- * result.setValueCount(numRows); return result; }; }
+ * {@snippet :
+ * ScalarUDFImpl negate = (args, numRows, allocator) -> {
+ *     BigIntVector input = (BigIntVector) args.get(0);
+ *     BigIntVector result = new BigIntVector("result", allocator);
+ *     result.allocateNew(numRows);
+ *     for (int i = 0; i < numRows; i++) {
+ *         result.set(i, -input.get(i));
+ *     }
+ *     result.setValueCount(numRows);
+ *     return result;
+ * };
+ * }
  *
  * @see <a
  *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/trait.ScalarUDFImpl.html">Rust

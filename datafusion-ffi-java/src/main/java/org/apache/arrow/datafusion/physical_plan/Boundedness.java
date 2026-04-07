@@ -5,8 +5,11 @@ package org.apache.arrow.datafusion.physical_plan;
  *
  * <p>Example:
  *
- * <p>{@snippet : // Used when implementing a custom ExecutionPlan Boundedness boundedness =
- * Boundedness.BOUNDED; // BOUNDED for finite data, UNBOUNDED for streaming }
+ * {@snippet :
+ * // Used when implementing a custom ExecutionPlan
+ * Boundedness boundedness = Boundedness.BOUNDED;
+ * // BOUNDED for finite data, UNBOUNDED for streaming
+ * }
  *
  * @see <a
  *     href="https://docs.rs/datafusion/52.1.0/datafusion/physical_plan/execution_plan/enum.Boundedness.html">Rust

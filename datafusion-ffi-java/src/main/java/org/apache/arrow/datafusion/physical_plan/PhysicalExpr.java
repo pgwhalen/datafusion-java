@@ -12,8 +12,11 @@ import org.apache.arrow.datafusion.logical_expr.Expr;
  *
  * <p>Example:
  *
- * <p>{@snippet : try (PhysicalExpr expr = session.createPhysicalExpr(schema, filters)) { // use
- * compiled physical expression for filter pushdown } }
+ * {@snippet :
+ * try (PhysicalExpr expr = session.createPhysicalExpr(schema, filters)) {
+ *     // use compiled physical expression for filter pushdown
+ * }
+ * }
  *
  * @see <a
  *     href="https://docs.rs/datafusion/52.1.0/datafusion/physical_plan/trait.PhysicalExpr.html">Rust

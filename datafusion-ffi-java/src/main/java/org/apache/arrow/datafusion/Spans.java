@@ -7,8 +7,11 @@ import java.util.List;
  *
  * <p>Example:
  *
- * <p>{@snippet : Span span = new Span(new Location(1, 5), new Location(1, 20)); Spans spans = new
- * Spans(List.of(span)); List<Span> list = spans.spans(); }
+ * {@snippet :
+ * Span span = new Span(new Location(1, 5), new Location(1, 20));
+ * Spans spans = new Spans(List.of(span));
+ * List<Span> list = spans.spans();
+ * }
  *
  * @param spans the list of spans
  * @see <a

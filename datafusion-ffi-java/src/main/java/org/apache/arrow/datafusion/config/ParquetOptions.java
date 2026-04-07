@@ -9,9 +9,16 @@ import java.util.Map;
  *
  * <p>Example:
  *
- * <p>{@snippet : ParquetOptions parquet = ParquetOptions.builder() .pushdownFilters(true)
- * .pruning(true) .enablePageIndex(true) .build(); ExecutionOptions exec =
- * ExecutionOptions.builder() .parquet(parquet) .build(); }
+ * {@snippet :
+ * ParquetOptions parquet = ParquetOptions.builder()
+ *     .pushdownFilters(true)
+ *     .pruning(true)
+ *     .enablePageIndex(true)
+ *     .build();
+ * ExecutionOptions exec = ExecutionOptions.builder()
+ *     .parquet(parquet)
+ *     .build();
+ * }
  *
  * @param enablePageIndex Whether to use the page index when reading parquet files
  * @param pruning Whether to use row group pruning when reading parquet files

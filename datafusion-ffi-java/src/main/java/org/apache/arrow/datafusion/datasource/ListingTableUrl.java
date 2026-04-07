@@ -5,9 +5,13 @@ package org.apache.arrow.datafusion.datasource;
  *
  * <p>Example:
  *
- * <p>{@snippet : ListingTableUrl url = ListingTableUrl.parse("/path/to/data/"); String path =
- * url.getUrl(); ListingTableConfig config = new ListingTableConfig(url)
- * .withListingOptions(options) .withSchema(mySchema); }
+ * {@snippet :
+ * ListingTableUrl url = ListingTableUrl.parse("/path/to/data/");
+ * String path = url.getUrl();
+ * ListingTableConfig config = new ListingTableConfig(url)
+ *     .withListingOptions(options)
+ *     .withSchema(mySchema);
+ * }
  *
  * @see <a
  *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingTableUrl.html">Rust
@@ -26,8 +30,11 @@ public final class ListingTableUrl {
    *
    * <p>Example:
    *
-   * <p>{@snippet : ListingTableUrl url = ListingTableUrl.parse("/data/csv/"); String path =
-   * url.getUrl(); // "/data/csv/" System.out.println("Table URL: " + path); }
+   * {@snippet :
+   * ListingTableUrl url = ListingTableUrl.parse("/data/csv/");
+   * String path = url.getUrl(); // "/data/csv/"
+   * System.out.println("Table URL: " + path);
+   * }
    *
    * @return the URL string
    * @see <a
@@ -43,9 +50,12 @@ public final class ListingTableUrl {
    *
    * <p>Example:
    *
-   * <p>{@snippet : ListingTableUrl url = ListingTableUrl.parse("/path/to/parquet/files/");
-   * ListingTableConfig config = new ListingTableConfig(url) .withListingOptions(options)
-   * .withSchema(mySchema); }
+   * {@snippet :
+   * ListingTableUrl url = ListingTableUrl.parse("/path/to/parquet/files/");
+   * ListingTableConfig config = new ListingTableConfig(url)
+   *     .withListingOptions(options)
+   *     .withSchema(mySchema);
+   * }
    *
    * @param path the directory path or URL
    * @return a new ListingTableUrl

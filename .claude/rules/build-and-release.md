@@ -57,7 +57,6 @@ Supported platforms are defined in `scripts/platforms.conf` (single source of tr
 - `NativeLoader.java` (`getPlatformDirectory` switch)
 
 ## Releasing
-
 The CI workflow is `.github/workflows/publish-ffi.yml`. It builds native libraries on 5 platforms, packages a fat JAR, tests it on 3 platforms, publishes to GitHub Packages, tags the release, and bumps the version.
 
 **To release**, trigger `workflow_dispatch` on the current development branch. **Do NOT merge to `main`.**

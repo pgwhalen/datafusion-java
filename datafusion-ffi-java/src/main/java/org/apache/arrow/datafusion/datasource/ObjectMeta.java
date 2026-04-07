@@ -9,8 +9,11 @@ package org.apache.arrow.datafusion.datasource;
  *
  * <p>Example:
  *
- * <p>{@snippet : ObjectMeta meta = new ObjectMeta("/data/file.parquet", 1024000); String location =
- * meta.location(); long size = meta.size(); System.out.println(location + " (" + size + " bytes)");
+ * {@snippet :
+ * ObjectMeta meta = new ObjectMeta("/data/file.parquet", 1024000);
+ * String location = meta.location();
+ * long size = meta.size();
+ * System.out.println(location + " (" + size + " bytes)");
  * }
  *
  * @param location the path or URI of the object

@@ -10,9 +10,14 @@ import java.util.Map;
  *
  * <p>Example:
  *
- * <p>{@snippet : ParquetOptions options = ParquetOptions.builder() .compression("SNAPPY")
- * .maxRowGroupSize(1_000_000L) .dictionaryEnabled(true) .build(); byte[] encoded =
- * options.encodeOptions(); }
+ * {@snippet :
+ * ParquetOptions options = ParquetOptions.builder()
+ *     .compression("SNAPPY")
+ *     .maxRowGroupSize(1_000_000L)
+ *     .dictionaryEnabled(true)
+ *     .build();
+ * byte[] encoded = options.encodeOptions();
+ * }
  *
  * @see <a
  *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/config/struct.ParquetOptions.html">Rust
@@ -71,8 +76,12 @@ public final class ParquetOptions {
    *
    * <p>Example:
    *
-   * <p>{@snippet : ParquetOptions options = ParquetOptions.builder() .compression("SNAPPY")
-   * .build(); byte[] encoded = options.encodeOptions(); }
+   * {@snippet :
+   * ParquetOptions options = ParquetOptions.builder()
+   *     .compression("SNAPPY")
+   *     .build();
+   * byte[] encoded = options.encodeOptions();
+   * }
    */
   public byte[] encodeOptions() {
     org.apache.arrow.datafusion.proto.ParquetOptions.Builder global =

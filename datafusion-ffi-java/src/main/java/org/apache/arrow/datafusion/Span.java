@@ -5,8 +5,11 @@ package org.apache.arrow.datafusion;
  *
  * <p>Example:
  *
- * <p>{@snippet : Location start = new Location(1, 5); Location end = new Location(1, 20); Span span
- * = new Span(start, end); }
+ * {@snippet :
+ * Location start = new Location(1, 5);
+ * Location end = new Location(1, 20);
+ * Span span = new Span(start, end);
+ * }
  *
  * @param start the start location
  * @param end the end location

@@ -9,9 +9,16 @@ import java.util.Map;
  *
  * <p>Example:
  *
- * <p>{@snippet : ExecutionOptions exec = ExecutionOptions.builder() .batchSize(4096)
- * .targetPartitions(8) .coalesceBatches(true) .build(); ConfigOptions config =
- * ConfigOptions.builder() .execution(exec) .build(); }
+ * {@snippet :
+ * ExecutionOptions exec = ExecutionOptions.builder()
+ *     .batchSize(4096)
+ *     .targetPartitions(8)
+ *     .coalesceBatches(true)
+ *     .build();
+ * ConfigOptions config = ConfigOptions.builder()
+ *     .execution(exec)
+ *     .build();
+ * }
  *
  * @param batchSize Number of rows processed per batch (default 8192)
  * @param coalesceBatches Whether to coalesce small batches into larger ones

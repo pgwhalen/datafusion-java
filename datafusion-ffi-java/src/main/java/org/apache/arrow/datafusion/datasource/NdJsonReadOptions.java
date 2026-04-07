@@ -9,9 +9,13 @@ import org.apache.arrow.vector.types.pojo.Schema;
  *
  * <p>Example:
  *
- * <p>{@snippet : NdJsonReadOptions options = NdJsonReadOptions.builder()
- * .schemaInferMaxRecords(200) .schema(mySchema) .build(); ctx.registerJson("my_table",
- * "/path/to/data.json", options); }
+ * {@snippet :
+ * NdJsonReadOptions options = NdJsonReadOptions.builder()
+ *     .schemaInferMaxRecords(200)
+ *     .schema(mySchema)
+ *     .build();
+ * ctx.registerJson("my_table", "/path/to/data.json", options);
+ * }
  *
  * @see <a
  *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/file_format/options/struct.NdJsonReadOptions.html">Rust
@@ -36,8 +40,12 @@ public final class NdJsonReadOptions {
    *
    * <p>Example:
    *
-   * <p>{@snippet : NdJsonReadOptions options = NdJsonReadOptions.builder() .schema(mySchema)
-   * .build(); Schema schema = options.schema(); }
+   * {@snippet :
+   * NdJsonReadOptions options = NdJsonReadOptions.builder()
+   *     .schema(mySchema)
+   *     .build();
+   * Schema schema = options.schema();
+   * }
    *
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/file_format/options/struct.NdJsonReadOptions.html#method.schema">Rust
@@ -52,8 +60,12 @@ public final class NdJsonReadOptions {
    *
    * <p>Example:
    *
-   * <p>{@snippet : NdJsonReadOptions options = NdJsonReadOptions.builder()
-   * .schemaInferMaxRecords(200) .build(); byte[] encoded = options.encodeOptions(); }
+   * {@snippet :
+   * NdJsonReadOptions options = NdJsonReadOptions.builder()
+   *     .schemaInferMaxRecords(200)
+   *     .build();
+   * byte[] encoded = options.encodeOptions();
+   * }
    */
   public byte[] encodeOptions() {
     org.apache.arrow.datafusion.proto.JsonOptions.Builder b =

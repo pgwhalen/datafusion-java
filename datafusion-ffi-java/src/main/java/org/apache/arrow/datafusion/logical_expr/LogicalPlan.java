@@ -12,8 +12,12 @@ import org.apache.arrow.datafusion.execution.SessionState;
  *
  * <p>Example:
  *
- * <p>{@snippet : try (SessionState state = ctx.sessionState()) { LogicalPlan plan =
- * state.createLogicalPlan("SELECT * FROM t"); DataFrame df = ctx.executeLogicalPlan(plan); } }
+ * {@snippet :
+ * try (SessionState state = ctx.sessionState()) {
+ *     LogicalPlan plan = state.createLogicalPlan("SELECT * FROM t");
+ *     DataFrame df = ctx.executeLogicalPlan(plan);
+ * }
+ * }
  *
  * @see <a
  *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.LogicalPlan.html">Rust

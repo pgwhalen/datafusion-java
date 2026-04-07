@@ -9,7 +9,7 @@ import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.types.pojo.Schema;
 
 /**
- * A borrowed handle to the DataFusion session available during a {@link TableProvider#scan}
+ * A borrowed handle to the DataFusion session available during a {@link TableProvider#scanWithArgs}
  * callback.
  *
  * <p>This provides access to session-level functionality like creating physical expressions from
@@ -18,10 +18,16 @@ import org.apache.arrow.vector.types.pojo.Schema;
  *
  * <p>Example:
  *
- * <p>{@snippet : @Override public ExecutionPlan scanWithArgs(Session session, ScanArgs args) { if
- * (args.filters() != null && !args.filters().isEmpty()) { PhysicalExpr expr =
- * session.createPhysicalExpr(schema(), args.filters()); // use expr for filter pushdown } return
- * new MyExecutionPlan(schema()); } }
+ * {@snippet :
+ * @Override
+ * public ExecutionPlan scanWithArgs(Session session, ScanArgs args) {
+ *     if (args.filters() != null && !args.filters().isEmpty()) {
+ *         PhysicalExpr expr = session.createPhysicalExpr(schema(), args.filters());
+ *         // use expr for filter pushdown
+ *     }
+ *     return new MyExecutionPlan(schema());
+ * }
+ * }
  *
  * @see <a href="https://docs.rs/datafusion/52.1.0/datafusion/catalog/trait.Session.html">Rust
  *     DataFusion: Session</a>
@@ -43,8 +49,11 @@ public class Session {
    *
    * <p>Example:
    *
-   * <p>{@snippet : PhysicalExpr expr = session.createPhysicalExpr(tableSchema, args.filters()); //
-   * use expr, then close when done expr.close(); }
+   * {@snippet :
+   * PhysicalExpr expr = session.createPhysicalExpr(tableSchema, args.filters());
+   * // use expr, then close when done
+   * expr.close();
+   * }
    *
    * @param tableSchema the schema of the table being scanned
    * @param filters the filter expressions to compile (borrowed, from the scan callback)

@@ -7,9 +7,12 @@ package org.apache.arrow.datafusion.datasource;
  *
  * <p>Example:
  *
- * <p>{@snippet : ObjectMeta meta = new ObjectMeta("/data/file.parquet", 1024000); FileRange range =
- * new FileRange(0, 512000); PartitionedFile file = new PartitionedFile(meta, range); String path =
- * file.objectMeta().location(); }
+ * {@snippet :
+ * ObjectMeta meta = new ObjectMeta("/data/file.parquet", 1024000);
+ * FileRange range = new FileRange(0, 512000);
+ * PartitionedFile file = new PartitionedFile(meta, range);
+ * String path = file.objectMeta().location();
+ * }
  *
  * @param objectMeta metadata for the file including its location and size
  * @param range byte range to read, or {@code null} to read the entire file

@@ -7,7 +7,9 @@ package org.apache.arrow.datafusion.logical_expr;
  *
  * <p>Example:
  *
- * <p>{@snippet : Signature sig = new Signature(Volatility.IMMUTABLE); }
+ * {@snippet :
+ * Signature sig = new Signature(Volatility.IMMUTABLE);
+ * }
  *
  * @see <a
  *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/struct.Signature.html">Rust

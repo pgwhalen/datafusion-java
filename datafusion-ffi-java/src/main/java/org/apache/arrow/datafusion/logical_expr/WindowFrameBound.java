@@ -10,9 +10,11 @@ import org.apache.arrow.datafusion.common.ScalarValue;
  *
  * <p>Example:
  *
- * <p>{@snippet : WindowFrameBound current = new WindowFrameBound.CurrentRow(); WindowFrameBound
- * unboundedPreceding = new WindowFrameBound.Preceding(null); WindowFrameBound fiveFollowing = new
- * WindowFrameBound.Following(ScalarValue.ofInt64(5L)); }
+ * {@snippet :
+ * WindowFrameBound current = new WindowFrameBound.CurrentRow();
+ * WindowFrameBound unboundedPreceding = new WindowFrameBound.Preceding(null);
+ * WindowFrameBound fiveFollowing = new WindowFrameBound.Following(ScalarValue.ofInt64(5L));
+ * }
  *
  * @see <a
  *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/window_frame/enum.WindowFrameBound.html">Rust

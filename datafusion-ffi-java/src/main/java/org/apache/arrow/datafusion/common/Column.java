@@ -7,8 +7,11 @@ import org.apache.arrow.datafusion.Spans;
  *
  * <p>Example:
  *
- * <p>{@snippet : Column col = new Column("id", null, new Spans(List.of())); String name =
- * col.name(); // "id" TableReference relation = col.relation(); // null }
+ * {@snippet :
+ * Column col = new Column("id", null, new Spans(List.of()));
+ * String name = col.name(); // "id"
+ * TableReference relation = col.relation(); // null
+ * }
  *
  * @param name the column name
  * @param relation the optional table reference for this column (may be null)

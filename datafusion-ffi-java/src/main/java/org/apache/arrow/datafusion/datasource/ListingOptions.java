@@ -7,9 +7,15 @@ package org.apache.arrow.datafusion.datasource;
  *
  * <p>Example:
  *
- * <p>{@snippet : ListingOptions options = ListingOptions.builder(myFormat) .fileExtension(".tsv")
- * .collectStat(true) .targetPartitions(4) .build(); ListingTableConfig config = new
- * ListingTableConfig(url) .withListingOptions(options); }
+ * {@snippet :
+ * ListingOptions options = ListingOptions.builder(myFormat)
+ *     .fileExtension(".tsv")
+ *     .collectStat(true)
+ *     .targetPartitions(4)
+ *     .build();
+ * ListingTableConfig config = new ListingTableConfig(url)
+ *     .withListingOptions(options);
+ * }
  *
  * @see <a
  *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingOptions.html">Rust
@@ -44,9 +50,12 @@ public class ListingOptions {
    *
    * <p>Example:
    *
-   * <p>{@snippet : ListingOptions options = ListingOptions.builder(myFormat).build(); FileFormat
-   * format = options.format(); String extension = format.getExtension(); System.out.println("Format
-   * extension: " + extension); }
+   * {@snippet :
+   * ListingOptions options = ListingOptions.builder(myFormat).build();
+   * FileFormat format = options.format();
+   * String extension = format.getExtension();
+   * System.out.println("Format extension: " + extension);
+   * }
    *
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingOptions.html#structfield.format">Rust
@@ -61,8 +70,12 @@ public class ListingOptions {
    *
    * <p>Example:
    *
-   * <p>{@snippet : ListingOptions options = ListingOptions.builder(myFormat) .fileExtension(".tsv")
-   * .build(); String ext = options.fileExtension(); // ".tsv" }
+   * {@snippet :
+   * ListingOptions options = ListingOptions.builder(myFormat)
+   *     .fileExtension(".tsv")
+   *     .build();
+   * String ext = options.fileExtension(); // ".tsv"
+   * }
    *
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingOptions.html#structfield.file_extension">Rust
@@ -77,8 +90,12 @@ public class ListingOptions {
    *
    * <p>Example:
    *
-   * <p>{@snippet : ListingOptions options = ListingOptions.builder(myFormat) .collectStat(true)
-   * .build(); boolean collect = options.collectStat(); // true }
+   * {@snippet :
+   * ListingOptions options = ListingOptions.builder(myFormat)
+   *     .collectStat(true)
+   *     .build();
+   * boolean collect = options.collectStat(); // true
+   * }
    *
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingOptions.html#structfield.collect_stat">Rust
@@ -93,8 +110,12 @@ public class ListingOptions {
    *
    * <p>Example:
    *
-   * <p>{@snippet : ListingOptions options = ListingOptions.builder(myFormat) .targetPartitions(4)
-   * .build(); int partitions = options.targetPartitions(); // 4 }
+   * {@snippet :
+   * ListingOptions options = ListingOptions.builder(myFormat)
+   *     .targetPartitions(4)
+   *     .build();
+   * int partitions = options.targetPartitions(); // 4
+   * }
    *
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingOptions.html#structfield.target_partitions">Rust

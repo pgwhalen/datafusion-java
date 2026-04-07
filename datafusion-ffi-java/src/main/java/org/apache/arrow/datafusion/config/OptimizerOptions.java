@@ -9,9 +9,16 @@ import java.util.Map;
  *
  * <p>Example:
  *
- * <p>{@snippet : OptimizerOptions optimizer = OptimizerOptions.builder() .preferHashJoin(true)
- * .maxPasses(5) .repartitionJoins(true) .build(); ConfigOptions config = ConfigOptions.builder()
- * .optimizer(optimizer) .build(); }
+ * {@snippet :
+ * OptimizerOptions optimizer = OptimizerOptions.builder()
+ *     .preferHashJoin(true)
+ *     .maxPasses(5)
+ *     .repartitionJoins(true)
+ *     .build();
+ * ConfigOptions config = ConfigOptions.builder()
+ *     .optimizer(optimizer)
+ *     .build();
+ * }
  *
  * @param enableDistinctAggregationSoftLimit Whether to enable the distinct aggregation soft limit
  *     optimization

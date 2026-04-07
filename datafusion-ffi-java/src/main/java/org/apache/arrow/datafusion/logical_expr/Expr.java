@@ -15,9 +15,13 @@ import org.apache.arrow.vector.types.pojo.ArrowType;
  *
  * <p>Use {@code instanceof} pattern matching to inspect expression structure:
  *
- * <p>{@snippet : if (expr instanceof Expr.BinaryExpr bin) { System.out.println("Left: " +
- * bin.left()); System.out.println("Op: " + bin.op()); System.out.println("Right: " + bin.right());
- * } }
+ * {@snippet :
+ * if (expr instanceof Expr.BinaryExpr bin) {
+ *     System.out.println("Left: " + bin.left());
+ *     System.out.println("Op: " + bin.op());
+ *     System.out.println("Right: " + bin.right());
+ * }
+ * }
  *
  * <p>Variants that cannot be represented via protobuf (e.g., subquery expressions) are captured by
  * {@link UnresolvedExpr}, which stores the raw proto bytes for lossless round-trip serialization.
@@ -32,7 +36,9 @@ public sealed interface Expr {
   /**
    * Equality: this = other.
    *
-   * <p>{@snippet : col("status").eq(lit("active")) }
+   * {@snippet :
+   * col("status").eq(lit("active"))
+   * }
    *
    * @param other the expression to compare
    * @see <a
@@ -46,7 +52,9 @@ public sealed interface Expr {
   /**
    * Not equal: this != other.
    *
-   * <p>{@snippet : col("status").notEq(lit("deleted")) }
+   * {@snippet :
+   * col("status").notEq(lit("deleted"))
+   * }
    *
    * @param other the expression to compare
    * @see <a
@@ -60,7 +68,9 @@ public sealed interface Expr {
   /**
    * Less than: this &lt; other.
    *
-   * <p>{@snippet : col("age").lt(lit(18)) }
+   * {@snippet :
+   * col("age").lt(lit(18))
+   * }
    *
    * @param other the expression to compare
    * @see <a
@@ -74,7 +84,9 @@ public sealed interface Expr {
   /**
    * Less than or equal: this &lt;= other.
    *
-   * <p>{@snippet : col("age").ltEq(lit(65)) }
+   * {@snippet :
+   * col("age").ltEq(lit(65))
+   * }
    *
    * @param other the expression to compare
    * @see <a
@@ -88,7 +100,9 @@ public sealed interface Expr {
   /**
    * Greater than: this &gt; other.
    *
-   * <p>{@snippet : col("age").gt(lit(18)) }
+   * {@snippet :
+   * col("age").gt(lit(18))
+   * }
    *
    * @param other the expression to compare
    * @see <a
@@ -102,7 +116,9 @@ public sealed interface Expr {
   /**
    * Greater than or equal: this &gt;= other.
    *
-   * <p>{@snippet : col("salary").gtEq(lit(50000)) }
+   * {@snippet :
+   * col("salary").gtEq(lit(50000))
+   * }
    *
    * @param other the expression to compare
    * @see <a
@@ -118,7 +134,9 @@ public sealed interface Expr {
   /**
    * Logical AND: this AND other.
    *
-   * <p>{@snippet : col("a").gt(lit(0)).and(col("b").lt(lit(100))) }
+   * {@snippet :
+   * col("a").gt(lit(0)).and(col("b").lt(lit(100)))
+   * }
    *
    * @param other the expression to combine
    * @see <a
@@ -132,7 +150,9 @@ public sealed interface Expr {
   /**
    * Logical OR: this OR other.
    *
-   * <p>{@snippet : col("status").eq(lit("active")).or(col("status").eq(lit("pending"))) }
+   * {@snippet :
+   * col("status").eq(lit("active")).or(col("status").eq(lit("pending")))
+   * }
    *
    * @param other the expression to combine
    * @see <a
@@ -146,7 +166,9 @@ public sealed interface Expr {
   /**
    * Logical NOT: NOT this.
    *
-   * <p>{@snippet : col("is_active").not() }
+   * {@snippet :
+   * col("is_active").not()
+   * }
    *
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.not">Rust
@@ -161,7 +183,9 @@ public sealed interface Expr {
   /**
    * Addition: this + other.
    *
-   * <p>{@snippet : col("price").add(col("tax")) }
+   * {@snippet :
+   * col("price").add(col("tax"))
+   * }
    *
    * @param other the expression to add
    * @see <a
@@ -175,7 +199,9 @@ public sealed interface Expr {
   /**
    * Subtraction: this - other.
    *
-   * <p>{@snippet : col("revenue").sub(col("cost")) }
+   * {@snippet :
+   * col("revenue").sub(col("cost"))
+   * }
    *
    * @param other the expression to subtract
    * @see <a
@@ -189,7 +215,9 @@ public sealed interface Expr {
   /**
    * Multiplication: this * other.
    *
-   * <p>{@snippet : col("price").mul(col("qty")) }
+   * {@snippet :
+   * col("price").mul(col("qty"))
+   * }
    *
    * @param other the expression to multiply by
    * @see <a
@@ -203,7 +231,9 @@ public sealed interface Expr {
   /**
    * Division: this / other.
    *
-   * <p>{@snippet : col("total").div(col("count")) }
+   * {@snippet :
+   * col("total").div(col("count"))
+   * }
    *
    * @param other the expression to divide by
    * @see <a
@@ -217,7 +247,9 @@ public sealed interface Expr {
   /**
    * Modulo: this % other.
    *
-   * <p>{@snippet : col("value").rem(lit(2)) }
+   * {@snippet :
+   * col("value").rem(lit(2))
+   * }
    *
    * @param other the expression to divide by
    * @see <a
@@ -231,7 +263,9 @@ public sealed interface Expr {
   /**
    * Unary negation: -this.
    *
-   * <p>{@snippet : col("balance").neg() }
+   * {@snippet :
+   * col("balance").neg()
+   * }
    *
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.neg">Rust
@@ -246,7 +280,9 @@ public sealed interface Expr {
   /**
    * SQL LIKE pattern match.
    *
-   * <p>{@snippet : col("name").like(lit("%Smith%")) }
+   * {@snippet :
+   * col("name").like(lit("%Smith%"))
+   * }
    *
    * @param pattern the pattern expression
    * @see <a
@@ -260,7 +296,9 @@ public sealed interface Expr {
   /**
    * SQL NOT LIKE pattern match.
    *
-   * <p>{@snippet : col("name").notLike(lit("%test%")) }
+   * {@snippet :
+   * col("name").notLike(lit("%test%"))
+   * }
    *
    * @param pattern the pattern expression
    * @see <a
@@ -274,7 +312,9 @@ public sealed interface Expr {
   /**
    * Case-insensitive LIKE (ILIKE).
    *
-   * <p>{@snippet : col("name").ilike(lit("%smith%")) }
+   * {@snippet :
+   * col("name").ilike(lit("%smith%"))
+   * }
    *
    * @param pattern the pattern expression
    * @see <a
@@ -290,7 +330,9 @@ public sealed interface Expr {
   /**
    * IS NULL.
    *
-   * <p>{@snippet : col("email").isNull() }
+   * {@snippet :
+   * col("email").isNull()
+   * }
    *
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.is_null">Rust
@@ -303,7 +345,9 @@ public sealed interface Expr {
   /**
    * IS NOT NULL.
    *
-   * <p>{@snippet : col("email").isNotNull() }
+   * {@snippet :
+   * col("email").isNotNull()
+   * }
    *
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.is_not_null">Rust
@@ -316,7 +360,9 @@ public sealed interface Expr {
   /**
    * IS TRUE.
    *
-   * <p>{@snippet : col("is_active").isTrue() }
+   * {@snippet :
+   * col("is_active").isTrue()
+   * }
    *
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.is_true">Rust
@@ -329,7 +375,9 @@ public sealed interface Expr {
   /**
    * IS FALSE.
    *
-   * <p>{@snippet : col("is_active").isFalse() }
+   * {@snippet :
+   * col("is_active").isFalse()
+   * }
    *
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.is_false">Rust
@@ -344,7 +392,9 @@ public sealed interface Expr {
   /**
    * IN (value1, value2, ...).
    *
-   * <p>{@snippet : col("status").inList(List.of(lit("active"), lit("pending"))) }
+   * {@snippet :
+   * col("status").inList(List.of(lit("active"), lit("pending")))
+   * }
    *
    * @param values the list of values
    * @see <a
@@ -358,7 +408,9 @@ public sealed interface Expr {
   /**
    * NOT IN (value1, value2, ...).
    *
-   * <p>{@snippet : col("status").notInList(List.of(lit("deleted"), lit("archived"))) }
+   * {@snippet :
+   * col("status").notInList(List.of(lit("deleted"), lit("archived")))
+   * }
    *
    * @param values the list of values
    * @see <a
@@ -374,7 +426,9 @@ public sealed interface Expr {
   /**
    * BETWEEN low AND high.
    *
-   * <p>{@snippet : col("age").between(lit(18), lit(65)) }
+   * {@snippet :
+   * col("age").between(lit(18), lit(65))
+   * }
    *
    * @param low the lower bound
    * @param high the upper bound
@@ -389,7 +443,9 @@ public sealed interface Expr {
   /**
    * NOT BETWEEN low AND high.
    *
-   * <p>{@snippet : col("score").notBetween(lit(0), lit(50)) }
+   * {@snippet :
+   * col("score").notBetween(lit(0), lit(50))
+   * }
    *
    * @param low the lower bound
    * @param high the upper bound
@@ -406,7 +462,9 @@ public sealed interface Expr {
   /**
    * Alias this expression: expr AS name.
    *
-   * <p>{@snippet : avg(col("salary")).alias("avg_salary") }
+   * {@snippet :
+   * avg(col("salary")).alias("avg_salary")
+   * }
    *
    * @param name the alias name
    * @see <a
@@ -422,7 +480,9 @@ public sealed interface Expr {
   /**
    * Sort ascending, nulls last (default).
    *
-   * <p>{@snippet : col("name").sortAsc() }
+   * {@snippet :
+   * col("name").sortAsc()
+   * }
    *
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.sort">Rust
@@ -435,7 +495,9 @@ public sealed interface Expr {
   /**
    * Sort descending, nulls first (default).
    *
-   * <p>{@snippet : col("score").sortDesc() }
+   * {@snippet :
+   * col("score").sortDesc()
+   * }
    *
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.sort">Rust
@@ -448,7 +510,9 @@ public sealed interface Expr {
   /**
    * Sort with explicit control over direction and null ordering.
    *
-   * <p>{@snippet : col("name").sort(true, false) // ascending, nulls last }
+   * {@snippet :
+   * col("name").sort(true, false) // ascending, nulls last
+   * }
    *
    * @param asc true for ascending, false for descending
    * @param nullsFirst true to sort nulls first

@@ -7,8 +7,9 @@ package org.apache.arrow.datafusion.logical_expr;
  *
  * <p>Example:
  *
- * <p>{@snippet : DataFrame joined = left.join(right, JoinType.INNER, new String[]{"id"}, new
- * String[]{"id"}); }
+ * {@snippet :
+ * DataFrame joined = left.join(right, JoinType.INNER, new String[]{"id"}, new String[]{"id"});
+ * }
  *
  * @see <a href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.JoinType.html">Rust
  *     DataFusion: JoinType</a>

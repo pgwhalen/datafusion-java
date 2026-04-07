@@ -9,8 +9,12 @@ import org.apache.arrow.vector.types.pojo.Schema;
  *
  * <p>Example:
  *
- * <p>{@snippet : ParquetReadOptions options = ParquetReadOptions.builder() .parquetPruning(true)
- * .skipMetadata(false) .build(); ctx.registerParquet("my_table", "/path/to/data.parquet", options);
+ * {@snippet :
+ * ParquetReadOptions options = ParquetReadOptions.builder()
+ *     .parquetPruning(true)
+ *     .skipMetadata(false)
+ *     .build();
+ * ctx.registerParquet("my_table", "/path/to/data.parquet", options);
  * }
  *
  * @see <a
@@ -38,8 +42,13 @@ public final class ParquetReadOptions {
    *
    * <p>Example:
    *
-   * <p>{@snippet : ParquetReadOptions options = ParquetReadOptions.builder() .schema(mySchema)
-   * .parquetPruning(true) .build(); Schema schema = options.schema(); }
+   * {@snippet :
+   * ParquetReadOptions options = ParquetReadOptions.builder()
+   *     .schema(mySchema)
+   *     .parquetPruning(true)
+   *     .build();
+   * Schema schema = options.schema();
+   * }
    *
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/file_format/options/struct.ParquetReadOptions.html#method.schema">Rust
@@ -54,8 +63,12 @@ public final class ParquetReadOptions {
    *
    * <p>Example:
    *
-   * <p>{@snippet : ParquetReadOptions options = ParquetReadOptions.builder() .parquetPruning(true)
-   * .build(); byte[] encoded = options.encodeOptions(); }
+   * {@snippet :
+   * ParquetReadOptions options = ParquetReadOptions.builder()
+   *     .parquetPruning(true)
+   *     .build();
+   * byte[] encoded = options.encodeOptions();
+   * }
    */
   public byte[] encodeOptions() {
     org.apache.arrow.datafusion.proto.ParquetOptions.Builder b =

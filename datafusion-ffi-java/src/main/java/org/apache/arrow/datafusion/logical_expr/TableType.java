@@ -5,8 +5,12 @@ package org.apache.arrow.datafusion.logical_expr;
  *
  * <p>Example:
  *
- * <p>{@snippet : TableType type = TableType.BASE; if (type == TableType.VIEW) {
- * System.out.println("This is a view"); } }
+ * {@snippet :
+ * TableType type = TableType.BASE;
+ * if (type == TableType.VIEW) {
+ *     System.out.println("This is a view");
+ * }
+ * }
  *
  * @see <a href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/enum.TableType.html">Rust
  *     DataFusion: TableType</a>

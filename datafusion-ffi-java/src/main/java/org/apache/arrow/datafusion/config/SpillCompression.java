@@ -5,9 +5,15 @@ package org.apache.arrow.datafusion.config;
  *
  * <p>Example:
  *
- * <p>{@snippet : ExecutionOptions exec = ExecutionOptions.builder()
- * .spillCompression(SpillCompression.ZSTD) .targetPartitions(4) .build(); ConfigOptions config =
- * ConfigOptions.builder() .execution(exec) .build(); }
+ * {@snippet :
+ * ExecutionOptions exec = ExecutionOptions.builder()
+ *     .spillCompression(SpillCompression.ZSTD)
+ *     .targetPartitions(4)
+ *     .build();
+ * ConfigOptions config = ConfigOptions.builder()
+ *     .execution(exec)
+ *     .build();
+ * }
  *
  * @see <a
  *     href="https://docs.rs/datafusion/52.1.0/datafusion/config/enum.SpillCompression.html">Rust

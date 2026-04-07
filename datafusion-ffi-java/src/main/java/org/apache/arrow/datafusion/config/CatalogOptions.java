@@ -9,9 +9,15 @@ import java.util.Map;
  *
  * <p>Example:
  *
- * <p>{@snippet : CatalogOptions catalog = CatalogOptions.builder() .informationSchema(true)
- * .defaultCatalog("my_catalog") .build(); ConfigOptions config = ConfigOptions.builder()
- * .catalog(catalog) .build(); }
+ * {@snippet :
+ * CatalogOptions catalog = CatalogOptions.builder()
+ *     .informationSchema(true)
+ *     .defaultCatalog("my_catalog")
+ *     .build();
+ * ConfigOptions config = ConfigOptions.builder()
+ *     .catalog(catalog)
+ *     .build();
+ * }
  *
  * @param createDefaultCatalogAndSchema Whether the default catalog and schema should be created
  *     automatically

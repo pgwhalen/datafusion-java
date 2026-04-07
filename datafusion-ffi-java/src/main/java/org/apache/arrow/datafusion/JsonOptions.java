@@ -7,8 +7,12 @@ package org.apache.arrow.datafusion;
  *
  * <p>Example:
  *
- * <p>{@snippet : JsonOptions options = JsonOptions.builder() .compressionLevel(3) .build(); byte[]
- * encoded = options.encodeOptions(); }
+ * {@snippet :
+ * JsonOptions options = JsonOptions.builder()
+ *     .compressionLevel(3)
+ *     .build();
+ * byte[] encoded = options.encodeOptions();
+ * }
  *
  * @see <a
  *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/config/struct.JsonOptions.html">Rust
@@ -31,8 +35,12 @@ public final class JsonOptions {
    *
    * <p>Example:
    *
-   * <p>{@snippet : JsonOptions options = JsonOptions.builder() .compressionLevel(3) .build();
-   * byte[] encoded = options.encodeOptions(); }
+   * {@snippet :
+   * JsonOptions options = JsonOptions.builder()
+   *     .compressionLevel(3)
+   *     .build();
+   * byte[] encoded = options.encodeOptions();
+   * }
    */
   public byte[] encodeOptions() {
     org.apache.arrow.datafusion.proto.JsonOptions.Builder b =

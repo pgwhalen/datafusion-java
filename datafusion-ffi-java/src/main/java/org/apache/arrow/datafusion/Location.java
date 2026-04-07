@@ -5,8 +5,11 @@ package org.apache.arrow.datafusion;
  *
  * <p>Example:
  *
- * <p>{@snippet : Location loc = new Location(1, 10); long line = loc.line(); // 1 long column =
- * loc.column(); // 10 }
+ * {@snippet :
+ * Location loc = new Location(1, 10);
+ * long line = loc.line(); // 1
+ * long column = loc.column(); // 10
+ * }
  *
  * @param line the line number
  * @param column the column number

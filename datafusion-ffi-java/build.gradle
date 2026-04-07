@@ -47,7 +47,9 @@ protobuf {
 
 spotless {
     java {
-        googleJavaFormat()
+        // formatJavadoc(false): google-java-format collapses multi-line {@snippet :} blocks
+        // into single lines, which breaks javadoc (generics like Map<String, V> get parsed as HTML).
+        googleJavaFormat().formatJavadoc(false)
         targetExclude 'build/generated/**', 'build/diplomat-generated/**'
     }
 }

@@ -10,9 +10,14 @@ import org.apache.arrow.vector.types.pojo.Schema;
  *
  * <p>Example:
  *
- * <p>{@snippet : CsvReadOptions options = CsvReadOptions.builder() .hasHeader(true)
- * .delimiter((byte) '\t') .schemaInferMaxRecords(200) .build(); ctx.registerCsv("my_table",
- * "/path/to/data.csv", options); }
+ * {@snippet :
+ * CsvReadOptions options = CsvReadOptions.builder()
+ *     .hasHeader(true)
+ *     .delimiter((byte) '\t')
+ *     .schemaInferMaxRecords(200)
+ *     .build();
+ * ctx.registerCsv("my_table", "/path/to/data.csv", options);
+ * }
  *
  * @see <a
  *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/file_format/options/struct.CsvReadOptions.html">Rust
@@ -59,8 +64,13 @@ public final class CsvReadOptions {
    *
    * <p>Example:
    *
-   * <p>{@snippet : CsvReadOptions options = CsvReadOptions.builder() .schema(mySchema)
-   * .hasHeader(true) .build(); Schema schema = options.schema(); // mySchema }
+   * {@snippet :
+   * CsvReadOptions options = CsvReadOptions.builder()
+   *     .schema(mySchema)
+   *     .hasHeader(true)
+   *     .build();
+   * Schema schema = options.schema(); // mySchema
+   * }
    *
    * @return the schema, or null
    * @see <a
@@ -76,8 +86,12 @@ public final class CsvReadOptions {
    *
    * <p>Example:
    *
-   * <p>{@snippet : CsvReadOptions options = CsvReadOptions.builder() .hasHeader(true) .build();
-   * byte[] encoded = options.encodeOptions(); }
+   * {@snippet :
+   * CsvReadOptions options = CsvReadOptions.builder()
+   *     .hasHeader(true)
+   *     .build();
+   * byte[] encoded = options.encodeOptions();
+   * }
    *
    * @return the serialized protobuf bytes
    */

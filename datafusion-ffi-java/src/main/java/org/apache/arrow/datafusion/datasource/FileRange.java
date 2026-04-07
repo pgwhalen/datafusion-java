@@ -5,8 +5,12 @@ package org.apache.arrow.datafusion.datasource;
  *
  * <p>Example:
  *
- * <p>{@snippet : FileRange range = new FileRange(0, 1024); long start = range.start(); // 0 long
- * end = range.end(); // 1024 long length = end - start; // 1024 bytes }
+ * {@snippet :
+ * FileRange range = new FileRange(0, 1024);
+ * long start = range.start(); // 0
+ * long end = range.end(); // 1024
+ * long length = end - start; // 1024 bytes
+ * }
  *
  * @param start start byte offset (inclusive)
  * @param end end byte offset (exclusive)

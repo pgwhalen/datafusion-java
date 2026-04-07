@@ -12,9 +12,13 @@ import org.apache.arrow.datafusion.logical_expr.InsertOp;
  *
  * <p>Example:
  *
- * <p>{@snippet : DataFrameWriteOptions options = DataFrameWriteOptions.builder()
- * .singleFileOutput(true) .insertOp(InsertOp.OVERWRITE) .partitionBy(List.of("year", "month"))
- * .build(); }
+ * {@snippet :
+ * DataFrameWriteOptions options = DataFrameWriteOptions.builder()
+ *     .singleFileOutput(true)
+ *     .insertOp(InsertOp.OVERWRITE)
+ *     .partitionBy(List.of("year", "month"))
+ *     .build();
+ * }
  *
  * @see <a
  *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrameWriteOptions.html">Rust

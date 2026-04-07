@@ -10,8 +10,16 @@ package org.apache.arrow.datafusion.datasource;
  *
  * <p>Example:
  *
- * <p>{@snippet : class TsvFormat implements FileFormat { @Override public String getExtension() {
- * return ".tsv"; } @Override public FileSource fileSource() { return new TsvFileSource(); } } }
+ * {@snippet :
+ * class TsvFormat implements FileFormat {
+ *     @Override public String getExtension() {
+ *         return ".tsv";
+ *     }
+ *     @Override public FileSource fileSource() {
+ *         return new TsvFileSource();
+ *     }
+ * }
+ * }
  *
  * @see <a
  *     href="https://docs.rs/datafusion-datasource/52.1.0/datafusion_datasource/file_format/trait.FileFormat.html">Rust
@@ -23,8 +31,12 @@ public interface FileFormat {
    *
    * <p>Example:
    *
-   * <p>{@snippet : FileFormat format = new TsvFormat(); String ext = format.getExtension(); //
-   * ".tsv" ListingOptions options = ListingOptions.builder(format) .build(); }
+   * {@snippet :
+   * FileFormat format = new TsvFormat();
+   * String ext = format.getExtension(); // ".tsv"
+   * ListingOptions options = ListingOptions.builder(format)
+   *     .build();
+   * }
    *
    * @return the file extension
    * @see <a
@@ -38,8 +50,12 @@ public interface FileFormat {
    *
    * <p>Example:
    *
-   * <p>{@snippet : FileFormat format = new TsvFormat(); FileSource source = format.fileSource();
-   * FileOpener opener = source.createFileOpener( schema, allocator, scanConfig); }
+   * {@snippet :
+   * FileFormat format = new TsvFormat();
+   * FileSource source = format.fileSource();
+   * FileOpener opener = source.createFileOpener(
+   *     schema, allocator, scanConfig);
+   * }
    *
    * @return a FileSource for this format
    * @see <a

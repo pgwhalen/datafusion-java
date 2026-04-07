@@ -11,10 +11,21 @@ import java.util.Optional;
  *
  * <p>Example implementation:
  *
- * <p>{@snippet : public class MySchemaProvider implements SchemaProvider { private final
- * Map<String, TableProvider> tables; @Override public List<String> tableNames() { return new
- * ArrayList<>(tables.keySet()); } @Override public Optional<TableProvider> table(String name) {
- * return Optional.ofNullable(tables.get(name)); } } }
+ * {@snippet :
+ * public class MySchemaProvider implements SchemaProvider {
+ *     private final Map<String, TableProvider> tables;
+ *
+ *     @Override
+ *     public List<String> tableNames() {
+ *         return new ArrayList<>(tables.keySet());
+ *     }
+ *
+ *     @Override
+ *     public Optional<TableProvider> table(String name) {
+ *         return Optional.ofNullable(tables.get(name));
+ *     }
+ * }
+ * }
  *
  * @see <a
  *     href="https://docs.rs/datafusion-catalog/52.1.0/datafusion_catalog/trait.SchemaProvider.html">Rust
@@ -26,8 +37,12 @@ public interface SchemaProvider {
    *
    * <p>Example:
    *
-   * <p>{@snippet : @Override public List<String> tableNames() { return new
-   * ArrayList<>(tables.keySet()); } }
+   * {@snippet :
+   * @Override
+   * public List<String> tableNames() {
+   *     return new ArrayList<>(tables.keySet());
+   * }
+   * }
    *
    * @return List of table names
    * @see <a
@@ -41,8 +56,12 @@ public interface SchemaProvider {
    *
    * <p>Example:
    *
-   * <p>{@snippet : @Override public Optional<TableProvider> table(String name) { return
-   * Optional.ofNullable(tables.get(name)); } }
+   * {@snippet :
+   * @Override
+   * public Optional<TableProvider> table(String name) {
+   *     return Optional.ofNullable(tables.get(name));
+   * }
+   * }
    *
    * @param name The table name
    * @return The table provider, or null if the table doesn't exist
@@ -61,8 +80,12 @@ public interface SchemaProvider {
    *
    * <p>Example:
    *
-   * <p>{@snippet : @Override public Optional<TableProvider> registerTable(String name,
-   * TableProvider table) { return Optional.ofNullable(tables.put(name, table)); } }
+   * {@snippet :
+   * @Override
+   * public Optional<TableProvider> registerTable(String name, TableProvider table) {
+   *     return Optional.ofNullable(tables.put(name, table));
+   * }
+   * }
    *
    * @param name The table name
    * @param table The table provider to register
@@ -86,8 +109,12 @@ public interface SchemaProvider {
    *
    * <p>Example:
    *
-   * <p>{@snippet : @Override public Optional<TableProvider> deregisterTable(String name) { return
-   * Optional.ofNullable(tables.remove(name)); } }
+   * {@snippet :
+   * @Override
+   * public Optional<TableProvider> deregisterTable(String name) {
+   *     return Optional.ofNullable(tables.remove(name));
+   * }
+   * }
    *
    * @param name The table name
    * @return The previously registered table, if any
@@ -108,7 +135,9 @@ public interface SchemaProvider {
    *
    * <p>Example:
    *
-   * <p>{@snippet : boolean exists = schemaProvider.tableExists("my_table"); }
+   * {@snippet :
+   * boolean exists = schemaProvider.tableExists("my_table");
+   * }
    *
    * @param name The table name
    * @return true if the table exists

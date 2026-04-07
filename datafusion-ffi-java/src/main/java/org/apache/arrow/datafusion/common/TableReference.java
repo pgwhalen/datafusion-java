@@ -6,9 +6,12 @@ package org.apache.arrow.datafusion.common;
  *
  * <p>Example:
  *
- * <p>{@snippet : TableReference bare = new TableReference.Bare("users"); TableReference partial =
- * new TableReference.Partial("public", "users"); TableReference full = new TableReference.Full(
- * "my_catalog", "public", "users"); String table = full.table(); // "users" }
+ * {@snippet :
+ * TableReference bare = new TableReference.Bare("users");
+ * TableReference partial = new TableReference.Partial("public", "users");
+ * TableReference full = new TableReference.Full("my_catalog", "public", "users");
+ * String table = full.table(); // "users"
+ * }
  *
  * @see <a
  *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/enum.TableReference.html">Rust

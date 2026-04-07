@@ -14,10 +14,14 @@ import org.apache.arrow.vector.types.pojo.Schema;
  *
  * <p>Example:
  *
- * <p>{@snippet : ListingTableUrl url = ListingTableUrl.parse("/path/to/data/"); ListingOptions
- * options = ListingOptions.builder(myFormat).build(); ListingTableConfig config = new
- * ListingTableConfig(url) .withListingOptions(options) .withSchema(mySchema); ListingTable table =
- * new ListingTable(config); }
+ * {@snippet :
+ * ListingTableUrl url = ListingTableUrl.parse("/path/to/data/");
+ * ListingOptions options = ListingOptions.builder(myFormat).build();
+ * ListingTableConfig config = new ListingTableConfig(url)
+ *     .withListingOptions(options)
+ *     .withSchema(mySchema);
+ * ListingTable table = new ListingTable(config);
+ * }
  *
  * @see <a
  *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingTableConfig.html">Rust
@@ -60,8 +64,12 @@ public class ListingTableConfig {
    *
    * <p>Example:
    *
-   * <p>{@snippet : ListingOptions options = ListingOptions.builder(myFormat) .collectStat(true)
-   * .build(); ListingTableConfig config = new ListingTableConfig(url) .withListingOptions(options);
+   * {@snippet :
+   * ListingOptions options = ListingOptions.builder(myFormat)
+   *     .collectStat(true)
+   *     .build();
+   * ListingTableConfig config = new ListingTableConfig(url)
+   *     .withListingOptions(options);
    * }
    *
    * @param options the listing options
@@ -80,9 +88,13 @@ public class ListingTableConfig {
    *
    * <p>Example:
    *
-   * <p>{@snippet : Schema schema = new Schema(List.of( Field.nullable("id", new ArrowType.Int(32,
-   * true)), Field.nullable("name", ArrowType.Utf8.INSTANCE))); ListingTableConfig config = new
-   * ListingTableConfig(url) .withSchema(schema); }
+   * {@snippet :
+   * Schema schema = new Schema(List.of(
+   *     Field.nullable("id", new ArrowType.Int(32, true)),
+   *     Field.nullable("name", ArrowType.Utf8.INSTANCE)));
+   * ListingTableConfig config = new ListingTableConfig(url)
+   *     .withSchema(schema);
+   * }
    *
    * @param schema the Arrow schema
    * @return this config
@@ -100,9 +112,13 @@ public class ListingTableConfig {
    *
    * <p>Example:
    *
-   * <p>{@snippet : ListingTableConfig config = new ListingTableConfig(url); List<ListingTableUrl>
-   * paths = config.tablePaths(); for (ListingTableUrl path : paths) {
-   * System.out.println(path.getUrl()); } }
+   * {@snippet :
+   * ListingTableConfig config = new ListingTableConfig(url);
+   * List<ListingTableUrl> paths = config.tablePaths();
+   * for (ListingTableUrl path : paths) {
+   *     System.out.println(path.getUrl());
+   * }
+   * }
    *
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingTableConfig.html#structfield.table_paths">Rust
@@ -117,9 +133,12 @@ public class ListingTableConfig {
    *
    * <p>Example:
    *
-   * <p>{@snippet : ListingTableConfig config = new ListingTableConfig(url)
-   * .withListingOptions(options); ListingOptions opts = config.listingOptions(); FileFormat format
-   * = opts.format(); }
+   * {@snippet :
+   * ListingTableConfig config = new ListingTableConfig(url)
+   *     .withListingOptions(options);
+   * ListingOptions opts = config.listingOptions();
+   * FileFormat format = opts.format();
+   * }
    *
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingTableConfig.html#structfield.options">Rust
@@ -134,8 +153,12 @@ public class ListingTableConfig {
    *
    * <p>Example:
    *
-   * <p>{@snippet : ListingTableConfig config = new ListingTableConfig(url) .withSchema(mySchema);
-   * Schema schema = config.schema(); List<Field> fields = schema.getFields(); }
+   * {@snippet :
+   * ListingTableConfig config = new ListingTableConfig(url)
+   *     .withSchema(mySchema);
+   * Schema schema = config.schema();
+   * List<Field> fields = schema.getFields();
+   * }
    *
    * @see <a
    *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingTableConfig.html#structfield.file_schema">Rust

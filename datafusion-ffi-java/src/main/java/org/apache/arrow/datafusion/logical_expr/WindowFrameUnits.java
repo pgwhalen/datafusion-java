@@ -5,8 +5,13 @@ package org.apache.arrow.datafusion.logical_expr;
  *
  * <p>Example:
  *
- * <p>{@snippet : WindowFrame rowFrame = new WindowFrame( WindowFrameUnits.ROWS, new
- * WindowFrameBound.Preceding(null), new WindowFrameBound.CurrentRow() ); }
+ * {@snippet :
+ * WindowFrame rowFrame = new WindowFrame(
+ *     WindowFrameUnits.ROWS,
+ *     new WindowFrameBound.Preceding(null),
+ *     new WindowFrameBound.CurrentRow()
+ * );
+ * }
  *
  * @see <a
  *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/window_frame/enum.WindowFrameUnits.html">Rust

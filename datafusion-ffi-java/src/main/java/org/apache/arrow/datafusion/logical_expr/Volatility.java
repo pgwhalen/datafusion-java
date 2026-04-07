@@ -5,8 +5,11 @@ package org.apache.arrow.datafusion.logical_expr;
  *
  * <p>Example:
  *
- * <p>{@snippet : // Register a UDF with IMMUTABLE volatility Volatility vol = Volatility.IMMUTABLE;
- * // IMMUTABLE means same input always gives same output }
+ * {@snippet :
+ * // Register a UDF with IMMUTABLE volatility
+ * Volatility vol = Volatility.IMMUTABLE;
+ * // IMMUTABLE means same input always gives same output
+ * }
  *
  * @see <a
  *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Volatility.html">Rust

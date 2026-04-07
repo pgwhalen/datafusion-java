@@ -8,9 +8,13 @@ import java.util.List;
  *
  * <p>Example:
  *
- * <p>{@snippet : // FileScanConfig is provided by DataFusion to FileSource.createFileOpener
- * FileOpener opener = source.createFileOpener( schema, allocator, scanConfig); List<Integer>
- * projection = scanConfig.projection(); Long limit = scanConfig.limit(); }
+ * {@snippet :
+ * // FileScanConfig is provided by DataFusion to FileSource.createFileOpener
+ * FileOpener opener = source.createFileOpener(
+ *     schema, allocator, scanConfig);
+ * List<Integer> projection = scanConfig.projection();
+ * Long limit = scanConfig.limit();
+ * }
  *
  * @param projection column indices to read (empty list means all columns)
  * @param limit maximum number of rows to return, or {@code null} for no limit

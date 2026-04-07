@@ -9,8 +9,14 @@ import com.google.protobuf.ByteString;
  *
  * <p>Example:
  *
- * <p>{@snippet : CsvOptions options = CsvOptions.builder() .hasHeader(true) .delimiter((byte) ',')
- * .dateFormat("%Y-%m-%d") .build(); byte[] encoded = options.encodeOptions(); }
+ * {@snippet :
+ * CsvOptions options = CsvOptions.builder()
+ *     .hasHeader(true)
+ *     .delimiter((byte) ',')
+ *     .dateFormat("%Y-%m-%d")
+ *     .build();
+ * byte[] encoded = options.encodeOptions();
+ * }
  *
  * @see <a
  *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/config/struct.CsvOptions.html">Rust
@@ -63,8 +69,12 @@ public final class CsvOptions {
    *
    * <p>Example:
    *
-   * <p>{@snippet : CsvOptions options = CsvOptions.builder() .hasHeader(true) .build(); byte[]
-   * encoded = options.encodeOptions(); }
+   * {@snippet :
+   * CsvOptions options = CsvOptions.builder()
+   *     .hasHeader(true)
+   *     .build();
+   * byte[] encoded = options.encodeOptions();
+   * }
    *
    * @return the serialized protobuf bytes
    */
