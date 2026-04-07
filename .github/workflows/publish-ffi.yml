@@ -116,6 +116,7 @@ jobs:
           - os: windows-latest
             platform: windows_64
             lib_name: datafusion_ffi_native.dll
+    needs: checks
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
