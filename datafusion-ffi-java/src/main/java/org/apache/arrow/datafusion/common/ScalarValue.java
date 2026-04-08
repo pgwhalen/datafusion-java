@@ -19,7 +19,8 @@ import org.apache.arrow.vector.PeriodDuration;
  * {@link UnsupportedOperationException} when encountered in FFI deserialization.
  *
  * <p>Use {@link #getObject()} for untyped access returning a friendly Java type, or use {@code
- * instanceof} with sealed subinterfaces ({@link DecimalValue}, {@link DurationValue}, {@link
+ * instanceof} with sealed subinterfaces ({@link IntegerValue}, {@link FloatValue}, {@link
+ * StringValue}, {@link BinaryValue}, {@link DecimalValue}, {@link DurationValue}, {@link
  * TimestampValue}, {@link DateValue}, {@link TimeValue}) for typed access without casting.
  *
  * <p>Example:
@@ -108,57 +109,166 @@ public sealed interface ScalarValue {
     LocalTime toLocalTime();
   }
 
+  /** Sealed subinterface for integer variants, providing widening numeric conversions. */
+  sealed interface IntegerValue extends ScalarValue
+      permits Int8, Int16, Int32, Int64, UInt8, UInt16, UInt32, UInt64 {
+    /** Returns the value as a {@code long}. Throws {@link ArithmeticException} for UInt64 overflow. */
+    long toLong();
+
+    /** Returns the value as a {@link BigInteger}. Always safe for all integer types. */
+    BigInteger toBigInteger();
+  }
+
+  /** Sealed subinterface for floating-point variants, providing widening {@code double} conversion. */
+  sealed interface FloatValue extends ScalarValue permits Float16, Float32, Float64 {
+    /** Returns the value as a {@code double}. */
+    double toDouble();
+  }
+
+  /** Sealed subinterface for string variants, providing typed {@link String} access. */
+  sealed interface StringValue extends ScalarValue permits Utf8, LargeUtf8, Utf8View {
+    /** Returns the string value. */
+    String value();
+  }
+
+  /** Sealed subinterface for binary variants, providing typed {@code byte[]} access. */
+  sealed interface BinaryValue extends ScalarValue
+      permits Binary, LargeBinary, BinaryView, FixedSizeBinary {
+    /** Returns the binary value. */
+    byte[] value();
+  }
+
   // -- Integers --
-  record Int8(byte value) implements ScalarValue {
+  record Int8(byte value) implements IntegerValue {
+    @Override
+    public long toLong() {
+      return value;
+    }
+
+    @Override
+    public BigInteger toBigInteger() {
+      return BigInteger.valueOf(value);
+    }
+
     @Override
     public Object getObject() {
       return value;
     }
   }
 
-  record Int16(short value) implements ScalarValue {
+  record Int16(short value) implements IntegerValue {
+    @Override
+    public long toLong() {
+      return value;
+    }
+
+    @Override
+    public BigInteger toBigInteger() {
+      return BigInteger.valueOf(value);
+    }
+
     @Override
     public Object getObject() {
       return value;
     }
   }
 
-  record Int32(int value) implements ScalarValue {
+  record Int32(int value) implements IntegerValue {
+    @Override
+    public long toLong() {
+      return value;
+    }
+
+    @Override
+    public BigInteger toBigInteger() {
+      return BigInteger.valueOf(value);
+    }
+
     @Override
     public Object getObject() {
       return value;
     }
   }
 
-  record Int64(long value) implements ScalarValue {
+  record Int64(long value) implements IntegerValue {
+    @Override
+    public long toLong() {
+      return value;
+    }
+
+    @Override
+    public BigInteger toBigInteger() {
+      return BigInteger.valueOf(value);
+    }
+
     @Override
     public Object getObject() {
       return value;
     }
   }
 
-  record UInt8(short value) implements ScalarValue {
+  record UInt8(short value) implements IntegerValue {
+    @Override
+    public long toLong() {
+      return value;
+    }
+
+    @Override
+    public BigInteger toBigInteger() {
+      return BigInteger.valueOf(value);
+    }
+
     @Override
     public Object getObject() {
       return value;
     }
   }
 
-  record UInt16(int value) implements ScalarValue {
+  record UInt16(int value) implements IntegerValue {
+    @Override
+    public long toLong() {
+      return value;
+    }
+
+    @Override
+    public BigInteger toBigInteger() {
+      return BigInteger.valueOf(value);
+    }
+
     @Override
     public Object getObject() {
       return value;
     }
   }
 
-  record UInt32(long value) implements ScalarValue {
+  record UInt32(long value) implements IntegerValue {
+    @Override
+    public long toLong() {
+      return value;
+    }
+
+    @Override
+    public BigInteger toBigInteger() {
+      return BigInteger.valueOf(value);
+    }
+
     @Override
     public Object getObject() {
       return value;
     }
   }
 
-  record UInt64(BigInteger value) implements ScalarValue {
+  record UInt64(BigInteger value) implements IntegerValue {
+    @Override
+    public long toLong() {
+      return value.longValueExact();
+    }
+
+    @Override
+    public BigInteger toBigInteger() {
+      return value;
+    }
+
     @Override
     public Object getObject() {
       return value;
@@ -166,21 +276,36 @@ public sealed interface ScalarValue {
   }
 
   // -- Floats --
-  record Float16(float value) implements ScalarValue {
+  record Float16(float value) implements FloatValue {
+    @Override
+    public double toDouble() {
+      return value;
+    }
+
     @Override
     public Object getObject() {
       return value;
     }
   }
 
-  record Float32(float value) implements ScalarValue {
+  record Float32(float value) implements FloatValue {
+    @Override
+    public double toDouble() {
+      return value;
+    }
+
     @Override
     public Object getObject() {
       return value;
     }
   }
 
-  record Float64(double value) implements ScalarValue {
+  record Float64(double value) implements FloatValue {
+    @Override
+    public double toDouble() {
+      return value;
+    }
+
     @Override
     public Object getObject() {
       return value;
@@ -188,21 +313,21 @@ public sealed interface ScalarValue {
   }
 
   // -- Strings --
-  record Utf8(String value) implements ScalarValue {
+  record Utf8(String value) implements StringValue {
     @Override
     public Object getObject() {
       return value;
     }
   }
 
-  record LargeUtf8(String value) implements ScalarValue {
+  record LargeUtf8(String value) implements StringValue {
     @Override
     public Object getObject() {
       return value;
     }
   }
 
-  record Utf8View(String value) implements ScalarValue {
+  record Utf8View(String value) implements StringValue {
     @Override
     public Object getObject() {
       return value;
@@ -210,28 +335,28 @@ public sealed interface ScalarValue {
   }
 
   // -- Binary --
-  record Binary(byte[] value) implements ScalarValue {
+  record Binary(byte[] value) implements BinaryValue {
     @Override
     public Object getObject() {
       return value;
     }
   }
 
-  record LargeBinary(byte[] value) implements ScalarValue {
+  record LargeBinary(byte[] value) implements BinaryValue {
     @Override
     public Object getObject() {
       return value;
     }
   }
 
-  record BinaryView(byte[] value) implements ScalarValue {
+  record BinaryView(byte[] value) implements BinaryValue {
     @Override
     public Object getObject() {
       return value;
     }
   }
 
-  record FixedSizeBinary(byte[] value) implements ScalarValue {
+  record FixedSizeBinary(byte[] value) implements BinaryValue {
     @Override
     public Object getObject() {
       return value;

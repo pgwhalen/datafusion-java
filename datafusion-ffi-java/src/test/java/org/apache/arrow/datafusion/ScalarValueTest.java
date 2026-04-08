@@ -316,8 +316,117 @@ public class ScalarValueTest {
     assertInstanceOf(ScalarValue.TimeValue.class, new ScalarValue.Time64Microsecond(0L));
     assertInstanceOf(ScalarValue.TimeValue.class, new ScalarValue.Time64Nanosecond(0L));
 
+    // IntegerValue
+    assertInstanceOf(ScalarValue.IntegerValue.class, new ScalarValue.Int8((byte) 1));
+    assertInstanceOf(ScalarValue.IntegerValue.class, new ScalarValue.Int16((short) 1));
+    assertInstanceOf(ScalarValue.IntegerValue.class, new ScalarValue.Int32(1));
+    assertInstanceOf(ScalarValue.IntegerValue.class, new ScalarValue.Int64(1L));
+    assertInstanceOf(ScalarValue.IntegerValue.class, new ScalarValue.UInt8((short) 1));
+    assertInstanceOf(ScalarValue.IntegerValue.class, new ScalarValue.UInt16(1));
+    assertInstanceOf(ScalarValue.IntegerValue.class, new ScalarValue.UInt32(1L));
+    assertInstanceOf(ScalarValue.IntegerValue.class, new ScalarValue.UInt64(BigInteger.ONE));
+
+    // FloatValue
+    assertInstanceOf(ScalarValue.FloatValue.class, new ScalarValue.Float16(1.0f));
+    assertInstanceOf(ScalarValue.FloatValue.class, new ScalarValue.Float32(1.0f));
+    assertInstanceOf(ScalarValue.FloatValue.class, new ScalarValue.Float64(1.0));
+
+    // StringValue
+    assertInstanceOf(ScalarValue.StringValue.class, new ScalarValue.Utf8("a"));
+    assertInstanceOf(ScalarValue.StringValue.class, new ScalarValue.LargeUtf8("a"));
+    assertInstanceOf(ScalarValue.StringValue.class, new ScalarValue.Utf8View("a"));
+
+    // BinaryValue
+    assertInstanceOf(ScalarValue.BinaryValue.class, new ScalarValue.Binary(new byte[] {}));
+    assertInstanceOf(ScalarValue.BinaryValue.class, new ScalarValue.LargeBinary(new byte[] {}));
+    assertInstanceOf(ScalarValue.BinaryValue.class, new ScalarValue.BinaryView(new byte[] {}));
+    assertInstanceOf(ScalarValue.BinaryValue.class, new ScalarValue.FixedSizeBinary(new byte[] {}));
+
     // Non-subinterface types are prevented from implementing subinterfaces at compile time
     // by the sealed interface hierarchy (e.g., Int32 cannot be cast to DecimalValue).
+  }
+
+  @Test
+  void testIntegerValueSubinterface() {
+    ScalarValue.IntegerValue i8 = new ScalarValue.Int8((byte) 42);
+    assertEquals(42L, i8.toLong());
+    assertEquals(BigInteger.valueOf(42), i8.toBigInteger());
+
+    ScalarValue.IntegerValue i16 = new ScalarValue.Int16((short) -1234);
+    assertEquals(-1234L, i16.toLong());
+    assertEquals(BigInteger.valueOf(-1234), i16.toBigInteger());
+
+    ScalarValue.IntegerValue i32 = new ScalarValue.Int32(123456);
+    assertEquals(123456L, i32.toLong());
+    assertEquals(BigInteger.valueOf(123456), i32.toBigInteger());
+
+    ScalarValue.IntegerValue i64 = new ScalarValue.Int64(9876543210L);
+    assertEquals(9876543210L, i64.toLong());
+    assertEquals(BigInteger.valueOf(9876543210L), i64.toBigInteger());
+
+    ScalarValue.IntegerValue u8 = new ScalarValue.UInt8((short) 200);
+    assertEquals(200L, u8.toLong());
+    assertEquals(BigInteger.valueOf(200), u8.toBigInteger());
+
+    ScalarValue.IntegerValue u16 = new ScalarValue.UInt16(60000);
+    assertEquals(60000L, u16.toLong());
+    assertEquals(BigInteger.valueOf(60000), u16.toBigInteger());
+
+    ScalarValue.IntegerValue u32 = new ScalarValue.UInt32(3000000000L);
+    assertEquals(3000000000L, u32.toLong());
+    assertEquals(BigInteger.valueOf(3000000000L), u32.toBigInteger());
+
+    // UInt64 within long range
+    ScalarValue.IntegerValue u64 = new ScalarValue.UInt64(BigInteger.valueOf(Long.MAX_VALUE));
+    assertEquals(Long.MAX_VALUE, u64.toLong());
+    assertEquals(BigInteger.valueOf(Long.MAX_VALUE), u64.toBigInteger());
+
+    // UInt64 exceeding long range — toBigInteger() works, toLong() throws
+    ScalarValue.IntegerValue u64Large =
+        new ScalarValue.UInt64(new BigInteger("18000000000000000000"));
+    assertEquals(new BigInteger("18000000000000000000"), u64Large.toBigInteger());
+    assertThrows(ArithmeticException.class, u64Large::toLong);
+  }
+
+  @Test
+  void testFloatValueSubinterface() {
+    ScalarValue.FloatValue f16 = new ScalarValue.Float16(3.14f);
+    assertEquals(3.14f, f16.toDouble(), 0.01);
+
+    ScalarValue.FloatValue f32 = new ScalarValue.Float32(2.718f);
+    assertEquals(2.718f, f32.toDouble(), 0.001);
+
+    ScalarValue.FloatValue f64 = new ScalarValue.Float64(1.41421356);
+    assertEquals(1.41421356, f64.toDouble(), 0.00000001);
+  }
+
+  @Test
+  void testStringValueSubinterface() {
+    ScalarValue.StringValue utf8 = new ScalarValue.Utf8("hello");
+    assertEquals("hello", utf8.value());
+
+    ScalarValue.StringValue largeUtf8 = new ScalarValue.LargeUtf8("world");
+    assertEquals("world", largeUtf8.value());
+
+    ScalarValue.StringValue utf8View = new ScalarValue.Utf8View("view");
+    assertEquals("view", utf8View.value());
+  }
+
+  @Test
+  void testBinaryValueSubinterface() {
+    byte[] data = {1, 2, 3};
+
+    ScalarValue.BinaryValue bin = new ScalarValue.Binary(data);
+    assertSame(data, bin.value());
+
+    ScalarValue.BinaryValue largeBin = new ScalarValue.LargeBinary(data);
+    assertSame(data, largeBin.value());
+
+    ScalarValue.BinaryValue binView = new ScalarValue.BinaryView(data);
+    assertSame(data, binView.value());
+
+    ScalarValue.BinaryValue fixedBin = new ScalarValue.FixedSizeBinary(data);
+    assertSame(data, fixedBin.value());
   }
 
   @Test
