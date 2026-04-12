@@ -108,7 +108,9 @@ public class DocsValidationDoclet implements Doclet {
           "spliterator",
           "stream",
           "builder",
-          "of");
+          "of",
+          "bridge",
+          "fromBridge");
 
   /** Per-class method exclusions for methods with no Rust equivalent. */
   private static final Map<String, Set<String>> CLASS_METHOD_EXCLUSIONS =

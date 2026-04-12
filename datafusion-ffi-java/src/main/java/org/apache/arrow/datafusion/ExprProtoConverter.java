@@ -61,6 +61,21 @@ public final class ExprProtoConverter {
     }
   }
 
+  /** Decode a proto-encoded {@code SortExprNodeCollection} into a list of {@link SortExpr}. */
+  public static List<SortExpr> sortExprsFromProtoBytes(byte[] bytes) {
+    try {
+      org.apache.arrow.datafusion.proto.SortExprNodeCollection collection =
+          org.apache.arrow.datafusion.proto.SortExprNodeCollection.parseFrom(bytes);
+      List<SortExpr> result = new ArrayList<>(collection.getSortExprNodesCount());
+      for (SortExprNode node : collection.getSortExprNodesList()) {
+        result.add(convertSortExpr(node));
+      }
+      return result;
+    } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+      throw new DataFusionError("Failed to decode sort expression protobuf", e);
+    }
+  }
+
   /** Encode a list of {@link Expr} into proto bytes ({@code LogicalExprList}). */
   public static byte[] toProtoBytes(List<Expr> exprs) {
     LogicalExprList.Builder builder = LogicalExprList.newBuilder();

@@ -53,7 +53,7 @@ public class SessionState implements AutoCloseable {
    *     DataFusion: SessionState::create_logical_plan</a>
    */
   public LogicalPlan createLogicalPlan(String sql) {
-    return new LogicalPlan(bridge.createLogicalPlan(sql));
+    return LogicalPlan.fromBridge(bridge.createLogicalPlan(sql));
   }
 
   @Override

@@ -479,7 +479,7 @@ public class LogicalPlanBuilder implements AutoCloseable {
    *     DataFusion: LogicalPlanBuilder::intersect</a>
    */
   public static LogicalPlan intersect(LogicalPlan left, LogicalPlan right, boolean isAll) {
-    return new LogicalPlan(
+    return LogicalPlan.fromBridge(
         LogicalPlanBuilderBridge.intersect(left.bridge(), right.bridge(), isAll));
   }
 
@@ -501,7 +501,8 @@ public class LogicalPlanBuilder implements AutoCloseable {
    *     DataFusion: LogicalPlanBuilder::except</a>
    */
   public static LogicalPlan except(LogicalPlan left, LogicalPlan right, boolean isAll) {
-    return new LogicalPlan(LogicalPlanBuilderBridge.except(left.bridge(), right.bridge(), isAll));
+    return LogicalPlan.fromBridge(
+        LogicalPlanBuilderBridge.except(left.bridge(), right.bridge(), isAll));
   }
 
   /**
@@ -524,7 +525,7 @@ public class LogicalPlanBuilder implements AutoCloseable {
   public LogicalPlan build() {
     LogicalPlanBridge result = bridge.build();
     bridge.close();
-    return new LogicalPlan(result);
+    return LogicalPlan.fromBridge(result);
   }
 
   @Override
