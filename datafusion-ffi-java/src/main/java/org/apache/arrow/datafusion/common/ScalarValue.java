@@ -9,14 +9,17 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.Period;
 import java.time.ZoneOffset;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import org.apache.arrow.vector.PeriodDuration;
 
 /**
  * A scalar value from DataFusion, representing a single typed value.
  *
  * <p>This sealed interface mirrors DataFusion's {@code ScalarValue} enum. Each variant is a record
- * that holds the typed value. Complex types (List, Struct, Map, etc.) are modeled but will throw
- * {@link UnsupportedOperationException} when encountered in FFI deserialization.
+ * that holds the typed value, including complex types (List, Struct, Map, Dictionary, Union, and
+ * RunEndEncoded).
  *
  * <p>Use {@link #getObject()} for untyped access returning a friendly Java type, or use {@code
  * instanceof} with sealed subinterfaces ({@link IntegerValue}, {@link FloatValue}, {@link
@@ -49,7 +52,6 @@ public sealed interface ScalarValue {
    * {@code Integer}.
    *
    * @return the value as a standard Java type, or {@code null} for {@link Null}
-   * @throws UnsupportedOperationException for complex types (List, Struct, Map, etc.)
    */
   Object getObject();
 
@@ -137,6 +139,25 @@ public sealed interface ScalarValue {
     /** Returns the binary value. */
     byte[] value();
   }
+
+  /**
+   * Sealed subinterface for list-like variants (List, LargeList, FixedSizeList), providing typed
+   * {@link List} access to the contained {@link ScalarValue} elements.
+   */
+  sealed interface ListScalarValue extends ScalarValue
+      permits ListValue, LargeListValue, FixedSizeListValue {
+    /** Returns the list elements as {@link ScalarValue} instances. */
+    List<ScalarValue> values();
+
+    /** Returns the list elements with each value converted via {@link ScalarValue#getObject()}. */
+    List<Object> toList();
+  }
+
+  /**
+   * Sealed subinterface for map-like variants (Struct, Map), providing typed {@link Map} access to
+   * key-value data. Use the concrete record types for the specific key/value types.
+   */
+  sealed interface MapScalarValue extends ScalarValue permits StructValue, MapValue {}
 
   // -- Integers --
   record Int8(byte value) implements IntegerValue {
@@ -646,60 +667,130 @@ public sealed interface ScalarValue {
     }
   }
 
-  // -- Complex types (modeled but unsupported in FFI) --
-  record ListValue() implements ScalarValue {
+  // -- Complex types --
+
+  /** A list scalar value containing ordered elements. */
+  record ListValue(List<ScalarValue> values) implements ListScalarValue {
+    public ListValue {
+      values = List.copyOf(values);
+    }
+
+    @Override
+    public List<Object> toList() {
+      return values.stream().map(ScalarValue::getObject).toList();
+    }
+
     @Override
     public Object getObject() {
-      throw new UnsupportedOperationException("ListValue is not supported in FFI");
+      return toList();
     }
   }
 
-  record LargeListValue() implements ScalarValue {
+  /** A large list scalar value (64-bit offsets) containing ordered elements. */
+  record LargeListValue(List<ScalarValue> values) implements ListScalarValue {
+    public LargeListValue {
+      values = List.copyOf(values);
+    }
+
+    @Override
+    public List<Object> toList() {
+      return values.stream().map(ScalarValue::getObject).toList();
+    }
+
     @Override
     public Object getObject() {
-      throw new UnsupportedOperationException("LargeListValue is not supported in FFI");
+      return toList();
     }
   }
 
-  record FixedSizeListValue() implements ScalarValue {
+  /** A fixed-size list scalar value where every list has the same number of elements. */
+  record FixedSizeListValue(List<ScalarValue> values, int listSize) implements ListScalarValue {
+    public FixedSizeListValue {
+      values = List.copyOf(values);
+    }
+
+    @Override
+    public List<Object> toList() {
+      return values.stream().map(ScalarValue::getObject).toList();
+    }
+
     @Override
     public Object getObject() {
-      throw new UnsupportedOperationException("FixedSizeListValue is not supported in FFI");
+      return toList();
     }
   }
 
-  record StructValue() implements ScalarValue {
+  /** A struct scalar value with named fields. The field order is preserved. */
+  record StructValue(Map<String, ScalarValue> fields) implements MapScalarValue {
+    public StructValue {
+      fields = Map.copyOf(fields);
+    }
+
+    /** Returns the struct fields with each value converted via {@link #getObject()}. */
+    public Map<String, Object> toMap() {
+      var result = new LinkedHashMap<String, Object>();
+      fields.forEach((k, v) -> result.put(k, v.getObject()));
+      return result;
+    }
+
     @Override
     public Object getObject() {
-      throw new UnsupportedOperationException("StructValue is not supported in FFI");
+      return toMap();
     }
   }
 
-  record MapValue() implements ScalarValue {
+  /**
+   * A map scalar value containing key-value entries. Entries are ordered and may contain duplicate
+   * keys (per the Arrow MapArray specification).
+   */
+  record MapValue(List<Map.Entry<ScalarValue, ScalarValue>> entries) implements MapScalarValue {
+    public MapValue {
+      entries = List.copyOf(entries);
+    }
+
+    /** Returns the entries as a map with keys and values converted via {@link #getObject()}. */
+    public Map<Object, Object> toMap() {
+      var result = new LinkedHashMap<Object, Object>();
+      for (var entry : entries) {
+        result.put(entry.getKey().getObject(), entry.getValue().getObject());
+      }
+      return result;
+    }
+
     @Override
     public Object getObject() {
-      throw new UnsupportedOperationException("MapValue is not supported in FFI");
+      return toMap();
     }
   }
 
-  record UnionValue() implements ScalarValue {
+  /**
+   * A union scalar value representing one variant of a union type.
+   *
+   * @param typeId the union type ID of the active variant (128 indicates null)
+   * @param value the scalar value of the active variant
+   */
+  record UnionValue(int typeId, ScalarValue value) implements ScalarValue {
     @Override
     public Object getObject() {
-      throw new UnsupportedOperationException("UnionValue is not supported in FFI");
+      return value.getObject();
     }
   }
 
-  record DictionaryValue() implements ScalarValue {
+  /**
+   * A dictionary-encoded scalar value. The value is the looked-up dictionary entry, not the index.
+   */
+  record DictionaryValue(ScalarValue value) implements ScalarValue {
     @Override
     public Object getObject() {
-      throw new UnsupportedOperationException("DictionaryValue is not supported in FFI");
+      return value.getObject();
     }
   }
 
-  record RunEndEncodedValue() implements ScalarValue {
+  /** A run-end encoded scalar value. The value is the decoded scalar, not the encoding metadata. */
+  record RunEndEncodedValue(ScalarValue value) implements ScalarValue {
     @Override
     public Object getObject() {
-      throw new UnsupportedOperationException("RunEndEncodedValue is not supported in FFI");
+      return value.getObject();
     }
   }
 }

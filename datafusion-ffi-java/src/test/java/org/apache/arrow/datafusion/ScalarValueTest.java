@@ -10,6 +10,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.Period;
+import java.util.List;
+import java.util.Map;
 import org.apache.arrow.datafusion.common.ScalarValue;
 import org.apache.arrow.vector.PeriodDuration;
 import org.junit.jupiter.api.Test;
@@ -166,24 +168,70 @@ public class ScalarValueTest {
   }
 
   @Test
-  void testGetObjectComplexTypesThrow() {
-    assertThrows(
-        UnsupportedOperationException.class, () -> new ScalarValue.ListValue().getObject());
-    assertThrows(
-        UnsupportedOperationException.class, () -> new ScalarValue.LargeListValue().getObject());
-    assertThrows(
-        UnsupportedOperationException.class,
-        () -> new ScalarValue.FixedSizeListValue().getObject());
-    assertThrows(
-        UnsupportedOperationException.class, () -> new ScalarValue.StructValue().getObject());
-    assertThrows(UnsupportedOperationException.class, () -> new ScalarValue.MapValue().getObject());
-    assertThrows(
-        UnsupportedOperationException.class, () -> new ScalarValue.UnionValue().getObject());
-    assertThrows(
-        UnsupportedOperationException.class, () -> new ScalarValue.DictionaryValue().getObject());
-    assertThrows(
-        UnsupportedOperationException.class,
-        () -> new ScalarValue.RunEndEncodedValue().getObject());
+  void testGetObjectListValue() {
+    var list =
+        new ScalarValue.ListValue(List.of(new ScalarValue.Int32(1), new ScalarValue.Int32(2)));
+    assertEquals(List.of(1, 2), list.getObject());
+  }
+
+  @Test
+  void testGetObjectLargeListValue() {
+    var list =
+        new ScalarValue.LargeListValue(
+            List.of(new ScalarValue.Utf8("a"), new ScalarValue.Utf8("b")));
+    assertEquals(List.of("a", "b"), list.getObject());
+  }
+
+  @Test
+  void testGetObjectFixedSizeListValue() {
+    var list =
+        new ScalarValue.FixedSizeListValue(
+            List.of(new ScalarValue.Float64(1.0), new ScalarValue.Float64(2.0)), 2);
+    assertEquals(List.of(1.0, 2.0), list.getObject());
+    assertEquals(2, list.listSize());
+  }
+
+  @Test
+  void testGetObjectStructValue() {
+    var struct =
+        new ScalarValue.StructValue(
+            Map.of("name", new ScalarValue.Utf8("Alice"), "age", new ScalarValue.Int32(30)));
+    @SuppressWarnings("unchecked")
+    var result = (Map<String, Object>) struct.getObject();
+    assertEquals("Alice", result.get("name"));
+    assertEquals(30, result.get("age"));
+  }
+
+  @Test
+  void testGetObjectMapValue() {
+    var map =
+        new ScalarValue.MapValue(
+            List.of(
+                Map.entry(new ScalarValue.Utf8("key1"), new ScalarValue.Int32(10)),
+                Map.entry(new ScalarValue.Utf8("key2"), new ScalarValue.Int32(20))));
+    @SuppressWarnings("unchecked")
+    var result = (Map<Object, Object>) map.getObject();
+    assertEquals(10, result.get("key1"));
+    assertEquals(20, result.get("key2"));
+  }
+
+  @Test
+  void testGetObjectUnionValue() {
+    var union = new ScalarValue.UnionValue(0, new ScalarValue.Int32(42));
+    assertEquals(42, union.getObject());
+    assertEquals(0, union.typeId());
+  }
+
+  @Test
+  void testGetObjectDictionaryValue() {
+    var dict = new ScalarValue.DictionaryValue(new ScalarValue.Utf8("hello"));
+    assertEquals("hello", dict.getObject());
+  }
+
+  @Test
+  void testGetObjectRunEndEncodedValue() {
+    var ree = new ScalarValue.RunEndEncodedValue(new ScalarValue.Int64(100L));
+    assertEquals(100L, ree.getObject());
   }
 
   // -- Subinterface tests --
@@ -427,6 +475,38 @@ public class ScalarValueTest {
 
     ScalarValue.BinaryValue fixedBin = new ScalarValue.FixedSizeBinary(data);
     assertSame(data, fixedBin.value());
+  }
+
+  @Test
+  void testListScalarValueSubinterface() {
+    ScalarValue.ListScalarValue list =
+        new ScalarValue.ListValue(List.of(new ScalarValue.Int32(1), new ScalarValue.Int32(2)));
+    assertEquals(List.of(new ScalarValue.Int32(1), new ScalarValue.Int32(2)), list.values());
+    assertEquals(List.of(1, 2), list.toList());
+
+    ScalarValue.ListScalarValue largeList =
+        new ScalarValue.LargeListValue(List.of(new ScalarValue.Utf8("a")));
+    assertEquals(List.of(new ScalarValue.Utf8("a")), largeList.values());
+    assertEquals(List.of("a"), largeList.toList());
+
+    ScalarValue.ListScalarValue fixedList =
+        new ScalarValue.FixedSizeListValue(
+            List.of(new ScalarValue.Float64(1.0), new ScalarValue.Float64(2.0)), 2);
+    assertEquals(
+        List.of(new ScalarValue.Float64(1.0), new ScalarValue.Float64(2.0)), fixedList.values());
+    assertEquals(List.of(1.0, 2.0), fixedList.toList());
+  }
+
+  @Test
+  void testMapScalarValueSubinterface() {
+    ScalarValue.MapScalarValue struct =
+        new ScalarValue.StructValue(Map.of("x", new ScalarValue.Int32(1)));
+    assertInstanceOf(ScalarValue.MapScalarValue.class, struct);
+
+    ScalarValue.MapScalarValue map =
+        new ScalarValue.MapValue(
+            List.of(Map.entry(new ScalarValue.Utf8("k"), new ScalarValue.Int32(10))));
+    assertInstanceOf(ScalarValue.MapScalarValue.class, map);
   }
 
   @Test

@@ -1,19 +1,31 @@
 package org.apache.arrow.datafusion;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import org.apache.arrow.vector.types.DateUnit;
 import org.apache.arrow.vector.types.FloatingPointPrecision;
 import org.apache.arrow.vector.types.IntervalUnit;
 import org.apache.arrow.vector.types.TimeUnit;
+import org.apache.arrow.vector.types.UnionMode;
 import org.apache.arrow.vector.types.pojo.ArrowType;
+import org.apache.arrow.vector.types.pojo.DictionaryEncoding;
+import org.apache.arrow.vector.types.pojo.Field;
+import org.apache.arrow.vector.types.pojo.FieldType;
+import org.apache.arrow.vector.types.pojo.Schema;
 
 /**
- * Converts between proto {@code ArrowType} messages and Arrow Java {@code ArrowType} instances.
+ * Converts between proto {@code ArrowType} messages and Arrow Java types.
  *
- * <p>Used by {@link ExprProtoConverter} for Cast/TryCast/Placeholder data types, and by {@link
- * ScalarValueProtoConverter} for typed scalars.
+ * <p>Handles ArrowType, Field, and Schema conversions in both directions.
  */
 public final class ArrowTypeProtoConverter {
   private ArrowTypeProtoConverter() {}
+
+  private static long nextDictId = 0;
+
+  // -- Proto → Arrow --
 
   static ArrowType fromProto(org.apache.arrow.datafusion.proto.ArrowType proto) {
     if (proto == null
@@ -37,10 +49,10 @@ public final class ArrowTypeProtoConverter {
       case FLOAT32 -> new ArrowType.FloatingPoint(FloatingPointPrecision.SINGLE);
       case FLOAT64 -> new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE);
       case UTF8 -> ArrowType.Utf8.INSTANCE;
-      case UTF8_VIEW -> new ArrowType.Utf8View();
+      case UTF8_VIEW -> ArrowType.Utf8View.INSTANCE;
       case LARGE_UTF8 -> ArrowType.LargeUtf8.INSTANCE;
       case BINARY -> ArrowType.Binary.INSTANCE;
-      case BINARY_VIEW -> new ArrowType.BinaryView();
+      case BINARY_VIEW -> ArrowType.BinaryView.INSTANCE;
       case FIXED_SIZE_BINARY -> new ArrowType.FixedSizeBinary(proto.getFIXEDSIZEBINARY());
       case LARGE_BINARY -> ArrowType.LargeBinary.INSTANCE;
       case DATE32 -> new ArrowType.Date(DateUnit.DAY);
@@ -66,9 +78,67 @@ public final class ArrowTypeProtoConverter {
       case DECIMAL256 ->
           new ArrowType.Decimal(
               proto.getDECIMAL256().getPrecision(), proto.getDECIMAL256().getScale(), 256);
-      default -> null;
+      case LIST -> new ArrowType.List();
+      case LARGE_LIST -> new ArrowType.LargeList();
+      case FIXED_SIZE_LIST -> new ArrowType.FixedSizeList(proto.getFIXEDSIZELIST().getListSize());
+      case STRUCT -> new ArrowType.Struct();
+      case MAP -> new ArrowType.Map(proto.getMAP().getKeysSorted());
+      case UNION -> {
+        var u = proto.getUNION();
+        UnionMode mode =
+            u.getUnionMode() == org.apache.arrow.datafusion.proto.UnionMode.dense
+                ? UnionMode.Dense
+                : UnionMode.Sparse;
+        int[] typeIds = u.getTypeIdsList().stream().mapToInt(Integer::intValue).toArray();
+        yield new ArrowType.Union(mode, typeIds);
+      }
+      case DICTIONARY -> {
+        // Arrow Java handles dictionary encoding via FieldType, not ArrowType.
+        // When called from fieldFromProto, this case won't be reached (handled there).
+        // As a fallback, return the value type.
+        yield fromProto(proto.getDICTIONARY().getValue());
+      }
+      case RUN_END_ENCODED -> new ArrowType.RunEndEncoded();
+      case ARROWTYPEENUM_NOT_SET -> null;
     };
   }
+
+  static Schema schemaFromProto(org.apache.arrow.datafusion.proto.Schema proto) {
+    List<Field> fields = new ArrayList<>(proto.getColumnsCount());
+    for (var protoField : proto.getColumnsList()) {
+      fields.add(fieldFromProto(protoField));
+    }
+    Map<String, String> metadata = proto.getMetadataMap().isEmpty() ? null : proto.getMetadataMap();
+    return new Schema(fields, metadata);
+  }
+
+  static Field fieldFromProto(org.apache.arrow.datafusion.proto.Field proto) {
+    var protoType = proto.getArrowType();
+    List<Field> children = new ArrayList<>(proto.getChildrenCount());
+    for (var child : proto.getChildrenList()) {
+      children.add(fieldFromProto(child));
+    }
+    Map<String, String> metadata =
+        proto.getMetadataMap().isEmpty() ? null : new HashMap<>(proto.getMetadataMap());
+
+    DictionaryEncoding dictEncoding = null;
+    ArrowType type;
+    if (protoType.getArrowTypeEnumCase()
+        == org.apache.arrow.datafusion.proto.ArrowType.ArrowTypeEnumCase.DICTIONARY) {
+      var dict = protoType.getDICTIONARY();
+      ArrowType indexType = fromProto(dict.getKey());
+      type = fromProto(dict.getValue());
+      int bitWidth = (indexType instanceof ArrowType.Int intType) ? intType.getBitWidth() : 32;
+      dictEncoding = new DictionaryEncoding(nextDictId++, false, new ArrowType.Int(bitWidth, true));
+    } else {
+      type = fromProto(protoType);
+    }
+
+    FieldType fieldType = new FieldType(proto.getNullable(), type, dictEncoding, metadata);
+    return new Field(proto.getName(), fieldType, children);
+  }
+
+  // -- Arrow → Proto --
 
   static org.apache.arrow.datafusion.proto.ArrowType toProto(ArrowType arrowType) {
     if (arrowType == null) {
@@ -178,6 +248,8 @@ public final class ArrowTypeProtoConverter {
 
     return builder.build();
   }
+
+  // -- Helper methods --
 
   private static TimeUnit convertTimeUnit(org.apache.arrow.datafusion.proto.TimeUnit proto) {
     return switch (proto) {

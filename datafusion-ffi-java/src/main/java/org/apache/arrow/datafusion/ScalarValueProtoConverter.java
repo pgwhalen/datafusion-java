@@ -9,8 +9,8 @@ import org.apache.arrow.datafusion.common.ScalarValue;
 /**
  * Converts between proto {@code ScalarValue} messages and Java {@link ScalarValue} records.
  *
- * <p>Handles all primitive types, strings, binary, dates, times, timestamps, durations, intervals,
- * and decimals. Complex types (List, Struct, Map, etc.) are not supported and will throw.
+ * <p>Handles all types including complex types (List, Struct, Map, Dictionary, Union,
+ * RunEndEncoded).
  */
 public final class ScalarValueProtoConverter {
   private ScalarValueProtoConverter() {}
@@ -119,6 +119,25 @@ public final class ScalarValueProtoConverter {
         var d = proto.getDecimal256Value();
         BigInteger val = decimalBytesToBigInteger(d.getValue());
         yield new ScalarValue.Decimal256(val, (int) d.getP(), (int) d.getS());
+      }
+      case LIST_VALUE -> ScalarNestedValueConverter.deserializeList(proto.getListValue());
+      case LARGE_LIST_VALUE ->
+          ScalarNestedValueConverter.deserializeLargeList(proto.getLargeListValue());
+      case FIXED_SIZE_LIST_VALUE ->
+          ScalarNestedValueConverter.deserializeFixedSizeList(proto.getFixedSizeListValue());
+      case STRUCT_VALUE -> ScalarNestedValueConverter.deserializeStruct(proto.getStructValue());
+      case MAP_VALUE -> ScalarNestedValueConverter.deserializeMap(proto.getMapValue());
+      case DICTIONARY_VALUE -> {
+        var dv = proto.getDictionaryValue();
+        yield new ScalarValue.DictionaryValue(fromProto(dv.getValue()));
+      }
+      case UNION_VALUE -> {
+        var uv = proto.getUnionValue();
+        yield new ScalarValue.UnionValue(uv.getValueId(), fromProto(uv.getValue()));
+      }
+      case RUN_END_ENCODED_VALUE -> {
+        var rev = proto.getRunEndEncodedValue();
+        yield new ScalarValue.RunEndEncodedValue(fromProto(rev.getValue()));
       }
       case NULL_VALUE -> new ScalarValue.Null();
       default -> new ScalarValue.Null();
@@ -237,11 +256,33 @@ public final class ScalarValueProtoConverter {
                   .setValue(bigIntegerToDecimalBytes(v.unscaledValue(), 32))
                   .setP(v.precision())
                   .setS(v.scale()));
+      case ScalarValue.DictionaryValue v ->
+          builder.setDictionaryValue(
+              org.apache.arrow.datafusion.proto.ScalarDictionaryValue.newBuilder()
+                  .setValue(toProto(v.value())));
+      case ScalarValue.UnionValue v ->
+          builder.setUnionValue(
+              org.apache.arrow.datafusion.proto.UnionValue.newBuilder()
+                  .setValueId(v.typeId())
+                  .setValue(toProto(v.value())));
+      case ScalarValue.RunEndEncodedValue v ->
+          builder.setRunEndEncodedValue(
+              org.apache.arrow.datafusion.proto.ScalarRunEndEncodedValue.newBuilder()
+                  .setValue(toProto(v.value())));
+      case ScalarValue.ListValue ignored ->
+          throw new UnsupportedOperationException("toProto for ListValue is not yet implemented");
+      case ScalarValue.LargeListValue ignored ->
+          throw new UnsupportedOperationException(
+              "toProto for LargeListValue is not yet implemented");
+      case ScalarValue.FixedSizeListValue ignored ->
+          throw new UnsupportedOperationException(
+              "toProto for FixedSizeListValue is not yet implemented");
+      case ScalarValue.StructValue ignored ->
+          throw new UnsupportedOperationException("toProto for StructValue is not yet implemented");
+      case ScalarValue.MapValue ignored ->
+          throw new UnsupportedOperationException("toProto for MapValue is not yet implemented");
       case ScalarValue.Null ignored ->
           builder.setNullValue(org.apache.arrow.datafusion.proto.ArrowType.getDefaultInstance());
-      default ->
-          throw new UnsupportedOperationException(
-              "Unsupported ScalarValue type for proto: " + value.getClass().getSimpleName());
     }
     return builder.build();
   }

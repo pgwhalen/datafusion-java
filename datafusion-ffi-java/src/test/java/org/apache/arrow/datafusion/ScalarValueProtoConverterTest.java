@@ -273,6 +273,26 @@ public class ScalarValueProtoConverterTest {
     assertRoundTrip(new ScalarValue.Decimal256(BigInteger.ZERO, 76, 0));
   }
 
+  // -- Complex wrapper types --
+
+  @Test
+  void testDictionaryValueRoundTrip() {
+    assertRoundTrip(new ScalarValue.DictionaryValue(new ScalarValue.Utf8("hello")));
+    assertRoundTrip(new ScalarValue.DictionaryValue(new ScalarValue.Int32(42)));
+  }
+
+  @Test
+  void testUnionValueRoundTrip() {
+    assertRoundTrip(new ScalarValue.UnionValue(0, new ScalarValue.Int32(42)));
+    assertRoundTrip(new ScalarValue.UnionValue(1, new ScalarValue.Utf8("hello")));
+  }
+
+  @Test
+  void testRunEndEncodedValueRoundTrip() {
+    assertRoundTrip(new ScalarValue.RunEndEncodedValue(new ScalarValue.Int64(100L)));
+    assertRoundTrip(new ScalarValue.RunEndEncodedValue(new ScalarValue.Utf8("test")));
+  }
+
   // -- Null --
 
   @Test
