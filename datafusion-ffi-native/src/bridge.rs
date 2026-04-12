@@ -2143,6 +2143,13 @@ fn decode_json_write_options(
     Ok(Some(opts))
 }
 
+fn import_static_schema(
+    schema_addr: usize,
+) -> Result<Option<&'static arrow::datatypes::Schema>, Box<ffi::DfError>> {
+    Ok(import_schema_option(schema_addr)?
+        .map(|schema| &*Box::leak(Box::new((*schema).clone()))))
+}
+
 fn parse_csv_options<'a>(
     options: &[u8],
     schema_addr: usize,
@@ -2172,10 +2179,7 @@ fn parse_csv_options<'a>(
         opts.truncated_rows = csv_opts.truncated_rows.unwrap_or(false);
     }
 
-    if let Some(schema) = import_schema_option(schema_addr)? {
-        let leaked: &'static arrow::datatypes::Schema = Box::leak(Box::new((*schema).clone()));
-        opts.schema = Some(leaked);
-    }
+    opts.schema = import_static_schema(schema_addr)?;
     Ok(opts)
 }
 
@@ -2195,10 +2199,7 @@ fn parse_parquet_options<'a>(
         opts.skip_metadata = Some(proto.skip_metadata);
     }
 
-    if let Some(schema) = import_schema_option(schema_addr)? {
-        let leaked: &'static arrow::datatypes::Schema = Box::leak(Box::new((*schema).clone()));
-        opts.schema = Some(leaked);
-    }
+    opts.schema = import_static_schema(schema_addr)?;
     Ok(opts)
 }
 
@@ -2220,10 +2221,7 @@ fn parse_json_options<'a>(
         opts.file_compression_type = json_opts.compression.into();
     }
 
-    if let Some(schema) = import_schema_option(schema_addr)? {
-        let leaked: &'static arrow::datatypes::Schema = Box::leak(Box::new((*schema).clone()));
-        opts.schema = Some(leaked);
-    }
+    opts.schema = import_static_schema(schema_addr)?;
     Ok(opts)
 }
 
