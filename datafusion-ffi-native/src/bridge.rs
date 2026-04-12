@@ -118,6 +118,13 @@ pub mod ffi {
         Full,
     }
 
+    /// Variable type for variable provider registration.
+    #[allow(dead_code)] // Variants constructed from Java via Diplomat FFI
+    pub enum DfVarType {
+        System,
+        UserDefined,
+    }
+
     /// A source-code span with start/end line and column.
     #[diplomat::attr(auto, abi_compatible)]
     pub struct DfSpan {
@@ -277,6 +284,34 @@ pub mod ffi {
         fn schema_names_raw(&self) -> usize;
         /// Returns DfSchemaProvider raw ptr (via createRaw downcall), or 0 for not found.
         fn schema(&self, name_addr: usize, name_len: usize) -> usize;
+    }
+
+    // -- Variable provider --
+
+    /// Variable provider trait: resolves @user and @@system variables in SQL.
+    pub trait DfVarProviderTrait {
+        /// Get variable value. var_names_ptr is a DfStringArray raw pointer
+        /// (Java takes ownership).
+        /// Returns a raw pointer to a DfExprBytes containing proto-serialized
+        /// ScalarValue, or 0 on error (after writing to error buffer).
+        fn get_value(
+            &self,
+            var_names_ptr: usize,
+            error_addr: usize,
+            error_cap: usize,
+        ) -> usize;
+
+        /// Get variable type. var_names_ptr is a DfStringArray raw pointer
+        /// (Java takes ownership). Writes FFI_ArrowSchema to out_schema_addr
+        /// if type is known.
+        /// Returns 1 if type found, 0 if None, negative on error.
+        fn get_type(
+            &self,
+            var_names_ptr: usize,
+            out_schema_addr: usize,
+            error_addr: usize,
+            error_cap: usize,
+        ) -> i32;
     }
 
     // ============================================================================
@@ -450,6 +485,22 @@ pub mod ffi {
                     copy_len,
                 );
             }
+        }
+
+        /// Create a DfExprBytes from a byte slice. Used by Java callbacks to
+        /// return serialized data to Rust.
+        pub fn new_from_slice(data: &[u8]) -> Box<DfExprBytes> {
+            Box::new(DfExprBytes {
+                bytes: data.to_vec(),
+            })
+        }
+
+        /// Transfer ownership as a raw pointer. The caller must consume this
+        /// via `take_from_raw` to avoid leaking memory.
+        pub fn to_raw_ptr(&mut self) -> usize {
+            let bytes = std::mem::take(&mut self.bytes);
+            let boxed = Box::new(DfExprBytes { bytes });
+            Box::into_raw(boxed) as usize
         }
     }
 
@@ -1327,6 +1378,22 @@ pub mod ffi {
             Ok(())
         }
 
+        /// Register a variable provider backed by a Java-implemented DfVarProviderTrait.
+        pub fn register_variable(
+            &self,
+            var_type: DfVarType,
+            provider: impl DfVarProviderTrait + 'static,
+        ) -> Result<(), Box<DfError>> {
+            use datafusion::variable::VarType;
+            let vt = match var_type {
+                DfVarType::System => VarType::System,
+                DfVarType::UserDefined => VarType::UserDefined,
+            };
+            let foreign = crate::var_provider::ForeignVarProvider::new(provider);
+            self.ctx.register_variable(vt, Arc::new(foreign));
+            Ok(())
+        }
+
         /// Parse a SQL expression against a schema, returning serialized protobuf bytes.
         pub fn parse_sql_expr(
             &self,
@@ -1925,6 +1992,23 @@ pub mod ffi {
             self.rt.block_on(df.write_json(path_str, df_write_opts, json_opts))?;
             Ok(())
         }
+    }
+}
+
+impl ffi::DfExprBytes {
+    /// Reconstitute a `DfExprBytes` from a raw pointer previously created
+    /// by `to_raw_ptr`, and extract its bytes.  Returns an empty Vec if
+    /// the pointer is null (0).
+    ///
+    /// # Safety contained here
+    /// The pointer must have been produced by `to_raw_ptr` and must not be
+    /// used again after this call.
+    pub(crate) fn take_from_raw(ptr: usize) -> Vec<u8> {
+        if ptr == 0 {
+            return Vec::new();
+        }
+        let boxed = unsafe { Box::from_raw(ptr as *mut ffi::DfExprBytes) };
+        boxed.bytes
     }
 }
 

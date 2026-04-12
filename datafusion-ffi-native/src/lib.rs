@@ -9,3 +9,4 @@ mod schema;
 mod stream;
 mod table;
 mod udf;
+mod var_provider;

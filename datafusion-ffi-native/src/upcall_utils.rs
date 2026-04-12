@@ -98,3 +98,19 @@ pub(crate) fn do_counted_upcall(
     }
     Ok(result as usize)
 }
+
+/// For upcalls that optionally write to an output buffer: negative = error,
+/// 0 = absent (nothing written), positive = present (output written).
+pub(crate) fn do_optional_upcall(
+    context: &str,
+    f: impl FnOnce(&ErrorBuffer) -> i32,
+) -> Result<bool, DataFusionError> {
+    let err = ErrorBuffer::new();
+    let result = f(&err);
+    if result < 0 {
+        return Err(DataFusionError::External(
+            format!("{}: {}", context, err.read()).into(),
+        ));
+    }
+    Ok(result > 0)
+}

@@ -304,6 +304,40 @@ public class SessionContext implements AutoCloseable {
   }
 
   /**
+   * Registers a variable provider for resolving variable references in SQL queries.
+   *
+   * <p>User-defined variables use the {@code @} prefix and system variables use {@code @@}. Once
+   * registered, queries can reference these variables directly:
+   *
+   * {@snippet :
+   * VarProvider provider = new VarProvider() {
+   *     @Override
+   *     public ScalarValue getValue(List<String> varNames) {
+   *         return new ScalarValue.Utf8("Alice");
+   *     }
+   *     @Override
+   *     public Optional<ArrowType> getType(List<String> varNames) {
+   *         return Optional.of(ArrowType.Utf8.INSTANCE);
+   *     }
+   * };
+   * ctx.registerVariable(VarType.USER_DEFINED, provider, allocator);
+   * DataFrame df = ctx.sql("SELECT @name");
+   * }
+   *
+   * @param type the variable type (system or user-defined)
+   * @param provider the variable provider implementation
+   * @param allocator the buffer allocator to use for Arrow data transfers
+   * @throws DataFusionError if registration fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.register_variable">Rust
+   *     DataFusion: SessionContext::register_variable</a>
+   */
+  public void registerVariable(VarType type, VarProvider provider, BufferAllocator allocator) {
+    checkNotClosed();
+    bridge.registerVariable(type, provider, allocator);
+  }
+
+  /**
    * Registers a scalar UDF with the session context.
    *
    * <p>Once registered, the UDF can be used in SQL queries by name. For example:

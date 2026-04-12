@@ -11,11 +11,14 @@ import java.util.Optional;
 import org.apache.arrow.datafusion.catalog.CatalogProvider;
 import org.apache.arrow.datafusion.catalog.SchemaProvider;
 import org.apache.arrow.datafusion.catalog.TableProvider;
+import org.apache.arrow.datafusion.common.ScalarValue;
 import org.apache.arrow.datafusion.dataframe.DataFrame;
 import org.apache.arrow.datafusion.datasource.CsvReadOptions;
 import org.apache.arrow.datafusion.datasource.NdJsonReadOptions;
 import org.apache.arrow.datafusion.datasource.ParquetReadOptions;
 import org.apache.arrow.datafusion.execution.SessionContext;
+import org.apache.arrow.datafusion.execution.VarProvider;
+import org.apache.arrow.datafusion.execution.VarType;
 import org.apache.arrow.datafusion.physical_plan.SendableRecordBatchStream;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
@@ -480,6 +483,130 @@ public class SessionContextTest {
       // Verify the list is properly structured (no empty strings from stale encoding)
       for (String name : defaultNames) {
         assertFalse(name.isEmpty(), "Catalog name should not be empty");
+      }
+    }
+  }
+
+  // ── register_variable tests ──
+
+  @Test
+  void testRegisterUserDefinedVariable() {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+      VarProvider provider =
+          new VarProvider() {
+            @Override
+            public ScalarValue getValue(List<String> varNames) {
+              return switch (varNames.getFirst()) {
+                case "@name" -> new ScalarValue.Utf8("Alice");
+                case "@count" -> new ScalarValue.Int32(42);
+                default ->
+                    throw new IllegalArgumentException("Unknown variable: " + varNames.getFirst());
+              };
+            }
+
+            @Override
+            public Optional<ArrowType> getType(List<String> varNames) {
+              return switch (varNames.getFirst()) {
+                case "@name" -> Optional.of(ArrowType.Utf8.INSTANCE);
+                case "@count" -> Optional.of(new ArrowType.Int(32, true));
+                default -> Optional.empty();
+              };
+            }
+          };
+      ctx.registerVariable(VarType.USER_DEFINED, provider, allocator);
+
+      try (DataFrame df = ctx.sql("SELECT @name, @count");
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
+        assertTrue(stream.loadNextBatch());
+        VectorSchemaRoot result = stream.getVectorSchemaRoot();
+        assertEquals(1, result.getRowCount());
+        VarCharVector nameCol = (VarCharVector) result.getVector(0);
+        assertEquals("Alice", nameCol.getObject(0).toString());
+        IntVector countCol = (IntVector) result.getVector(1);
+        assertEquals(42, countCol.get(0));
+      }
+    }
+  }
+
+  @Test
+  void testRegisterSystemVariable() {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+      VarProvider provider =
+          new VarProvider() {
+            @Override
+            public ScalarValue getValue(List<String> varNames) {
+              if (varNames.getFirst().equals("@@version")) {
+                return new ScalarValue.Utf8("1.0.0");
+              }
+              throw new IllegalArgumentException("Unknown system variable: " + varNames.getFirst());
+            }
+
+            @Override
+            public Optional<ArrowType> getType(List<String> varNames) {
+              if (varNames.getFirst().equals("@@version")) {
+                return Optional.of(ArrowType.Utf8.INSTANCE);
+              }
+              return Optional.empty();
+            }
+          };
+      ctx.registerVariable(VarType.SYSTEM, provider, allocator);
+
+      try (DataFrame df = ctx.sql("SELECT @@version");
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
+        assertTrue(stream.loadNextBatch());
+        VectorSchemaRoot result = stream.getVectorSchemaRoot();
+        assertEquals(1, result.getRowCount());
+        VarCharVector col = (VarCharVector) result.getVector(0);
+        assertEquals("1.0.0", col.getObject(0).toString());
+      }
+    }
+  }
+
+  @Test
+  void testVariableInWhereClause() {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+      // Register a batch with ids 1-4
+      Schema schema =
+          new Schema(
+              List.of(
+                  new Field("id", new FieldType(false, new ArrowType.Int(32, true), null), null)));
+      try (VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator)) {
+        IntVector id = (IntVector) root.getVector("id");
+        id.allocateNew(4);
+        for (int i = 0; i < 4; i++) {
+          id.set(i, i + 1);
+        }
+        root.setRowCount(4);
+        ctx.registerBatch("test", root, allocator);
+      }
+
+      // Register a threshold variable
+      VarProvider provider =
+          new VarProvider() {
+            @Override
+            public ScalarValue getValue(List<String> varNames) {
+              return new ScalarValue.Int32(2);
+            }
+
+            @Override
+            public Optional<ArrowType> getType(List<String> varNames) {
+              return Optional.of(new ArrowType.Int(32, true));
+            }
+          };
+      ctx.registerVariable(VarType.USER_DEFINED, provider, allocator);
+
+      // Query using the variable in WHERE clause
+      try (DataFrame df = ctx.sql("SELECT id FROM test WHERE id > @threshold ORDER BY id");
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
+        assertTrue(stream.loadNextBatch());
+        VectorSchemaRoot result = stream.getVectorSchemaRoot();
+        assertEquals(2, result.getRowCount());
+        IntVector idResult = (IntVector) result.getVector("id");
+        assertEquals(3, idResult.get(0));
+        assertEquals(4, idResult.get(1));
       }
     }
   }

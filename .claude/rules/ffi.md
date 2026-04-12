@@ -1,7 +1,7 @@
 ---
 paths:
-  - "datafusion-ffi-java/src/main/java/**/*.java"
-  - "datafusion-ffi-native/src/**/*.rs"
+  - "datafusion-ffi-java/**/*.java"
+  - "datafusion-ffi-native/**/*.rs"
 ---
 
 # FFI Architecture (Diplomat-Based)

@@ -14,6 +14,7 @@ import org.apache.arrow.datafusion.DfCatalogAdapter;
 import org.apache.arrow.datafusion.DfFileFormatAdapter;
 import org.apache.arrow.datafusion.DfScalarUDFAdapter;
 import org.apache.arrow.datafusion.DfTableAdapter;
+import org.apache.arrow.datafusion.DfVarProviderAdapter;
 import org.apache.arrow.datafusion.ExprProtoConverter;
 import org.apache.arrow.datafusion.catalog.CatalogProvider;
 import org.apache.arrow.datafusion.catalog.TableProvider;
@@ -35,6 +36,7 @@ import org.apache.arrow.datafusion.generated.DfRuntimeEnv;
 import org.apache.arrow.datafusion.generated.DfSessionContext;
 import org.apache.arrow.datafusion.generated.DfSessionState;
 import org.apache.arrow.datafusion.generated.DfStringArray;
+import org.apache.arrow.datafusion.generated.DfVarType;
 import org.apache.arrow.datafusion.logical_expr.Expr;
 import org.apache.arrow.datafusion.logical_expr.ScalarUDF;
 import org.apache.arrow.memory.BufferAllocator;
@@ -245,6 +247,25 @@ public final class SessionContextBridge implements AutoCloseable {
       throw new NativeDataFusionError(e);
     } catch (Exception e) {
       throw new DataFusionError("Failed to register catalog", e);
+    }
+  }
+
+  void registerVariable(VarType type, VarProvider provider, BufferAllocator allocator) {
+    try {
+      DfVarProviderAdapter adapter =
+          new DfVarProviderAdapter(provider, allocator, config.fullStackTrace());
+      traitImpls.add(adapter);
+      DfVarType dfType =
+          switch (type) {
+            case SYSTEM -> DfVarType.SYSTEM;
+            case USER_DEFINED -> DfVarType.USER_DEFINED;
+          };
+      dfCtx.registerVariable(dfType, adapter);
+      logger.debug("Registered variable provider (type={})", type);
+    } catch (DfError e) {
+      throw new NativeDataFusionError(e);
+    } catch (Exception e) {
+      throw new DataFusionError("Failed to register variable provider", e);
     }
   }
 
