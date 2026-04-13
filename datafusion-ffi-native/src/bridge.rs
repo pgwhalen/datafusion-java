@@ -540,8 +540,36 @@ pub mod ffi {
         /// via `take_from_raw` to avoid leaking memory.
         pub fn to_raw_ptr(&mut self) -> usize {
             let bytes = std::mem::take(&mut self.bytes);
-            let boxed = Box::new(DfExprBytes { bytes });
+            let boxed = DfExprBytes::from_bytes(bytes);
             Box::into_raw(boxed) as usize
+        }
+
+        /// Construct from logical expressions, serialized as protobuf `LogicalExprList`.
+        fn from_exprs(exprs: &[Expr]) -> Result<Box<DfExprBytes>, Box<DfError>> {
+            let codec = DefaultLogicalExtensionCodec {};
+            let serialized = serialize_exprs(exprs, &codec)?;
+            let proto_list = LogicalExprList { expr: serialized };
+            Ok(DfExprBytes::from_bytes(proto_list.encode_to_vec()))
+        }
+
+        /// Construct from sort expressions, serialized as protobuf `SortExprNodeCollection`.
+        fn from_sort_exprs(sort_exprs: &[SortExpr]) -> Result<Box<DfExprBytes>, Box<DfError>> {
+            let codec = DefaultLogicalExtensionCodec {};
+            let nodes = serialize_sorts(sort_exprs, &codec)?;
+            let collection = SortExprNodeCollection {
+                sort_expr_nodes: nodes,
+            };
+            Ok(DfExprBytes::from_bytes(collection.encode_to_vec()))
+        }
+
+        /// Construct an empty `DfExprBytes` (no data).
+        fn empty() -> Box<DfExprBytes> {
+            Box::new(DfExprBytes { bytes: Vec::new() })
+        }
+
+        /// Construct from a pre-built byte vector.
+        fn from_bytes(bytes: Vec<u8>) -> Box<DfExprBytes> {
+            Box::new(DfExprBytes { bytes })
         }
     }
 
@@ -768,30 +796,6 @@ pub mod ffi {
 
     }
 
-    /// Serialize expressions to protobuf bytes. Returns an empty Vec for empty input.
-    fn encode_exprs(exprs: &[Expr]) -> Result<Vec<u8>, Box<DfError>> {
-        if exprs.is_empty() {
-            return Ok(Vec::new());
-        }
-        let codec = DefaultLogicalExtensionCodec {};
-        let serialized = serialize_exprs(exprs, &codec)?;
-        let proto_list = LogicalExprList { expr: serialized };
-        Ok(proto_list.encode_to_vec())
-    }
-
-    /// Serialize sort expressions to protobuf bytes.
-    fn encode_sort_exprs(sort_exprs: &[SortExpr]) -> Result<Vec<u8>, Box<DfError>> {
-        if sort_exprs.is_empty() {
-            return Ok(Vec::new());
-        }
-        let codec = DefaultLogicalExtensionCodec {};
-        let nodes = serialize_sorts(sort_exprs, &codec)?;
-        let collection = SortExprNodeCollection {
-            sort_expr_nodes: nodes,
-        };
-        Ok(collection.encode_to_vec())
-    }
-
     /// Opaque wrapper for a LogicalPlan.
     #[diplomat::opaque]
     pub struct DfLogicalPlan {
@@ -876,8 +880,7 @@ pub mod ffi {
         /// All non-recursive expressions in this node, as proto bytes.
         pub fn expressions_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
             let exprs = self.plan.expressions();
-            let bytes = encode_exprs(&exprs)?;
-            Ok(Box::new(DfExprBytes { bytes }))
+            DfExprBytes::from_exprs(&exprs)
         }
 
         /// Single-line display of this node only.
@@ -917,8 +920,7 @@ pub mod ffi {
         /// Filter predicate as proto bytes. Errors if not a Filter.
         pub fn filter_predicate_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
             if let LogicalPlan::Filter(f) = &self.plan {
-                let bytes = encode_exprs(&[f.predicate.clone()])?;
-                Ok(Box::new(DfExprBytes { bytes }))
+                DfExprBytes::from_exprs(&[f.predicate.clone()])
             } else {
                 Err("Not a Filter".into())
             }
@@ -929,8 +931,7 @@ pub mod ffi {
         /// Sort expressions as proto bytes (SortExprNodeCollection). Errors if not a Sort.
         pub fn sort_exprs_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
             if let LogicalPlan::Sort(s) = &self.plan {
-                let bytes = encode_sort_exprs(&s.expr)?;
-                Ok(Box::new(DfExprBytes { bytes }))
+                DfExprBytes::from_sort_exprs(&s.expr)
             } else {
                 Err("Not a Sort".into())
             }
@@ -983,8 +984,7 @@ pub mod ffi {
         pub fn join_on_left_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
             if let LogicalPlan::Join(j) = &self.plan {
                 let left_exprs: Vec<Expr> = j.on.iter().map(|(l, _)| l.clone()).collect();
-                let bytes = encode_exprs(&left_exprs)?;
-                Ok(Box::new(DfExprBytes { bytes }))
+                DfExprBytes::from_exprs(&left_exprs)
             } else {
                 Err("Not a Join".into())
             }
@@ -994,8 +994,7 @@ pub mod ffi {
         pub fn join_on_right_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
             if let LogicalPlan::Join(j) = &self.plan {
                 let right_exprs: Vec<Expr> = j.on.iter().map(|(_, r)| r.clone()).collect();
-                let bytes = encode_exprs(&right_exprs)?;
-                Ok(Box::new(DfExprBytes { bytes }))
+                DfExprBytes::from_exprs(&right_exprs)
             } else {
                 Err("Not a Join".into())
             }
@@ -1005,11 +1004,8 @@ pub mod ffi {
         pub fn join_filter_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
             if let LogicalPlan::Join(j) = &self.plan {
                 match &j.filter {
-                    Some(f) => {
-                        let bytes = encode_exprs(&[f.clone()])?;
-                        Ok(Box::new(DfExprBytes { bytes }))
-                    }
-                    None => Ok(Box::new(DfExprBytes { bytes: vec![] })),
+                    Some(f) => DfExprBytes::from_exprs(&[f.clone()]),
+                    None => Ok(DfExprBytes::empty()),
                 }
             } else {
                 Err("Not a Join".into())
@@ -1033,8 +1029,7 @@ pub mod ffi {
         /// Aggregate grouping expressions as proto bytes. Errors if not an Aggregate.
         pub fn aggregate_group_exprs_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
             if let LogicalPlan::Aggregate(a) = &self.plan {
-                let bytes = encode_exprs(&a.group_expr)?;
-                Ok(Box::new(DfExprBytes { bytes }))
+                DfExprBytes::from_exprs(&a.group_expr)
             } else {
                 Err("Not an Aggregate".into())
             }
@@ -1043,8 +1038,7 @@ pub mod ffi {
         /// Aggregate function expressions as proto bytes. Errors if not an Aggregate.
         pub fn aggregate_aggr_exprs_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
             if let LogicalPlan::Aggregate(a) = &self.plan {
-                let bytes = encode_exprs(&a.aggr_expr)?;
-                Ok(Box::new(DfExprBytes { bytes }))
+                DfExprBytes::from_exprs(&a.aggr_expr)
             } else {
                 Err("Not an Aggregate".into())
             }
@@ -1056,11 +1050,8 @@ pub mod ffi {
         pub fn limit_skip_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
             if let LogicalPlan::Limit(l) = &self.plan {
                 match &l.skip {
-                    Some(expr) => {
-                        let bytes = encode_exprs(&[*expr.clone()])?;
-                        Ok(Box::new(DfExprBytes { bytes }))
-                    }
-                    None => Ok(Box::new(DfExprBytes { bytes: vec![] })),
+                    Some(expr) => DfExprBytes::from_exprs(&[*expr.clone()]),
+                    None => Ok(DfExprBytes::empty()),
                 }
             } else {
                 Err("Not a Limit".into())
@@ -1071,11 +1062,8 @@ pub mod ffi {
         pub fn limit_fetch_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
             if let LogicalPlan::Limit(l) = &self.plan {
                 match &l.fetch {
-                    Some(expr) => {
-                        let bytes = encode_exprs(&[*expr.clone()])?;
-                        Ok(Box::new(DfExprBytes { bytes }))
-                    }
-                    None => Ok(Box::new(DfExprBytes { bytes: vec![] })),
+                    Some(expr) => DfExprBytes::from_exprs(&[*expr.clone()]),
+                    None => Ok(DfExprBytes::empty()),
                 }
             } else {
                 Err("Not a Limit".into())
@@ -1154,17 +1142,16 @@ pub mod ffi {
                 if let Some(proj) = &ts.projection {
                     let u32s: Vec<u32> = proj.iter().map(|&i| i as u32).collect();
                     let bytes: Vec<u8> = u32s.iter().flat_map(|v| v.to_le_bytes()).collect();
-                    return Box::new(DfExprBytes { bytes });
+                    return DfExprBytes::from_bytes(bytes);
                 }
             }
-            Box::new(DfExprBytes { bytes: vec![] })
+            DfExprBytes::empty()
         }
 
         /// TableScan filter expressions as proto bytes.
         pub fn table_scan_filters_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
             if let LogicalPlan::TableScan(ts) = &self.plan {
-                let bytes = encode_exprs(&ts.filters)?;
-                Ok(Box::new(DfExprBytes { bytes }))
+                DfExprBytes::from_exprs(&ts.filters)
             } else {
                 Err("Not a TableScan".into())
             }
@@ -1240,8 +1227,7 @@ pub mod ffi {
         /// DistinctOn ON expressions as proto bytes. Errors if not Distinct::On.
         pub fn distinct_on_on_exprs_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
             if let LogicalPlan::Distinct(Distinct::On(d)) = &self.plan {
-                let bytes = encode_exprs(&d.on_expr)?;
-                Ok(Box::new(DfExprBytes { bytes }))
+                DfExprBytes::from_exprs(&d.on_expr)
             } else {
                 Err("Not a Distinct::On".into())
             }
@@ -1250,8 +1236,7 @@ pub mod ffi {
         /// DistinctOn SELECT expressions as proto bytes. Errors if not Distinct::On.
         pub fn distinct_on_select_exprs_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
             if let LogicalPlan::Distinct(Distinct::On(d)) = &self.plan {
-                let bytes = encode_exprs(&d.select_expr)?;
-                Ok(Box::new(DfExprBytes { bytes }))
+                DfExprBytes::from_exprs(&d.select_expr)
             } else {
                 Err("Not a Distinct::On".into())
             }
@@ -1261,11 +1246,8 @@ pub mod ffi {
         pub fn distinct_on_sort_exprs_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
             if let LogicalPlan::Distinct(Distinct::On(d)) = &self.plan {
                 match &d.sort_expr {
-                    Some(sort_exprs) => {
-                        let bytes = encode_sort_exprs(sort_exprs)?;
-                        Ok(Box::new(DfExprBytes { bytes }))
-                    }
-                    None => Ok(Box::new(DfExprBytes { bytes: vec![] })),
+                    Some(sort_exprs) => DfExprBytes::from_sort_exprs(sort_exprs),
+                    None => Ok(DfExprBytes::empty()),
                 }
             } else {
                 Err("Not a Distinct::On".into())
@@ -1296,8 +1278,7 @@ pub mod ffi {
         pub fn values_all_exprs_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
             if let LogicalPlan::Values(v) = &self.plan {
                 let flat: Vec<Expr> = v.values.iter().flatten().cloned().collect();
-                let bytes = encode_exprs(&flat)?;
-                Ok(Box::new(DfExprBytes { bytes }))
+                DfExprBytes::from_exprs(&flat)
             } else {
                 Err("Not a Values".into())
             }
@@ -1308,8 +1289,7 @@ pub mod ffi {
         /// Window expressions as proto bytes. Errors if not a Window.
         pub fn window_exprs_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
             if let LogicalPlan::Window(w) = &self.plan {
-                let bytes = encode_exprs(&w.window_expr)?;
-                Ok(Box::new(DfExprBytes { bytes }))
+                DfExprBytes::from_exprs(&w.window_expr)
             } else {
                 Err("Not a Window".into())
             }
@@ -1759,9 +1739,7 @@ pub mod ffi {
             let bytes = g.literal_protos.get(l_idx).ok_or_else(|| {
                 Box::<DfError>::from(format!("Literal index {} out of bounds", l_idx))
             })?;
-            Ok(Box::new(DfExprBytes {
-                bytes: bytes.clone(),
-            }))
+            Ok(DfExprBytes::from_bytes(bytes.clone()))
         }
     }
 
@@ -1980,11 +1958,7 @@ pub mod ffi {
             let df_schema = DFSchema::try_from(schema.schema.as_ref().clone())?;
             let state = self.ctx.state();
             let expr = state.create_logical_expr(sql_str, &df_schema)?;
-            let codec = DefaultLogicalExtensionCodec {};
-            let serialized = serialize_exprs(&[expr], &codec)?;
-            let proto_list = LogicalExprList { expr: serialized };
-            let bytes = proto_list.encode_to_vec();
-            Ok(Box::new(DfExprBytes { bytes }))
+            DfExprBytes::from_exprs(&[expr])
         }
 
         /// Check if a table exists by name.
