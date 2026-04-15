@@ -152,6 +152,11 @@ public class DocsValidationDoclet implements Doclet {
                   // Java-only proto serialization helper
                   "encodeOptions")),
           Map.entry(
+              "ArrowReadOptions",
+              Set.of(
+                  // Java-only proto serialization helper
+                  "encodeOptions")),
+          Map.entry(
               "CsvOptions",
               Set.of(
                   // Java-only proto serialization helper
@@ -228,6 +233,7 @@ public class DocsValidationDoclet implements Doclet {
           Map.entry("CsvReadOptions", Set.of("encodeOptions")),
           Map.entry("ParquetReadOptions", Set.of("encodeOptions")),
           Map.entry("NdJsonReadOptions", Set.of("encodeOptions")),
+          Map.entry("ArrowReadOptions", Set.of("encodeOptions")),
           Map.entry("CsvOptions", Set.of("encodeOptions")),
           Map.entry("JsonOptions", Set.of("encodeOptions")),
           Map.entry("ParquetOptions", Set.of("encodeOptions")),

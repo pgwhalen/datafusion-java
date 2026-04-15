@@ -22,6 +22,7 @@ import org.apache.arrow.datafusion.common.DataFusionError;
 import org.apache.arrow.datafusion.common.NativeDataFusionError;
 import org.apache.arrow.datafusion.config.ConfigOptions;
 import org.apache.arrow.datafusion.dataframe.DataFrameBridge;
+import org.apache.arrow.datafusion.datasource.ArrowReadOptions;
 import org.apache.arrow.datafusion.datasource.CsvReadOptions;
 import org.apache.arrow.datafusion.datasource.ListingTable;
 import org.apache.arrow.datafusion.datasource.ListingTableUrl;
@@ -489,6 +490,55 @@ public final class SessionContextBridge implements AutoCloseable {
       throw e;
     } catch (Exception e) {
       throw new DataFusionError("Failed to read JSON with options", e);
+    }
+  }
+
+  void registerArrow(
+      String name, String path, ArrowReadOptions options, BufferAllocator allocator) {
+    try {
+      withOptionalSchema(
+          options.schema(),
+          allocator,
+          schemaAddr -> {
+            dfCtx.registerArrow(name, path, schemaAddr);
+            return null;
+          });
+      logger.debug("Registered Arrow table '{}'", name);
+    } catch (DfError e) {
+      throw new NativeDataFusionError(e);
+    } catch (DataFusionError e) {
+      throw e;
+    } catch (Exception e) {
+      throw new DataFusionError("Failed to register Arrow", e);
+    }
+  }
+
+  DataFrameBridge readArrow(String path) {
+    try {
+      DfDataFrame df = dfCtx.readArrow(path);
+      return new DataFrameBridge(df);
+    } catch (DfError e) {
+      throw new NativeDataFusionError(e);
+    } catch (Exception e) {
+      throw new DataFusionError("Failed to read Arrow file", e);
+    }
+  }
+
+  DataFrameBridge readArrow(String path, ArrowReadOptions options, BufferAllocator allocator) {
+    try {
+      return withOptionalSchema(
+          options.schema(),
+          allocator,
+          schemaAddr -> {
+            DfDataFrame df = dfCtx.readArrowWithOptions(path, schemaAddr);
+            return new DataFrameBridge(df);
+          });
+    } catch (DfError e) {
+      throw new NativeDataFusionError(e);
+    } catch (DataFusionError e) {
+      throw e;
+    } catch (Exception e) {
+      throw new DataFusionError("Failed to read Arrow with options", e);
     }
   }
 

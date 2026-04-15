@@ -2103,6 +2103,45 @@ pub mod ffi {
             Ok(self.wrap_df(df))
         }
 
+        /// Read an Arrow IPC file/directory into a DataFrame.
+        pub fn read_arrow(
+            &self,
+            path: &DiplomatStr,
+        ) -> Result<Box<DfDataFrame>, Box<DfError>> {
+            let path_str = diplomat_str(path)?;
+            let df = self
+                .rt
+                .block_on(self.ctx.read_arrow(path_str, Default::default()))?;
+            Ok(self.wrap_df(df))
+        }
+
+        /// Register an Arrow IPC file/directory as a named table.
+        pub fn register_arrow(
+            &self,
+            name: &DiplomatStr,
+            path: &DiplomatStr,
+            schema_addr: usize,
+        ) -> Result<(), Box<DfError>> {
+            let name_str = diplomat_str(name)?;
+            let path_str = diplomat_str(path)?;
+            let opts = super::parse_arrow_options(schema_addr)?;
+            self.rt
+                .block_on(self.ctx.register_arrow(name_str, path_str, opts))?;
+            Ok(())
+        }
+
+        /// Read an Arrow IPC file with options into a DataFrame.
+        pub fn read_arrow_with_options(
+            &self,
+            path: &DiplomatStr,
+            schema_addr: usize,
+        ) -> Result<Box<DfDataFrame>, Box<DfError>> {
+            let path_str = diplomat_str(path)?;
+            let opts = super::parse_arrow_options(schema_addr)?;
+            let df = self.rt.block_on(self.ctx.read_arrow(path_str, opts))?;
+            Ok(self.wrap_df(df))
+        }
+
         /// Return catalog names.
         pub fn catalog_names(&self) -> Box<DfStringArray> {
             let names = self.ctx.catalog_names();
@@ -2855,6 +2894,18 @@ fn parse_json_options<'a>(
         opts.file_compression_type = json_opts.compression.into();
     }
 
+    opts.schema = import_static_schema(schema_addr)?;
+    Ok(opts)
+}
+
+fn parse_arrow_options<'a>(
+    schema_addr: usize,
+) -> Result<
+    datafusion::datasource::file_format::options::ArrowReadOptions<'a>,
+    Box<ffi::DfError>,
+> {
+    let mut opts =
+        datafusion::datasource::file_format::options::ArrowReadOptions::default();
     opts.schema = import_static_schema(schema_addr)?;
     Ok(opts)
 }

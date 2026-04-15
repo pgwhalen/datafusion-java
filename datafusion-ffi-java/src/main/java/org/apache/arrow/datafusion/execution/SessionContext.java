@@ -9,6 +9,7 @@ import org.apache.arrow.datafusion.catalog.TableProvider;
 import org.apache.arrow.datafusion.common.DataFusionError;
 import org.apache.arrow.datafusion.config.ConfigOptions;
 import org.apache.arrow.datafusion.dataframe.DataFrame;
+import org.apache.arrow.datafusion.datasource.ArrowReadOptions;
 import org.apache.arrow.datafusion.datasource.CsvReadOptions;
 import org.apache.arrow.datafusion.datasource.FileFormat;
 import org.apache.arrow.datafusion.datasource.ListingTable;
@@ -463,6 +464,29 @@ public class SessionContext implements AutoCloseable {
   }
 
   /**
+   * Registers an Arrow IPC file or directory as a named table.
+   *
+   * {@snippet :
+   * ctx.registerArrow("events", "/data/events.arrow", ArrowReadOptions.builder().build(), allocator);
+   * DataFrame df = ctx.sql("SELECT * FROM events");
+   * }
+   *
+   * @param name The table name
+   * @param path The file or directory path
+   * @param options Arrow read options
+   * @param allocator The buffer allocator
+   * @throws DataFusionError if registration fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.register_arrow">Rust
+   *     DataFusion: SessionContext::register_arrow</a>
+   */
+  public void registerArrow(
+      String name, String path, ArrowReadOptions options, BufferAllocator allocator) {
+    checkNotClosed();
+    bridge.registerArrow(name, path, options, allocator);
+  }
+
+  /**
    * Returns whether a table with the given name exists.
    *
    * {@snippet :
@@ -615,6 +639,44 @@ public class SessionContext implements AutoCloseable {
   public DataFrame readJson(String path, NdJsonReadOptions options, BufferAllocator allocator) {
     checkNotClosed();
     return new DataFrame(bridge.readJson(path, options, allocator));
+  }
+
+  /**
+   * Reads an Arrow IPC file/directory into a DataFrame.
+   *
+   * {@snippet :
+   * DataFrame df = ctx.readArrow("/data/events.arrow");
+   * df.show();
+   * }
+   *
+   * @param path The file or directory path
+   * @return A DataFrame for the Arrow data
+   * @throws DataFusionError if reading fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.read_arrow">Rust
+   *     DataFusion: SessionContext::read_arrow</a>
+   */
+  public DataFrame readArrow(String path) {
+    checkNotClosed();
+    return new DataFrame(bridge.readArrow(path));
+  }
+
+  /**
+   * Reads an Arrow IPC file/directory into a DataFrame with options. See {@link
+   * #readArrow(String)} for an example.
+   *
+   * @param path The file or directory path
+   * @param options Arrow read options
+   * @param allocator The buffer allocator (needed if schema is specified in options)
+   * @return A DataFrame for the Arrow data
+   * @throws DataFusionError if reading fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.read_arrow">Rust
+   *     DataFusion: SessionContext::read_arrow</a>
+   */
+  public DataFrame readArrow(String path, ArrowReadOptions options, BufferAllocator allocator) {
+    checkNotClosed();
+    return new DataFrame(bridge.readArrow(path, options, allocator));
   }
 
   /**

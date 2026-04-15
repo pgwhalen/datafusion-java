@@ -13,6 +13,7 @@ import org.apache.arrow.datafusion.catalog.SchemaProvider;
 import org.apache.arrow.datafusion.catalog.TableProvider;
 import org.apache.arrow.datafusion.common.ScalarValue;
 import org.apache.arrow.datafusion.dataframe.DataFrame;
+import org.apache.arrow.datafusion.datasource.ArrowReadOptions;
 import org.apache.arrow.datafusion.datasource.CsvReadOptions;
 import org.apache.arrow.datafusion.datasource.NdJsonReadOptions;
 import org.apache.arrow.datafusion.datasource.ParquetReadOptions;
@@ -270,8 +271,48 @@ public class SessionContextTest {
     }
   }
 
+  @Test
+  void testRegisterArrow(@TempDir Path tempDir) throws IOException {
+    Path arrowFile = tempDir.resolve("data.arrow");
+
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+
+      // Create an Arrow IPC file using COPY
+      ctx.registerCsv(
+          "src_csv",
+          createCsvFile(tempDir, "src.csv", "id,name,score\n1,Alice,95\n2,Bob,87\n3,Carol,92\n"),
+          CsvReadOptions.builder().build(),
+          allocator);
+      try (DataFrame copy =
+          ctx.sql("COPY src_csv TO '" + arrowFile.toString() + "' STORED AS ARROW")) {
+        copy.show();
+      }
+
+      ctx.registerArrow(
+          "test_arrow", arrowFile.toString(), ArrowReadOptions.builder().build(), allocator);
+
+      try (DataFrame df = ctx.sql("SELECT id, name, score FROM test_arrow ORDER BY id");
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
+        assertTrue(stream.loadNextBatch());
+        VectorSchemaRoot root = stream.getVectorSchemaRoot();
+        assertEquals(3, root.getRowCount());
+
+        BigIntVector id = (BigIntVector) root.getVector("id");
+        assertEquals(1, id.get(0));
+        assertEquals(2, id.get(1));
+        assertEquals(3, id.get(2));
+
+        BigIntVector score = (BigIntVector) root.getVector("score");
+        assertEquals(95, score.get(0));
+        assertEquals(87, score.get(1));
+        assertEquals(92, score.get(2));
+      }
+    }
+  }
+
   // ==========================================================================
-  // readCsv / readParquet / readJson with options
+  // readCsv / readParquet / readJson / readArrow with options
   // ==========================================================================
 
   @Test
@@ -356,6 +397,75 @@ public class SessionContextTest {
         assertEquals("B", y.getObject(1).toString());
         assertEquals(3.5, x.get(2), 0.001);
         assertEquals("C", y.getObject(2).toString());
+      }
+    }
+  }
+
+  @Test
+  void testReadArrow(@TempDir Path tempDir) throws IOException {
+    Path arrowFile = tempDir.resolve("data.arrow");
+
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+
+      // Create an Arrow IPC file using COPY
+      ctx.registerCsv(
+          "src_csv",
+          createCsvFile(tempDir, "src3.csv", "id,value\n1,100\n2,200\n"),
+          CsvReadOptions.builder().build(),
+          allocator);
+      try (DataFrame copy =
+          ctx.sql("COPY src_csv TO '" + arrowFile.toString() + "' STORED AS ARROW")) {
+        copy.show();
+      }
+
+      try (DataFrame df = ctx.readArrow(arrowFile.toString());
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
+        assertTrue(stream.loadNextBatch());
+        VectorSchemaRoot root = stream.getVectorSchemaRoot();
+        assertEquals(2, root.getRowCount());
+
+        BigIntVector id = (BigIntVector) root.getVector("id");
+        assertEquals(1, id.get(0));
+        assertEquals(2, id.get(1));
+
+        BigIntVector value = (BigIntVector) root.getVector("value");
+        assertEquals(100, value.get(0));
+        assertEquals(200, value.get(1));
+      }
+    }
+  }
+
+  @Test
+  void testReadArrowWithOptions(@TempDir Path tempDir) throws IOException {
+    Path arrowFile = tempDir.resolve("data.arrow");
+
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+
+      // Create an Arrow IPC file using COPY
+      ctx.registerCsv(
+          "src_csv",
+          createCsvFile(tempDir, "src2.csv", "x,y\n1.5,A\n2.5,B\n3.5,C\n"),
+          CsvReadOptions.builder().build(),
+          allocator);
+      try (DataFrame copy =
+          ctx.sql("COPY src_csv TO '" + arrowFile.toString() + "' STORED AS ARROW")) {
+        copy.show();
+      }
+
+      ArrowReadOptions options = ArrowReadOptions.builder().build();
+
+      try (DataFrame df = ctx.readArrow(arrowFile.toString(), options, allocator);
+          SendableRecordBatchStream stream = df.executeStream(allocator)) {
+        assertTrue(stream.loadNextBatch());
+        VectorSchemaRoot root = stream.getVectorSchemaRoot();
+        assertEquals(3, root.getRowCount());
+
+        Float8Vector x = (Float8Vector) root.getVector("x");
+        assertEquals(1.5, x.get(0), 0.001);
+        assertEquals(2.5, x.get(1), 0.001);
+        assertEquals(3.5, x.get(2), 0.001);
       }
     }
   }
@@ -609,5 +719,11 @@ public class SessionContextTest {
         assertEquals(4, idResult.get(1));
       }
     }
+  }
+
+  private String createCsvFile(Path dir, String name, String content) throws IOException {
+    Path file = dir.resolve(name);
+    Files.writeString(file, content);
+    return file.toString();
   }
 }
