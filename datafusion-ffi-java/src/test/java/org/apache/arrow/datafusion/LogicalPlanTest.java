@@ -354,6 +354,320 @@ public class LogicalPlanTest {
     }
   }
 
+  // ── Common diagnostic methods ──
+
+  @Test
+  void testDisplayIndentSchemaContainsSchemaInfo() {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+      registerTestTable(ctx, allocator);
+      try (SessionState state = ctx.state();
+          LogicalPlan plan = state.createLogicalPlan("SELECT * FROM t WHERE id > 1")) {
+        String displaySchema = plan.displayIndentSchema();
+        assertNotNull(displaySchema);
+        assertTrue(displaySchema.contains("\n"), "display_indent_schema should be multi-line");
+        // Should contain schema field names
+        assertTrue(displaySchema.contains("id"), "should reference 'id' field");
+        assertTrue(displaySchema.contains("name"), "should reference 'name' field");
+        // Should differ from plain displayIndent (has extra schema info)
+        String plain = plan.displayIndent();
+        assertNotEquals(plain, displaySchema, "schema version should differ from plain indent");
+      }
+    }
+  }
+
+  @Test
+  void testMaxRowsOnValues() {
+    try (SessionContext ctx = new SessionContext();
+        SessionState state = ctx.state();
+        LogicalPlan plan = state.createLogicalPlan("VALUES (1), (2), (3)")) {
+      LogicalPlan current = plan;
+      while (!(current instanceof LogicalPlan.Values) && !current.inputs().isEmpty()) {
+        current = current.inputs().get(0);
+      }
+      assertInstanceOf(LogicalPlan.Values.class, current);
+      OptionalLong maxRows = current.maxRows();
+      assertTrue(maxRows.isPresent(), "Values node should know its max row count");
+      assertEquals(3L, maxRows.getAsLong());
+    }
+  }
+
+  @Test
+  void testMaxRowsOnLimit() {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+      registerTestTable(ctx, allocator);
+      try (SessionState state = ctx.state();
+          LogicalPlan plan = state.createLogicalPlan("SELECT * FROM t LIMIT 5")) {
+        OptionalLong maxRows = plan.maxRows();
+        assertTrue(maxRows.isPresent(), "LIMIT plan should have known max rows");
+        assertEquals(5L, maxRows.getAsLong());
+      }
+    }
+  }
+
+  @Test
+  void testContainsOuterReferenceIsFalse() {
+    try (SessionContext ctx = new SessionContext();
+        SessionState state = ctx.state();
+        LogicalPlan plan = state.createLogicalPlan("SELECT 1 AS x")) {
+      // A simple literal plan has no outer references.
+      // Testing the true case would require an intermediate correlated subquery node
+      // before decorrelation, which is not easily produced from createLogicalPlan.
+      assertFalse(plan.containsOuterReference());
+    }
+  }
+
+  // ── New variant tests ──
+
+  @Test
+  void testWindowVariant() {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+      registerTestTable(ctx, allocator);
+      try (SessionState state = ctx.state();
+          LogicalPlan plan =
+              state.createLogicalPlan("SELECT id, ROW_NUMBER() OVER (ORDER BY id) AS rn FROM t")) {
+        LogicalPlan current = plan;
+        while (!(current instanceof LogicalPlan.Window) && !current.inputs().isEmpty()) {
+          current = current.inputs().get(0);
+        }
+        assertInstanceOf(LogicalPlan.Window.class, current);
+        LogicalPlan.Window window = (LogicalPlan.Window) current;
+        assertFalse(window.windowExprs().isEmpty(), "should have window expressions");
+        assertInstanceOf(Expr.WindowFunctionExpr.class, window.windowExprs().get(0));
+        Expr.WindowFunctionExpr wfExpr = (Expr.WindowFunctionExpr) window.windowExprs().get(0);
+        assertEquals("row_number", wfExpr.funcName());
+        assertFalse(wfExpr.orderBy().isEmpty(), "should have ORDER BY");
+        assertTrue(wfExpr.partitionBy().isEmpty(), "should have no PARTITION BY");
+      }
+    }
+  }
+
+  @Test
+  void testAnalyzeVariant() {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+      registerTestTable(ctx, allocator);
+      try (SessionState state = ctx.state();
+          LogicalPlan plan = state.createLogicalPlan("EXPLAIN ANALYZE SELECT * FROM t")) {
+        assertInstanceOf(LogicalPlan.Analyze.class, plan);
+        LogicalPlan.Analyze analyze = (LogicalPlan.Analyze) plan;
+        assertFalse(analyze.verbose());
+        assertNotNull(analyze.input());
+        assertNotNull(analyze.schema());
+      }
+    }
+  }
+
+  @Test
+  void testRecursiveQueryVariant() {
+    try (SessionContext ctx = new SessionContext();
+        SessionState state = ctx.state();
+        LogicalPlan plan =
+            state.createLogicalPlan(
+                "WITH RECURSIVE cte AS (SELECT 1 AS n UNION ALL SELECT n + 1 FROM cte WHERE n < 5) SELECT * FROM cte")) {
+      LogicalPlan current = plan;
+      while (!(current instanceof LogicalPlan.RecursiveQuery) && !current.inputs().isEmpty()) {
+        current = current.inputs().get(0);
+      }
+      assertInstanceOf(LogicalPlan.RecursiveQuery.class, current);
+      LogicalPlan.RecursiveQuery rq = (LogicalPlan.RecursiveQuery) current;
+      assertEquals("cte", rq.name());
+      assertFalse(rq.isDistinct(), "UNION ALL should not be distinct");
+      assertNotNull(rq.staticTerm());
+      assertNotNull(rq.recursiveTerm());
+      assertEquals(2, rq.inputs().size(), "should have static and recursive inputs");
+    }
+  }
+
+  @Test
+  void testDdlVariant() {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+      registerTestTable(ctx, allocator);
+      try (SessionState state = ctx.state();
+          LogicalPlan plan = state.createLogicalPlan("CREATE VIEW my_view AS SELECT * FROM t")) {
+        assertInstanceOf(LogicalPlan.Ddl.class, plan);
+        LogicalPlan.Ddl ddl = (LogicalPlan.Ddl) plan;
+        assertNotNull(ddl.schema());
+      }
+    }
+  }
+
+  @Test
+  void testCopyVariant() {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+      registerTestTable(ctx, allocator);
+      try (SessionState state = ctx.state();
+          LogicalPlan plan =
+              state.createLogicalPlan("COPY (SELECT * FROM t) TO '/tmp/output.csv'")) {
+        assertInstanceOf(LogicalPlan.Copy.class, plan);
+        LogicalPlan.Copy copy = (LogicalPlan.Copy) plan;
+        assertNotNull(copy.input());
+        assertEquals(1, copy.inputs().size());
+        assertNotNull(copy.schema());
+      }
+    }
+  }
+
+  @Test
+  void testStatementVariant() {
+    try (SessionContext ctx = new SessionContext();
+        SessionState state = ctx.state();
+        LogicalPlan plan = state.createLogicalPlan("SET datafusion.execution.batch_size = 1024")) {
+      assertInstanceOf(LogicalPlan.Statement.class, plan);
+      LogicalPlan.Statement stmt = (LogicalPlan.Statement) plan;
+      assertTrue(stmt.inputs().isEmpty(), "Statement has no children");
+      assertNotNull(stmt.schema());
+    }
+  }
+
+  @Test
+  void testDistinctOnVariant() {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+      registerTestTable(ctx, allocator);
+      try (SessionState state = ctx.state();
+          LogicalPlan plan =
+              state.createLogicalPlan(
+                  "SELECT DISTINCT ON (id) id, name FROM t ORDER BY id, name")) {
+        LogicalPlan current = plan;
+        while (!(current instanceof LogicalPlan.Distinct.On) && !current.inputs().isEmpty()) {
+          current = current.inputs().get(0);
+        }
+        assertInstanceOf(LogicalPlan.Distinct.On.class, current);
+        LogicalPlan.Distinct.On on = (LogicalPlan.Distinct.On) current;
+        assertEquals(1, on.onExprs().size(), "DISTINCT ON one column");
+        assertEquals(2, on.selectExprs().size(), "selecting two columns");
+        assertTrue(on.sortExprs().isPresent(), "ORDER BY should produce sort exprs");
+        assertEquals(2, on.sortExprs().get().size());
+        assertNotNull(on.input());
+      }
+    }
+  }
+
+  @Test
+  void testDescribeTableVariant() {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+      registerTestTable(ctx, allocator);
+      try (SessionState state = ctx.state();
+          LogicalPlan plan = state.createLogicalPlan("DESCRIBE t")) {
+        assertInstanceOf(LogicalPlan.DescribeTable.class, plan);
+        LogicalPlan.DescribeTable describe = (LogicalPlan.DescribeTable) plan;
+        assertTrue(describe.inputs().isEmpty(), "DescribeTable has no children");
+        assertNotNull(describe.schema());
+        assertFalse(describe.schema().getFields().isEmpty());
+      }
+    }
+  }
+
+  // ── Deeper accessor tests ──
+
+  @Test
+  void testJoinAccessors() {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+      registerTestTable(ctx, allocator, "t1");
+      registerTestTable(ctx, allocator, "t2");
+      try (SessionState state = ctx.state();
+          LogicalPlan plan =
+              state.createLogicalPlan("SELECT * FROM t1 LEFT JOIN t2 ON t1.id = t2.id")) {
+        LogicalPlan current = plan;
+        while (!(current instanceof LogicalPlan.Join) && !current.inputs().isEmpty()) {
+          current = current.inputs().get(0);
+        }
+        assertInstanceOf(LogicalPlan.Join.class, current);
+        LogicalPlan.Join join = (LogicalPlan.Join) current;
+        assertEquals(JoinType.LEFT, join.joinType());
+        assertEquals(JoinConstraint.ON, join.joinConstraint());
+        // The join condition may appear in onLeftKeys/onRightKeys or in filter,
+        // depending on the optimizer. Verify all accessors are reachable.
+        assertNotNull(join.onLeftKeys(), "onLeftKeys should not be null");
+        assertNotNull(join.onRightKeys(), "onRightKeys should not be null");
+        assertEquals(
+            join.onLeftKeys().size(),
+            join.onRightKeys().size(),
+            "left and right key lists should have same size");
+        // The condition should appear somewhere: either as on-keys or as a filter
+        assertTrue(
+            !join.onLeftKeys().isEmpty() || join.filter().isPresent(),
+            "join condition should be in on-keys or filter");
+        assertEquals(NullEquality.NULL_EQUALS_NOTHING, join.nullEquality());
+        assertEquals(2, join.inputs().size());
+      }
+    }
+  }
+
+  @Test
+  void testTableScanAccessors() {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+      registerTestTable(ctx, allocator);
+      try (SessionState state = ctx.state();
+          LogicalPlan plan = state.createLogicalPlan("SELECT * FROM t")) {
+        LogicalPlan current = plan;
+        while (!(current instanceof LogicalPlan.TableScan) && !current.inputs().isEmpty()) {
+          current = current.inputs().get(0);
+        }
+        assertInstanceOf(LogicalPlan.TableScan.class, current);
+        LogicalPlan.TableScan scan = (LogicalPlan.TableScan) current;
+        assertInstanceOf(TableReference.Bare.class, scan.tableName());
+        assertEquals("t", ((TableReference.Bare) scan.tableName()).table());
+        // Exercise all accessors - values depend on planner optimization
+        assertNotNull(scan.projection(), "projection should not be null");
+        assertNotNull(scan.filters(), "filters list should not be null");
+        assertNotNull(scan.fetch(), "fetch should not be null");
+      }
+    }
+  }
+
+  @Test
+  void testLimitWithSkipAndFetch() {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+      registerTestTable(ctx, allocator);
+      try (SessionState state = ctx.state();
+          LogicalPlan plan = state.createLogicalPlan("SELECT * FROM t LIMIT 2 OFFSET 1")) {
+        LogicalPlan current = plan;
+        while (!(current instanceof LogicalPlan.Limit) && !current.inputs().isEmpty()) {
+          current = current.inputs().get(0);
+        }
+        assertInstanceOf(LogicalPlan.Limit.class, current);
+        LogicalPlan.Limit limit = (LogicalPlan.Limit) current;
+        assertTrue(limit.fetchExpr().isPresent(), "LIMIT should set fetchExpr");
+        assertInstanceOf(Expr.LiteralExpr.class, limit.fetchExpr().get());
+        assertTrue(limit.skipExpr().isPresent(), "OFFSET should set skipExpr");
+        assertInstanceOf(Expr.LiteralExpr.class, limit.skipExpr().get());
+      }
+    }
+  }
+
+  @Test
+  void testSortExprDescNullsFirst() {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+      registerTestTable(ctx, allocator);
+      try (SessionState state = ctx.state();
+          LogicalPlan plan =
+              state.createLogicalPlan("SELECT * FROM t ORDER BY id DESC NULLS FIRST")) {
+        LogicalPlan current = plan;
+        while (!(current instanceof LogicalPlan.Sort) && !current.inputs().isEmpty()) {
+          current = current.inputs().get(0);
+        }
+        assertInstanceOf(LogicalPlan.Sort.class, current);
+        LogicalPlan.Sort sort = (LogicalPlan.Sort) current;
+        assertEquals(1, sort.sortExprs().size());
+        SortExpr sortExpr = sort.sortExprs().get(0);
+        assertFalse(sortExpr.asc(), "DESC should mean asc=false");
+        assertTrue(sortExpr.nullsFirst(), "NULLS FIRST should mean nullsFirst=true");
+        assertInstanceOf(Expr.ColumnExpr.class, sortExpr.expr());
+      }
+    }
+  }
+
   // ── Helper ──
 
   private void registerTestTable(SessionContext ctx, BufferAllocator allocator) {
