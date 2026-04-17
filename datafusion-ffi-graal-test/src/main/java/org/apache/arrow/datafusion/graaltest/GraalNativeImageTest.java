@@ -16,7 +16,7 @@ import org.apache.arrow.datafusion.catalog.SchemaProvider;
 import org.apache.arrow.datafusion.catalog.Session;
 import org.apache.arrow.datafusion.execution.SessionContext;
 import org.apache.arrow.datafusion.execution.SessionState;
-import org.apache.arrow.datafusion.logical_expr.Expr;
+import org.apache.arrow.datafusion.catalog.ScanArgs;
 import org.apache.arrow.datafusion.catalog.TableProvider;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
@@ -295,8 +295,7 @@ public class GraalNativeImageTest {
     }
 
     @Override
-    public ExecutionPlan scan(
-        Session session, List<Expr> filters, List<Integer> projection, Long limit) {
+    public ExecutionPlan scanWithArgs(Session session, ScanArgs args) {
       return new SimpleExecutionPlan(schema);
     }
   }

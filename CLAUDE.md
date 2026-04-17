@@ -8,6 +8,7 @@ This repository contains Java bindings for Apache DataFusion.
 |--------|---------|
 | **`datafusion-ffi-java`** | Primary Java library using the FFM API (Java 22+) |
 | **`datafusion-ffi-native`** | Rust crate providing C-compatible FFI via Diplomat |
+| **`datafusion-ffi-graal-test`** | GraalVM native image compatibility test suite (JVM mode runs all 9 FFI path tests) |
 | **`datafusion-java`** | Deprecated compatibility layer that delegates to `datafusion-ffi-java` |
 
 The legacy JNI modules (`datafusion-jni`, `datafusion-examples`) have been removed. `datafusion-java` now depends on `datafusion-ffi-java` at the Gradle level and contains no native code. See `datafusion-java/MIGRATION.md` for the full migration guide.
@@ -323,3 +324,4 @@ When making changes, ensure:
 - [ ] `./gradlew :datafusion-ffi-java:spotlessCheck` passes (or run `spotlessApply`)
 - [ ] New functionality has corresponding tests in `IntegrationTest.java`
 - [ ] `./gradlew :datafusion-java:test` passes (compatibility layer still works)
+- [ ] `./gradlew :datafusion-ffi-graal-test:run` passes (GraalVM JVM-mode integration test)

@@ -92,6 +92,41 @@ jobs:
       - name: Run spotlessCheck, javadoc, and verifyDocsHttp
         run: ./gradlew :datafusion-ffi-java:spotlessCheck :datafusion-ffi-java:javadoc :datafusion-ffi-java:verifyDocsHttp -PskipDiplomatGeneration
 
+  # Run GraalVM native image test in JVM mode — validates FFI bindings work end-to-end
+  graal-jvm-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 25 (graal-test toolchain)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+
+      - name: Set up JDK 22 (Gradle daemon)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '22'
+          distribution: 'temurin'
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            datafusion-ffi-native/target
+          key: ${{ runner.os }}-${{ runner.arch }}-cargo-${{ hashFiles('**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-cargo-
+
+      - name: Run GraalVM JVM mode test
+        run: ./gradlew :datafusion-ffi-graal-test:run
+
   # Build native libraries on all platforms
   build-native:
     strategy:

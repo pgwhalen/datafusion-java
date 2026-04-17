@@ -27,8 +27,10 @@ configurations.all {
 
 java {
     toolchain {
+        // JDK 25 needed to compile against GraalVM SDK 25 (compileOnly).
+        // No vendor constraint — any JDK 25 works for JVM-mode compilation and execution.
+        // Native image building (nativeCompile) requires an actual GraalVM JDK.
         languageVersion = JavaLanguageVersion.of(25)
-        vendor = JvmVendorSpec.ORACLE
     }
 }
 
@@ -85,6 +87,7 @@ ext.resolveStaticLibPath = {
 }
 
 tasks.named('run') {
+    dependsOn ':datafusion-ffi-java:copyDevLibrary'
     doFirst {
         def libPath = resolveNativeLibPath()
         if (libPath == null) {
