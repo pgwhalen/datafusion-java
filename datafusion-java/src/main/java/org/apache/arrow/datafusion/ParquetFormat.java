@@ -1,14 +1,24 @@
 package org.apache.arrow.datafusion;
 
-/** The Apache Parquet file format configuration */
-public class ParquetFormat extends AbstractProxy implements FileFormat {
+/**
+ * The Apache Parquet file format configuration
+ *
+ * @deprecated Use {@link org.apache.arrow.datafusion.datasource.ParquetReadOptions} with the new
+ *     SessionContext API instead.
+ */
+@Deprecated(since = "0.17.4", forRemoval = true)
+@SuppressWarnings("deprecation")
+public class ParquetFormat implements FileFormat {
   /** Create new ParquetFormat with default options */
-  public ParquetFormat() {
-    super(FileFormats.createParquet());
+  public ParquetFormat() {}
+
+  @Override
+  public long getPointer() {
+    return 0;
   }
 
   @Override
-  void doClose(long pointer) {
-    FileFormats.destroyFileFormat(pointer);
+  public void close() {
+    // no-op
   }
 }

@@ -14,6 +14,7 @@ import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.ipc.ArrowReader;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -85,6 +86,22 @@ public class TestQuery {
           RuntimeException.class,
           () -> context.sql("SELECT z FROM (VALUES (1, 2), (3, 4)) AS t (x, y)").join(),
           "invalid column name in query should raise an error");
+    }
+  }
+
+  @Disabled("pgwhalen/datafusion-java#54: StreamBackedArrowReader.bytesRead() always returns 0")
+  @Test
+  public void testBytesReadIsNonZero() throws Exception {
+    try (SessionContext context = SessionContexts.create();
+        BufferAllocator allocator = new RootAllocator()) {
+      try (ArrowReader reader =
+          context
+              .sql("SELECT * FROM (VALUES (1, 2), (3, 4)) AS t (x, y)")
+              .thenComposeAsync(df -> df.collect(allocator))
+              .join()) {
+        assertTrue(reader.loadNextBatch());
+        assertTrue(reader.bytesRead() > 0, "bytesRead() should report actual bytes read");
+      }
     }
   }
 

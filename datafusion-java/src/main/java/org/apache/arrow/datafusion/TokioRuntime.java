@@ -1,25 +1,18 @@
 package org.apache.arrow.datafusion;
 
+@SuppressWarnings("deprecation")
 final class TokioRuntime extends AbstractProxy implements Runtime {
 
-  TokioRuntime(long pointer) {
-    super(pointer);
+  TokioRuntime() {
+    super();
   }
 
   @Override
   void doClose(long pointer) {
-    destroyTokioRuntime(pointer);
+    // no-op: the FFI library manages its own runtime
   }
 
   static TokioRuntime create() {
-    long pointer = TokioRuntime.createTokioRuntime();
-    if (pointer <= 0) {
-      throw new IllegalStateException("failed to create runtime");
-    }
-    return new TokioRuntime(pointer);
+    return new TokioRuntime();
   }
-
-  static native long createTokioRuntime();
-
-  static native void destroyTokioRuntime(long pointer);
 }

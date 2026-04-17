@@ -2,7 +2,12 @@ package org.apache.arrow.datafusion;
 
 import java.util.Optional;
 
-/** Configures options specific to reading Parquet data */
+/**
+ * Configures options specific to reading Parquet data
+ *
+ * @deprecated Use {@link org.apache.arrow.datafusion.config.ParquetOptions} instead.
+ */
+@Deprecated(since = "0.17.4", forRemoval = true)
 @SuppressWarnings("UnusedReturnValue")
 public class ParquetOptions {
   private final SessionConfig config;
@@ -11,84 +16,40 @@ public class ParquetOptions {
     this.config = config;
   }
 
-  /**
-   * Get whether parquet data page level metadata (Page Index) statistics are used
-   *
-   * @return whether using the page index is enabled
-   */
   public boolean enablePageIndex() {
-    return SessionConfig.getParquetOptionsEnablePageIndex(config.getPointer());
+    return config.enablePageIndex;
   }
 
-  /**
-   * Set whether to use parquet data page level metadata (Page Index) statistics to reduce the
-   * number of rows decoded.
-   *
-   * @param enabled whether using the page index is enabled
-   * @return the modified {@link ParquetOptions} instance
-   */
   public ParquetOptions withEnablePageIndex(boolean enabled) {
-    SessionConfig.setParquetOptionsEnablePageIndex(config.getPointer(), enabled);
+    config.enablePageIndex = enabled;
+    config.enablePageIndexSet = true;
     return this;
   }
 
-  /**
-   * Get whether pruning is enabled, meaning reading row groups will be skipped based on metadata
-   *
-   * @return whether pruning is enabled
-   */
   public boolean pruning() {
-    return SessionConfig.getParquetOptionsPruning(config.getPointer());
+    return config.pruning;
   }
 
-  /**
-   * Set whether pruning is enabled, meaning reading row groups will be skipped based on metadata
-   *
-   * @param enabled whether to enable pruning
-   * @return the modified {@link ParquetOptions} instance
-   */
   public ParquetOptions withPruning(boolean enabled) {
-    SessionConfig.setParquetOptionsPruning(config.getPointer(), enabled);
+    config.pruning = enabled;
+    config.pruningSet = true;
     return this;
   }
 
-  /**
-   * Get whether file metadata is skipped, to avoid schema conflicts
-   *
-   * @return whether metadata is skipped
-   */
   public boolean skipMetadata() {
-    return SessionConfig.getParquetOptionsSkipMetadata(config.getPointer());
+    return config.skipMetadata;
   }
 
-  /**
-   * Set whether file metadata is skipped, to avoid schema conflicts
-   *
-   * @param enabled whether to skip metadata
-   * @return the modified {@link ParquetOptions} instance
-   */
   public ParquetOptions withSkipMetadata(boolean enabled) {
-    SessionConfig.setParquetOptionsSkipMetadata(config.getPointer(), enabled);
+    config.skipMetadata = enabled;
+    config.skipMetadataSet = true;
     return this;
   }
 
-  /**
-   * Get the metadata size hint
-   *
-   * @return metadata size hint value
-   */
   public Optional<Long> metadataSizeHint() {
-    long sizeHint = SessionConfig.getParquetOptionsMetadataSizeHint(config.getPointer());
-    return sizeHint < 0 ? Optional.empty() : Optional.of(sizeHint);
+    return config.metadataSizeHint < 0 ? Optional.empty() : Optional.of(config.metadataSizeHint);
   }
 
-  /**
-   * Set the metadata size hint, which is used to attempt to read the full metadata at once rather
-   * than needing one read to get the metadata size and then a second read for the metadata itself.
-   *
-   * @param metadataSizeHint the metadata size hint
-   * @return the modified {@link ParquetOptions} instance
-   */
   public ParquetOptions withMetadataSizeHint(Optional<Long> metadataSizeHint) {
     long value = -1L;
     if (metadataSizeHint.isPresent()) {
@@ -97,47 +58,28 @@ public class ParquetOptions {
         throw new RuntimeException("metadataSizeHint cannot be negative");
       }
     }
-    SessionConfig.setParquetOptionsMetadataSizeHint(config.getPointer(), value);
+    config.metadataSizeHint = value;
+    config.metadataSizeHintSet = true;
     return this;
   }
 
-  /**
-   * Get whether filter pushdown is enabled, so filters are applied during parquet decoding
-   *
-   * @return whether filter pushdown is enabled
-   */
   public boolean pushdownFilters() {
-    return SessionConfig.getParquetOptionsPushdownFilters(config.getPointer());
+    return config.pushdownFilters;
   }
 
-  /**
-   * Set whether filter pushdown is enabled, so filters are applied during parquet decoding
-   *
-   * @param enabled whether to pushdown filters
-   * @return the modified {@link ParquetOptions} instance
-   */
   public ParquetOptions withPushdownFilters(boolean enabled) {
-    SessionConfig.setParquetOptionsPushdownFilters(config.getPointer(), enabled);
+    config.pushdownFilters = enabled;
+    config.pushdownFiltersSet = true;
     return this;
   }
 
-  /**
-   * Get whether filter reordering is enabled to minimize evaluation cost
-   *
-   * @return whether filter reordering is enabled
-   */
   public boolean reorderFilters() {
-    return SessionConfig.getParquetOptionsReorderFilters(config.getPointer());
+    return config.reorderFilters;
   }
 
-  /**
-   * Set whether filter reordering is enabled to minimize evaluation cost
-   *
-   * @param enabled whether to reorder filters
-   * @return the modified {@link ParquetOptions} instance
-   */
   public ParquetOptions withReorderFilters(boolean enabled) {
-    SessionConfig.setParquetOptionsReorderFilters(config.getPointer(), enabled);
+    config.reorderFilters = enabled;
+    config.reorderFiltersSet = true;
     return this;
   }
 }

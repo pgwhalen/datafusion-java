@@ -1,12 +1,13 @@
 package org.apache.arrow.datafusion;
 
+@SuppressWarnings("deprecation")
 class DefaultTableProvider extends AbstractProxy implements TableProvider {
-  DefaultTableProvider(long pointer) {
-    super(pointer);
+  DefaultTableProvider() {
+    super();
   }
 
   @Override
   void doClose(long pointer) throws Exception {
-    TableProviders.destroyTableProvider(pointer);
+    // no-op
   }
 }

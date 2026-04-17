@@ -3,22 +3,29 @@ package org.apache.arrow.datafusion;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@SuppressWarnings("deprecation")
 abstract class AbstractProxy implements AutoCloseable, NativeProxy {
   private static final Logger logger = LoggerFactory.getLogger(AbstractProxy.class);
+  private static final AtomicLong ID_GENERATOR = new AtomicLong(1);
   private final long pointer;
   private final AtomicBoolean closed;
   private final ConcurrentMap<Long, AbstractProxy> children;
 
   protected AbstractProxy(long pointer) {
-    this.pointer = pointer;
+    this.pointer = (pointer != 0) ? pointer : ID_GENERATOR.getAndIncrement();
     if (logger.isDebugEnabled()) {
-      logger.debug("Obtaining {}@{}", getClass().getSimpleName(), Long.toHexString(pointer));
+      logger.debug("Obtaining {}@{}", getClass().getSimpleName(), Long.toHexString(this.pointer));
     }
     this.closed = new AtomicBoolean(false);
     this.children = new ConcurrentHashMap<>();
+  }
+
+  protected AbstractProxy() {
+    this(0);
   }
 
   /**
@@ -46,11 +53,6 @@ abstract class AbstractProxy implements AutoCloseable, NativeProxy {
   }
 
   abstract void doClose(long pointer) throws Exception;
-
-  // Ensure native library is loaded before any proxy object is used
-  static {
-    JNILoader.load();
-  }
 
   @Override
   public final void close() throws Exception {

@@ -1,6 +1,11 @@
 package org.apache.arrow.datafusion;
 
-/** Configures options related to query execution */
+/**
+ * Configures options related to query execution
+ *
+ * @deprecated Use {@link org.apache.arrow.datafusion.config.ExecutionOptions} instead.
+ */
+@Deprecated(since = "0.17.4", forRemoval = true)
 @SuppressWarnings("UnusedReturnValue")
 public class ExecutionOptions {
   private final SessionConfig config;
@@ -24,7 +29,7 @@ public class ExecutionOptions {
    * @return batch size
    */
   public long batchSize() {
-    return SessionConfig.getExecutionOptionsBatchSize(config.getPointer());
+    return config.batchSize;
   }
 
   /**
@@ -34,7 +39,8 @@ public class ExecutionOptions {
    * @return the modified {@link ExecutionOptions} instance
    */
   public ExecutionOptions withBatchSize(long batchSize) {
-    SessionConfig.setExecutionOptionsBatchSize(config.getPointer(), batchSize);
+    config.batchSize = batchSize;
+    config.batchSizeSet = true;
     return this;
   }
 
@@ -44,7 +50,7 @@ public class ExecutionOptions {
    * @return whether batch coalescing is enabled
    */
   public boolean coalesceBatches() {
-    return SessionConfig.getExecutionOptionsCoalesceBatches(config.getPointer());
+    return config.coalesceBatches;
   }
 
   /**
@@ -54,7 +60,8 @@ public class ExecutionOptions {
    * @return the modified {@link ExecutionOptions} instance
    */
   public ExecutionOptions withCoalesceBatches(boolean enabled) {
-    SessionConfig.setExecutionOptionsCoalesceBatches(config.getPointer(), enabled);
+    config.coalesceBatches = enabled;
+    config.coalesceBatchesSet = true;
     return this;
   }
 
@@ -64,7 +71,7 @@ public class ExecutionOptions {
    * @return whether statistics collection is enabled
    */
   public boolean collectStatistics() {
-    return SessionConfig.getExecutionOptionsCollectStatistics(config.getPointer());
+    return config.collectStatistics;
   }
 
   /**
@@ -74,7 +81,8 @@ public class ExecutionOptions {
    * @return the modified {@link ExecutionOptions} instance
    */
   public ExecutionOptions withCollectStatistics(boolean enabled) {
-    SessionConfig.setExecutionOptionsCollectStatistics(config.getPointer(), enabled);
+    config.collectStatistics = enabled;
+    config.collectStatisticsSet = true;
     return this;
   }
 
@@ -84,7 +92,7 @@ public class ExecutionOptions {
    * @return number of partitions
    */
   public long targetPartitions() {
-    return SessionConfig.getExecutionOptionsTargetPartitions(config.getPointer());
+    return config.targetPartitions;
   }
 
   /**
@@ -94,7 +102,8 @@ public class ExecutionOptions {
    * @return the modified {@link ExecutionOptions} instance
    */
   public ExecutionOptions withTargetPartitions(long targetPartitions) {
-    SessionConfig.setExecutionOptionsTargetPartitions(config.getPointer(), targetPartitions);
+    config.targetPartitions = targetPartitions;
+    config.targetPartitionsSet = true;
     return this;
   }
 }

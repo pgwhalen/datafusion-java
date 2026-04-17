@@ -1,14 +1,24 @@
 package org.apache.arrow.datafusion;
 
-/** The Apache Arrow IPC file format configuration. This format is also known as Feather V2 */
-public class ArrowFormat extends AbstractProxy implements FileFormat {
+/**
+ * The Apache Arrow IPC file format configuration. This format is also known as Feather V2
+ *
+ * @deprecated Use SQL CREATE EXTERNAL TABLE ... STORED AS ARROW with the new SessionContext API
+ *     instead.
+ */
+@Deprecated(since = "0.17.4", forRemoval = true)
+@SuppressWarnings("deprecation")
+public class ArrowFormat implements FileFormat {
   /** Create a new ArrowFormat with default options */
-  public ArrowFormat() {
-    super(FileFormats.createArrow());
+  public ArrowFormat() {}
+
+  @Override
+  public long getPointer() {
+    return 0;
   }
 
   @Override
-  void doClose(long pointer) {
-    FileFormats.destroyFileFormat(pointer);
+  public void close() {
+    // no-op
   }
 }

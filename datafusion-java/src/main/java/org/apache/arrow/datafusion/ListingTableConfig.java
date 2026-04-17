@@ -5,8 +5,18 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
 
-/** Configuration for creating a {@link ListingTable} */
-public class ListingTableConfig extends AbstractProxy implements AutoCloseable {
+/**
+ * Configuration for creating a {@link ListingTable}
+ *
+ * @deprecated Use {@link org.apache.arrow.datafusion.datasource.ListingTableConfig} instead.
+ */
+@Deprecated(since = "0.17.4", forRemoval = true)
+@SuppressWarnings("deprecation")
+public class ListingTableConfig implements AutoCloseable, NativeProxy {
+
+  private final String[] tablePaths;
+  private final ListingOptions listingOptions;
+
   /** A Builder for {@link ListingTableConfig} instances */
   public static class Builder {
     private final String[] tablePaths;
@@ -15,9 +25,7 @@ public class ListingTableConfig extends AbstractProxy implements AutoCloseable {
     /**
      * Create a new {@link Builder}
      *
-     * @param tablePath The path where data files are stored. This may be a file system path or a
-     *     URL with a scheme. When no scheme is provided, glob expressions may be used to filter
-     *     files.
+     * @param tablePath The path where data files are stored.
      */
     public Builder(String tablePath) {
       this(new String[] {tablePath});
@@ -26,9 +34,7 @@ public class ListingTableConfig extends AbstractProxy implements AutoCloseable {
     /**
      * Create a new {@link Builder}
      *
-     * @param tablePaths The paths where data files are stored. This may be an array of file system
-     *     paths or an array of URLs with a scheme. When no scheme is provided, glob expressions may
-     *     be used to filter files.
+     * @param tablePaths The paths where data files are stored.
      */
     public Builder(String[] tablePaths) {
       this.tablePaths = tablePaths;
@@ -46,21 +52,20 @@ public class ListingTableConfig extends AbstractProxy implements AutoCloseable {
     }
 
     /**
-     * Create the listing table config. This is async as the schema may need to be inferred
+     * Create the listing table config.
      *
-     * @param context The {@link SessionContext} to use when inferring the schema
+     * @param context The {@link SessionContext} to use (no longer used for schema inference)
      * @return Future that will complete with the table config
      */
     public CompletableFuture<ListingTableConfig> build(SessionContext context) {
-      return createListingTableConfig(this, context).thenApply(ListingTableConfig::new);
+      return CompletableFuture.completedFuture(new ListingTableConfig(tablePaths, options));
     }
   }
 
   /**
    * Create a new {@link Builder} for a {@link ListingTableConfig}
    *
-   * @param tablePath The path where data files are stored. This may be a file system path or a URL
-   *     with a scheme. When no scheme is specified, glob expressions may be used to filter files.
+   * @param tablePath The path where data files are stored.
    * @return A new {@link Builder} instance
    */
   public static Builder builder(String tablePath) {
@@ -101,36 +106,26 @@ public class ListingTableConfig extends AbstractProxy implements AutoCloseable {
     return new Builder(tablePath.toString());
   }
 
-  private ListingTableConfig(long pointer) {
-    super(pointer);
+  private ListingTableConfig(String[] tablePaths, ListingOptions listingOptions) {
+    this.tablePaths = tablePaths;
+    this.listingOptions = listingOptions;
   }
 
-  private static CompletableFuture<Long> createListingTableConfig(
-      Builder builder, SessionContext context) {
-    CompletableFuture<Long> future = new CompletableFuture<>();
-    Runtime runtime = context.getRuntime();
-    create(
-        runtime.getPointer(),
-        context.getPointer(),
-        builder.tablePaths,
-        builder.options == null ? 0 : builder.options.getPointer(),
-        (errMessage, configId) -> {
-          if (ErrorUtil.containsError(errMessage)) {
-            future.completeExceptionally(new RuntimeException(errMessage));
-          } else {
-            future.complete(configId);
-          }
-        });
-    return future;
+  String[] getTablePaths() {
+    return tablePaths;
+  }
+
+  ListingOptions getListingOptions() {
+    return listingOptions;
   }
 
   @Override
-  void doClose(long pointer) {
-    destroy(pointer);
+  public long getPointer() {
+    return 0;
   }
 
-  private static native void create(
-      long runtime, long context, String[] tablePaths, long options, ObjectResultCallback callback);
-
-  private static native void destroy(long pointer);
+  @Override
+  public void close() {
+    // no-op
+  }
 }

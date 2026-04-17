@@ -1,16 +1,26 @@
 plugins {
     id 'java-library'
-    id 'maven-publish'
-    id 'signing'
     id 'datafusion.java-conventions'
     id 'com.diffplug.spotless'
-    id 'com.google.osdetector'
+}
+
+// Override the conventions plugin: we need Java 22+ for FFM API
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(22)
+    }
+}
+
+// Override the conventions plugin: don't down-compile to Java 8
+tasks.withType(JavaCompile).configureEach {
+    options.release.set(22)
 }
 
 dependencies {
     api 'org.slf4j:slf4j-api:2.0.16'
     api 'org.apache.arrow:arrow-format:18.0.0'
     api 'org.apache.arrow:arrow-vector:18.1.0'
+    implementation project(':datafusion-ffi-java')
     implementation 'org.apache.arrow:arrow-c-data:18.1.0'
     runtimeOnly 'org.apache.arrow:arrow-memory-unsafe:18.0.0'
     testImplementation 'org.apache.arrow:arrow-compression:14.0.2'
@@ -27,207 +37,13 @@ spotless {
     }
 }
 
-java {
-    withJavadocJar()
-    withSourcesJar()
-
-    compileJava {
-        options.compilerArgs += ["-h", "${layout.buildDirectory.asFile.get()}/target/headers"]
-    }
-}
-
-javadoc {
-    if (JavaVersion.current().isJava9Compatible()) {
-        options.addBooleanOption('html5', true)
-    }
-}
-
 test {
-    def libraryPath = findProperty("JNI_PATH") ?: "$rootDir/datafusion-java/build/jni_libs/dev"
-    jvmArgs += ["-Djava.library.path=$libraryPath", "--add-opens=java.base/java.nio=ALL-UNNAMED"]
+    dependsOn ':datafusion-ffi-java:copyDevLibrary'
+    def ffiLibPath = project(':datafusion-ffi-java').layout.buildDirectory.dir("ffi_libs/dev").get().asFile.path
+    jvmArgs += [
+        "--add-opens=java.base/java.nio=ALL-UNNAMED",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Djava.library.path=$ffiLibPath"
+    ]
     useJUnitPlatform()
-}
-
-def cargoBinary = "${System.getProperty('user.home')}/.cargo/bin/cargo"
-
-tasks.register('cargoDevBuild', Exec) {
-    workingDir "$rootDir/datafusion-jni"
-    executable cargoBinary
-    args += ['build']
-}
-
-tasks.register('cargoReleaseBuild', Exec) {
-    workingDir "$rootDir/datafusion-jni"
-    executable cargoBinary
-    args += ['build', '--release']
-}
-
-def extensionMapping = [
-        "osx"    : "dylib",
-        "linux"  : "so",
-        "windows": "dll"
-]
-
-tasks.register('copyDevLibrary', Sync) {
-    def extension = extensionMapping[osdetector.os]
-    from "${rootDir}/datafusion-jni/target/debug/libdatafusion_jni.$extension"
-    into layout.buildDirectory.dir("jni_libs/dev")
-    dependsOn cargoDevBuild
-}
-
-tasks.named("test") {
-    dependsOn copyDevLibrary
-}
-
-tasks.register('copyBuiltLibrary', Copy) {
-    def extension = extensionMapping[osdetector.os]
-    from "${rootDir}/datafusion-jni/target/release/libdatafusion_jni.$extension"
-    into layout.buildDirectory.dir("jni_libs/${osdetector.classifier}")
-    dependsOn cargoReleaseBuild
-}
-
-def classifierOsx = 'osx-x86_64'
-def extensionOsx = 'dylib'
-def jniLibOsx = layout.buildDirectory.file("jni_libs/$classifierOsx/libdatafusion_jni.$extensionOsx")
-
-def classifierLinux = 'linux-x86_64'
-def extensionLinux = 'so'
-def jniLibLinux = layout.buildDirectory.file("jni_libs/$classifierLinux/libdatafusion_jni.$extensionLinux")
-
-def classifierWindows = "windows-x86_64"
-def extensionWindows = "dll"
-def jniLibWindows = layout.buildDirectory.file("jni_libs/$classifierWindows/datafusion_jni.$extensionWindows")
-
-tasks.register('jarWithOsxLib', Jar) {
-    from sourceSets.main.output
-    from jniLibOsx
-    rename "libdatafusion_jni.$extensionOsx", "jni_libs/libdatafusion_jni.$extensionOsx"
-    archiveClassifier.set(classifierOsx)
-}
-
-tasks.register('jarWithLinuxLib', Jar) {
-    from sourceSets.main.output
-    from jniLibLinux
-    rename "libdatafusion_jni.$extensionLinux", "jni_libs/libdatafusion_jni.$extensionLinux"
-    archiveClassifier.set(classifierLinux)
-}
-
-tasks.register('jarWithWindowsLib', Jar) {
-    from sourceSets.main.output
-    from jniLibWindows
-    rename "datafusion_jni.$extensionWindows", "jni_libs/datafusion_jni.$extensionWindows"
-    archiveClassifier.set(classifierWindows)
-}
-
-tasks.register('jarWithLib', Jar) {
-    from sourceSets.main.output
-    from jniLibOsx
-    rename "libdatafusion_jni.$extensionOsx", "jni_libs/libdatafusion_jni.$extensionOsx"
-    from jniLibLinux
-    rename "libdatafusion_jni.$extensionLinux", "jni_libs/libdatafusion_jni.$extensionLinux"
-    from jniLibWindows
-    rename "datafusion_jni.$extensionWindows", "jni_libs/datafusion_jni.$extensionWindows"
-}
-
-publishing {
-    publications {
-        mavenJava(MavenPublication) {
-            artifactId 'datafusion-java'
-            artifact sourcesJar
-            artifact javadocJar
-            artifact jarWithLib
-            pom {
-                name = 'DataFusion Java'
-                description = 'A Java binding to Apache Arrow DataFusion library'
-                url = 'https://github.com/datafusion-contrib/datafusion-java'
-                licenses {
-                    license {
-                        name = 'The Apache License, Version 2.0'
-                        url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
-                    }
-                }
-                developers {
-                    developer {
-                        id = 'dev'
-                        name = 'Apache Arrow Developers'
-                        email = 'dev@arrow.apache.org'
-                    }
-                }
-                scm {
-                    connection = 'scm:git:git@github.com:datafusion-contrib/datafusion-java.git'
-                    developerConnection = 'scm:git:https://github.com/datafusion-contrib/datafusion-java.git'
-                    url = 'https://github.com/datafusion-contrib/datafusion-java'
-                }
-            }
-            pom.withXml {
-                // Dependencies don't get mapped to the pom file due to using custom artifacts,
-                // so add them here
-                def dependenciesNode = asNode().appendNode('dependencies')
-                def apiDependencies = configurations.api.allDependencies
-                Set<String> includedDependencies = []
-                apiDependencies.each {
-                    def dependencyNode = dependenciesNode.appendNode('dependency')
-                    dependencyNode.appendNode('groupId', it.getGroup())
-                    dependencyNode.appendNode('artifactId', it.getName())
-                    dependencyNode.appendNode('version', it.getVersion())
-                    dependencyNode.appendNode('scope', 'compile')
-                    includedDependencies.add(String.format("%s:%s", it.getGroup(), it.getName()))
-                }
-                def implementationDependencies = configurations.implementation.allDependencies
-                implementationDependencies.each {
-                    if (!includedDependencies.contains(String.format("%s:%s", it.getGroup(), it.getName()))) {
-                        def dependencyNode = dependenciesNode.appendNode('dependency')
-                        dependencyNode.appendNode('groupId', it.getGroup())
-                        dependencyNode.appendNode('artifactId', it.getName())
-                        dependencyNode.appendNode('version', it.getVersion())
-                        dependencyNode.appendNode('scope', 'runtime')
-                    }
-                }
-                def runtimeDependencies = configurations.runtimeOnly.allDependencies
-                runtimeDependencies.each {
-                    def dependencyNode = dependenciesNode.appendNode('dependency')
-                    dependencyNode.appendNode('groupId', it.getGroup())
-                    dependencyNode.appendNode('artifactId', it.getName())
-                    dependencyNode.appendNode('version', it.getVersion())
-                    dependencyNode.appendNode('scope', 'runtime')
-                }
-            }
-        }
-    }
-    repositories {
-        maven {
-            name = "Sonatype"
-            def releasesRepoUrl = "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/"
-            def snapshotsRepoUrl = "https://s01.oss.sonatype.org/content/repositories/snapshots/"
-            url = version.endsWith('SNAPSHOT') ? snapshotsRepoUrl : releasesRepoUrl
-            credentials {
-                username = findProperty('ossrhUsername') ?: System.getenv("MAVEN_USERNAME")
-                password = findProperty('ossrhPassword') ?: System.getenv("MAVEN_PASSWORD")
-            }
-        }
-    }
-}
-
-def artifacts = publishing.publications.mavenJava.artifacts
-
-if (jniLibLinux.get().asFile.exists()) {
-    artifacts.artifact jarWithLinuxLib
-}
-
-if (jniLibOsx.get().asFile.exists()) {
-    artifacts.artifact jarWithOsxLib
-}
-
-if (jniLibWindows.get().asFile.exists()) {
-    artifacts.artifact jarWithWindowsLib
-}
-
-
-signing {
-    required { !version.endsWith("SNAPSHOT") && gradle.taskGraph.hasTask("publish") }
-    def signingKeyId = findProperty("signingKeyId")
-    def signingKey = findProperty("signingKey")
-    def signingPassword = findProperty("signingPassword")
-    useInMemoryPgpKeys(signingKeyId, signingKey, signingPassword)
-    sign publishing.publications.mavenJava
 }

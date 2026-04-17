@@ -10,7 +10,10 @@ import org.apache.arrow.vector.ipc.ArrowReader;
  * #collect(BufferAllocator) collected} into {@link
  * org.apache.arrow.vector.ipc.message.ArrowRecordBatch batches} and read via {@link ArrowReader
  * reader}.
+ *
+ * @deprecated Use {@link org.apache.arrow.datafusion.dataframe.DataFrame} instead.
  */
+@Deprecated(since = "0.17.4", forRemoval = true)
 public interface DataFrame extends NativeProxy {
   /**
    * Collect dataframe into a list of record batches

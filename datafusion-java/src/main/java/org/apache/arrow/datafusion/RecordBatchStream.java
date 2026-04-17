@@ -6,7 +6,11 @@ import org.apache.arrow.vector.dictionary.DictionaryProvider;
 
 /**
  * A record batch stream is a stream of tabular Arrow data that can be iterated over asynchronously
+ *
+ * @deprecated Use {@link org.apache.arrow.datafusion.physical_plan.SendableRecordBatchStream}
+ *     instead.
  */
+@Deprecated(since = "0.17.4", forRemoval = true)
 public interface RecordBatchStream extends AutoCloseable, NativeProxy, DictionaryProvider {
   /**
    * Get the VectorSchemaRoot that will be populated with data as the stream is iterated over

@@ -1,36 +1,36 @@
 package org.apache.arrow.datafusion;
 
-import java.util.concurrent.CompletableFuture;
+/**
+ * A data source composed of multiple files that share a schema
+ *
+ * @deprecated Use {@link org.apache.arrow.datafusion.datasource.ListingTable} instead.
+ */
+@Deprecated(since = "0.17.4", forRemoval = true)
+@SuppressWarnings("deprecation")
+public class ListingTable implements TableProvider, AutoCloseable {
 
-/** A data source composed of multiple files that share a schema */
-public class ListingTable extends AbstractProxy implements TableProvider {
+  private final ListingTableConfig config;
+
   /**
    * Create a new listing table
    *
    * @param config The listing table configuration
    */
   public ListingTable(ListingTableConfig config) {
-    super(createListingTable(config));
+    this.config = config;
   }
 
-  private static long createListingTable(ListingTableConfig config) {
-    CompletableFuture<Long> result = new CompletableFuture<>();
-    create(
-        config.getPointer(),
-        (errString, tableId) -> {
-          if (ErrorUtil.containsError(errString)) {
-            result.completeExceptionally(new RuntimeException(errString));
-          } else {
-            result.complete(tableId);
-          }
-        });
-    return result.join();
+  ListingTableConfig getConfig() {
+    return config;
   }
 
   @Override
-  void doClose(long pointer) {
-    TableProviders.destroyTableProvider(pointer);
+  public long getPointer() {
+    return 0;
   }
 
-  private static native void create(long config, ObjectResultCallback result);
+  @Override
+  public void close() {
+    // no-op
+  }
 }

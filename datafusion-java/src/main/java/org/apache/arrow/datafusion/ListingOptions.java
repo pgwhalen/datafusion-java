@@ -1,7 +1,18 @@
 package org.apache.arrow.datafusion;
 
-/** Configures options for a {@link ListingTable} */
-public class ListingOptions extends AbstractProxy implements AutoCloseable {
+/**
+ * Configures options for a {@link ListingTable}
+ *
+ * @deprecated Use {@link org.apache.arrow.datafusion.datasource.ListingOptions} instead.
+ */
+@Deprecated(since = "0.17.4", forRemoval = true)
+@SuppressWarnings("deprecation")
+public class ListingOptions implements AutoCloseable, NativeProxy {
+
+  private final FileFormat format;
+  private final String fileExtension;
+  private final boolean collectStat;
+
   /** A Builder for {@link ListingOptions} instances */
   public static class Builder {
     private final FileFormat format;
@@ -59,21 +70,31 @@ public class ListingOptions extends AbstractProxy implements AutoCloseable {
     return new Builder(format);
   }
 
-  /**
-   * Construct ListingOptions from a Builder
-   *
-   * @param builder The builder to use
-   */
   private ListingOptions(Builder builder) {
-    super(create(builder.format.getPointer(), builder.fileExtension, builder.collectStat));
+    this.format = builder.format;
+    this.fileExtension = builder.fileExtension;
+    this.collectStat = builder.collectStat;
+  }
+
+  FileFormat getFormat() {
+    return format;
+  }
+
+  String getFileExtension() {
+    return fileExtension;
+  }
+
+  boolean isCollectStat() {
+    return collectStat;
   }
 
   @Override
-  void doClose(long pointer) {
-    destroy(pointer);
+  public long getPointer() {
+    return 0;
   }
 
-  private static native long create(long format, String fileExtension, boolean collectStat);
-
-  private static native void destroy(long pointer);
+  @Override
+  public void close() {
+    // no-op
+  }
 }

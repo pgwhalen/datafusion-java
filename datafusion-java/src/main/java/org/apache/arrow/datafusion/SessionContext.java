@@ -4,7 +4,12 @@ import java.nio.file.Path;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
-/** A session context holds resources and is the entrance for obtaining {@link DataFrame} */
+/**
+ * A session context holds resources and is the entrance for obtaining {@link DataFrame}
+ *
+ * @deprecated Use {@link org.apache.arrow.datafusion.execution.SessionContext} instead.
+ */
+@Deprecated(since = "0.17.4", forRemoval = true)
 public interface SessionContext extends AutoCloseable, NativeProxy {
 
   /**

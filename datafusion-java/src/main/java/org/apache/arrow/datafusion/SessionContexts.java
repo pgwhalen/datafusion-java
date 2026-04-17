@@ -1,37 +1,17 @@
 package org.apache.arrow.datafusion;
 
 import java.util.function.Consumer;
+import org.apache.arrow.datafusion.config.ConfigOptions;
 
-/** Manages session contexts */
+/**
+ * Manages session contexts
+ *
+ * @deprecated Use {@link org.apache.arrow.datafusion.execution.SessionContext} directly.
+ */
+@Deprecated(since = "0.17.4", forRemoval = true)
 public class SessionContexts {
 
   private SessionContexts() {}
-
-  /**
-   * Create a new session context
-   *
-   * @return native pointer to the created session context
-   */
-  static native long createSessionContext();
-
-  /**
-   * Create a new session context using a SessionConfig
-   *
-   * @param configPointer pointer to the native session config object to use
-   * @return native pointer to the created session context
-   */
-  static native long createSessionContextWithConfig(long configPointer);
-
-  /**
-   * Destroy a session context
-   *
-   * @param pointer native pointer to the session context to destroy
-   */
-  static native void destroySessionContext(long pointer);
-
-  static {
-    JNILoader.load();
-  }
 
   /**
    * Create a new default session context
@@ -39,8 +19,7 @@ public class SessionContexts {
    * @return The created context
    */
   public static SessionContext create() {
-    long pointer = createSessionContext();
-    return new DefaultSessionContext(pointer);
+    return new DefaultSessionContext(ConfigOptions.defaults());
   }
 
   /**
@@ -50,8 +29,7 @@ public class SessionContexts {
    * @return The created context
    */
   public static SessionContext withConfig(SessionConfig config) {
-    long pointer = createSessionContextWithConfig(config.getPointer());
-    return new DefaultSessionContext(pointer);
+    return new DefaultSessionContext(config.toConfigOptions());
   }
 
   /**
@@ -63,8 +41,7 @@ public class SessionContexts {
    */
   public static SessionContext withConfig(Consumer<SessionConfig> configuration) throws Exception {
     try (SessionConfig config = new SessionConfig().withConfiguration(configuration)) {
-      long pointer = createSessionContextWithConfig(config.getPointer());
-      return new DefaultSessionContext(pointer);
+      return new DefaultSessionContext(config.toConfigOptions());
     }
   }
 }
