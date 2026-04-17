@@ -8,7 +8,7 @@ version = '0.17.0-SNAPSHOT'
 
 // Force all Arrow deps to arrowVersion (including transitive from datafusion-ffi-java)
 // to pick up the FindClass JNI fix for GraalVM native image compatibility.
-def arrowVersion = '19.0.0-SNAPSHOT'
+def arrowVersion = '19.0.0'
 
 repositories {
     mavenLocal()
