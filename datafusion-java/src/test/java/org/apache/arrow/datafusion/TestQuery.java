@@ -14,7 +14,6 @@ import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.ipc.ArrowReader;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -89,7 +88,6 @@ public class TestQuery {
     }
   }
 
-  @Disabled("pgwhalen/datafusion-java#54: StreamBackedArrowReader.bytesRead() always returns 0")
   @Test
   public void testBytesReadIsNonZero() throws Exception {
     try (SessionContext context = SessionContexts.create();

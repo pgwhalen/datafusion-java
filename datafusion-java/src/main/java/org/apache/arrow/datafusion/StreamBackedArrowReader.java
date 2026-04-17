@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.Set;
 import org.apache.arrow.datafusion.physical_plan.SendableRecordBatchStream;
 import org.apache.arrow.memory.BufferAllocator;
+import org.apache.arrow.vector.FieldVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.dictionary.Dictionary;
 import org.apache.arrow.vector.ipc.ArrowReader;
@@ -15,6 +16,7 @@ import org.apache.arrow.vector.types.pojo.Schema;
  */
 class StreamBackedArrowReader extends ArrowReader {
   private final SendableRecordBatchStream stream;
+  private long totalBytesRead = 0;
 
   StreamBackedArrowReader(SendableRecordBatchStream stream, BufferAllocator allocator) {
     super(allocator);
@@ -28,7 +30,14 @@ class StreamBackedArrowReader extends ArrowReader {
 
   @Override
   public boolean loadNextBatch() throws IOException {
-    return stream.loadNextBatch();
+    boolean hasData = stream.loadNextBatch();
+    if (hasData) {
+      VectorSchemaRoot root = stream.getVectorSchemaRoot();
+      for (FieldVector vector : root.getFieldVectors()) {
+        totalBytesRead += vector.getBufferSize();
+      }
+    }
+    return hasData;
   }
 
   @Override
@@ -53,8 +62,7 @@ class StreamBackedArrowReader extends ArrowReader {
 
   @Override
   public long bytesRead() {
-    // TODO(pgwhalen/datafusion-java#54): track actual bytes read
-    return 0;
+    return totalBytesRead;
   }
 
   @Override
