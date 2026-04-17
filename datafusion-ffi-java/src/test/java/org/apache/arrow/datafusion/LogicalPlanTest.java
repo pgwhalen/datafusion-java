@@ -272,36 +272,83 @@ public class LogicalPlanTest {
   }
 
   @Test
-  void testDisplayIndentProducesMultiLineOutput() {
+  void testDisplayIndent() {
     try (BufferAllocator allocator = new RootAllocator();
         SessionContext ctx = new SessionContext()) {
       registerTestTable(ctx, allocator);
       try (SessionState state = ctx.state();
           LogicalPlan plan = state.createLogicalPlan("SELECT * FROM t WHERE id > 1")) {
-        String display = plan.displayIndent();
-        assertNotNull(display);
-        assertTrue(display.contains("\n"), "display_indent should be multi-line");
+        String expected =
+            """
+            Projection: t.id, t.name
+              Filter: t.id > Int64(1)
+                TableScan: t""";
+        assertEquals(expected, plan.displayIndent());
       }
     }
   }
 
   @Test
-  void testDisplayGraphvizContainsDot() {
+  void testDisplayGraphviz() {
     try (SessionContext ctx = new SessionContext();
         SessionState state = ctx.state();
         LogicalPlan plan = state.createLogicalPlan("SELECT 1")) {
-      String dot = plan.displayGraphviz();
-      assertTrue(dot.contains("digraph"), "graphviz output should contain 'digraph'");
+      String expected =
+          """
+
+          // Begin DataFusion GraphViz Plan,
+          // display it online here: https://dreampuf.github.io/GraphvizOnline
+
+          digraph {
+            subgraph cluster_1
+            {
+              graph[label="LogicalPlan"]
+              2[shape=box label="Projection: Int64(1)"]
+              3[shape=box label="EmptyRelation: rows=1"]
+              2 -> 3 [arrowhead=none, arrowtail=normal, dir=back]
+            }
+            subgraph cluster_4
+            {
+              graph[label="Detailed LogicalPlan"]
+              5[shape=box label="Projection: Int64(1)\\nSchema: [Int64(1):Int64]"]
+              6[shape=box label="EmptyRelation: rows=1\\nSchema: []"]
+              5 -> 6 [arrowhead=none, arrowtail=normal, dir=back]
+            }
+          }
+          // End DataFusion GraphViz Plan
+          """;
+      assertEquals(expected, plan.displayGraphviz());
     }
   }
 
   @Test
-  void testDisplayPgJsonContainsJson() {
+  void testDisplayPgJson() {
     try (SessionContext ctx = new SessionContext();
         SessionState state = ctx.state();
         LogicalPlan plan = state.createLogicalPlan("SELECT 1")) {
-      String json = plan.displayPgJson();
-      assertTrue(json.startsWith("["), "pg_json output should start with '['");
+      String expected =
+          """
+          [
+            {
+              "Plan": {
+                "Expressions": [
+                  "Int64(1)"
+                ],
+                "Node Type": "Projection",
+                "Output": [
+                  "Int64(1)"
+                ],
+                "Plans": [
+                  {
+                    "Node Type": "EmptyRelation",
+                    "Output": [],
+                    "Plans": []
+                  }
+                ]
+              }
+            }
+          ]""";
+      assertEquals(expected, plan.displayPgJson());
     }
   }
 
@@ -310,9 +357,7 @@ public class LogicalPlanTest {
     try (SessionContext ctx = new SessionContext();
         SessionState state = ctx.state();
         LogicalPlan plan = state.createLogicalPlan("SELECT 1 AS x")) {
-      String display = plan.display();
-      assertNotNull(display);
-      assertFalse(display.isEmpty());
+      assertEquals("Projection: Int64(1) AS x", plan.display());
     }
   }
 
@@ -357,21 +402,18 @@ public class LogicalPlanTest {
   // ── Common diagnostic methods ──
 
   @Test
-  void testDisplayIndentSchemaContainsSchemaInfo() {
+  void testDisplayIndentSchema() {
     try (BufferAllocator allocator = new RootAllocator();
         SessionContext ctx = new SessionContext()) {
       registerTestTable(ctx, allocator);
       try (SessionState state = ctx.state();
           LogicalPlan plan = state.createLogicalPlan("SELECT * FROM t WHERE id > 1")) {
-        String displaySchema = plan.displayIndentSchema();
-        assertNotNull(displaySchema);
-        assertTrue(displaySchema.contains("\n"), "display_indent_schema should be multi-line");
-        // Should contain schema field names
-        assertTrue(displaySchema.contains("id"), "should reference 'id' field");
-        assertTrue(displaySchema.contains("name"), "should reference 'name' field");
-        // Should differ from plain displayIndent (has extra schema info)
-        String plain = plan.displayIndent();
-        assertNotEquals(plain, displaySchema, "schema version should differ from plain indent");
+        String expected =
+            """
+            Projection: t.id, t.name [id:Int32, name:Utf8;N]
+              Filter: t.id > Int64(1) [id:Int32, name:Utf8;N]
+                TableScan: t [id:Int32, name:Utf8;N]""";
+        assertEquals(expected, plan.displayIndentSchema());
       }
     }
   }
