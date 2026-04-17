@@ -2,10 +2,15 @@
 
 ## Project Overview
 
-This repository contains Java bindings for Apache DataFusion. There are two separate binding implementations:
+This repository contains Java bindings for Apache DataFusion.
 
-1. **`datafusion-java` / `datafusion-jni`** (LEGACY) - Original JNI-based bindings
-2. **`datafusion-ffi-java` / `datafusion-ffi-native`** (NEW) - FFM-based bindings using Java's Foreign Function & Memory API
+| Module | Purpose |
+|--------|---------|
+| **`datafusion-ffi-java`** | Primary Java library using the FFM API (Java 22+) |
+| **`datafusion-ffi-native`** | Rust crate providing C-compatible FFI via Diplomat |
+| **`datafusion-java`** | Deprecated compatibility layer that delegates to `datafusion-ffi-java` |
+
+The legacy JNI modules (`datafusion-jni`, `datafusion-examples`) have been removed. `datafusion-java` now depends on `datafusion-ffi-java` at the Gradle level and contains no native code. See `datafusion-java/MIGRATION.md` for the full migration guide.
 
 ## Goals
 
@@ -167,21 +172,19 @@ impl std::fmt::Debug for ForeignTableProvider {
 }
 ```
 
-## Important: Legacy Code Policy
+## datafusion-java Compatibility Layer
 
-### DO NOT modify or depend on:
-- `datafusion-java/` - Legacy Java JNI bindings
-- `datafusion-jni/` - Legacy Rust JNI library
+`datafusion-java` is a **deprecated** adapter that preserves the old async/`CompletableFuture` API while delegating to `datafusion-ffi-java` under the hood. Key differences from the old JNI implementation:
 
-### Reasons:
-1. The legacy code uses outdated dependencies (Arrow 39, DataFusion 25) with known build issues
-2. The JNI approach is being replaced by the FFM approach
-3. Changes to legacy code may break existing users
+- No native code -- pure Java adapter classes
+- Requires JDK 22+ (inherits FFM requirement from `datafusion-ffi-java`)
+- DataFusion upgraded from 25 to 52 (behavioral differences handled in the adapter)
+- All public types annotated `@Deprecated(since = "0.17.4", forRemoval = true)`
 
 ### When working on this project:
-- All new features should go in `datafusion-ffi-java` and `datafusion-ffi-native`
-- Do not add dependencies between the new and legacy modules
-- The legacy modules may be removed in a future release
+- All new features go in `datafusion-ffi-java` and `datafusion-ffi-native`
+- Only modify `datafusion-java` for **compatibility fixes** when explicitly asked
+- See `datafusion-java/MIGRATION.md` for the full API mapping
 
 ## Build Instructions
 
@@ -217,8 +220,15 @@ Tests require the native library to be built first. The Gradle build handles thi
 ./gradlew :datafusion-ffi-java:test --info
 ```
 
-### DO NOT run `./gradlew test` (without module qualifier)
-This will try to build the legacy `datafusion-jni` module which has dependency issues with newer Rust/Arrow versions.
+### Build and Test the Compatibility Layer
+
+```bash
+# Run legacy API tests (delegates to datafusion-ffi-java under the hood)
+./gradlew :datafusion-java:test
+
+# Format
+./gradlew :datafusion-java:spotlessApply
+```
 
 ## Adding New Features
 
@@ -295,7 +305,7 @@ void newFunction() {
 - JUnit 5 for testing
 
 ### Rust (datafusion-ffi-native)
-- datafusion 45
+- datafusion 52
 - arrow 54 (with ffi feature)
 - tokio 1.x (for async runtime)
 - futures 0.3
@@ -303,8 +313,6 @@ void newFunction() {
 ## Known Issues
 
 1. **FFM API methods**: Code uses `allocateFrom` and `getString` methods from the FFM API (stable in Java 22+).
-
-2. **Legacy module build failures**: The `datafusion-jni` crate has dependency conflicts with newer chrono versions. This is a known issue - use module-specific Gradle commands.
 
 ## Testing Checklist
 
@@ -314,3 +322,4 @@ When making changes, ensure:
 - [ ] `./gradlew :datafusion-ffi-java:test` passes all tests
 - [ ] `./gradlew :datafusion-ffi-java:spotlessCheck` passes (or run `spotlessApply`)
 - [ ] New functionality has corresponding tests in `IntegrationTest.java`
+- [ ] `./gradlew :datafusion-java:test` passes (compatibility layer still works)
