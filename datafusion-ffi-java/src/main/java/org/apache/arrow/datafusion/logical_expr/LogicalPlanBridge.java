@@ -13,10 +13,12 @@ import org.apache.arrow.datafusion.ExprProtoConverter;
 import org.apache.arrow.datafusion.common.DataFusionError;
 import org.apache.arrow.datafusion.common.NativeDataFusionError;
 import org.apache.arrow.datafusion.common.TableReference;
+import org.apache.arrow.datafusion.generated.DfDdlKind;
 import org.apache.arrow.datafusion.generated.DfError;
 import org.apache.arrow.datafusion.generated.DfExprBytes;
 import org.apache.arrow.datafusion.generated.DfLogicalPlan;
 import org.apache.arrow.datafusion.generated.DfLogicalPlanKind;
+import org.apache.arrow.datafusion.generated.DfStatementKind;
 import org.apache.arrow.datafusion.generated.DfTableRefType;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.types.pojo.Schema;
@@ -338,7 +340,269 @@ public final class LogicalPlanBridge implements AutoCloseable {
     return readExprs(dfPlan.windowExprsProto());
   }
 
+  // -- Statement --
+  DfStatementKind statementKind() {
+    try {
+      return dfPlan.statementKind();
+    } catch (DfError e) {
+      throw new NativeDataFusionError(e);
+    }
+  }
+
+  TransactionAccessMode statementTxStartAccessMode() {
+    try {
+      return switch (dfPlan.statementTxStartAccessMode()) {
+        case READ_ONLY -> TransactionAccessMode.READ_ONLY;
+        case READ_WRITE -> TransactionAccessMode.READ_WRITE;
+      };
+    } catch (DfError e) {
+      throw new NativeDataFusionError(e);
+    }
+  }
+
+  TransactionIsolationLevel statementTxStartIsolationLevel() {
+    try {
+      return switch (dfPlan.statementTxStartIsolationLevel()) {
+        case READ_UNCOMMITTED -> TransactionIsolationLevel.READ_UNCOMMITTED;
+        case READ_COMMITTED -> TransactionIsolationLevel.READ_COMMITTED;
+        case REPEATABLE_READ -> TransactionIsolationLevel.REPEATABLE_READ;
+        case SERIALIZABLE -> TransactionIsolationLevel.SERIALIZABLE;
+        case SNAPSHOT -> TransactionIsolationLevel.SNAPSHOT;
+      };
+    } catch (DfError e) {
+      throw new NativeDataFusionError(e);
+    }
+  }
+
+  TransactionConclusion statementTxEndConclusion() {
+    try {
+      return switch (dfPlan.statementTxEndConclusion()) {
+        case COMMIT -> TransactionConclusion.COMMIT;
+        case ROLLBACK -> TransactionConclusion.ROLLBACK;
+      };
+    } catch (DfError e) {
+      throw new NativeDataFusionError(e);
+    }
+  }
+
+  boolean statementTxEndChain() {
+    try {
+      return dfPlan.statementTxEndChain();
+    } catch (DfError e) {
+      throw new NativeDataFusionError(e);
+    }
+  }
+
+  String statementSetVariableName() {
+    try {
+      return dfPlan.statementSetVariableName();
+    } catch (DfError e) {
+      throw new NativeDataFusionError(e);
+    }
+  }
+
+  String statementSetVariableValue() {
+    try {
+      return dfPlan.statementSetVariableValue();
+    } catch (DfError e) {
+      throw new NativeDataFusionError(e);
+    }
+  }
+
+  String statementResetVariableName() {
+    try {
+      return dfPlan.statementResetVariableName();
+    } catch (DfError e) {
+      throw new NativeDataFusionError(e);
+    }
+  }
+
+  String statementPrepareName() {
+    try {
+      return dfPlan.statementPrepareName();
+    } catch (DfError e) {
+      throw new NativeDataFusionError(e);
+    }
+  }
+
+  Schema statementPrepareFields() {
+    try (RootAllocator tempAllocator = new RootAllocator();
+        ArrowSchema ffiSchema = ArrowSchema.allocateNew(tempAllocator)) {
+      dfPlan.statementPrepareSchemaTo(ffiSchema.memoryAddress());
+      return Data.importSchema(tempAllocator, ffiSchema, null);
+    } catch (DfError e) {
+      throw new NativeDataFusionError(e);
+    } catch (Exception e) {
+      throw new DataFusionError("Failed to get prepare fields", e);
+    }
+  }
+
+  String statementExecuteName() {
+    try {
+      return dfPlan.statementExecuteName();
+    } catch (DfError e) {
+      throw new NativeDataFusionError(e);
+    }
+  }
+
+  List<Expr> statementExecuteParams() {
+    return readExprs(dfPlan.statementExecuteParamsProto());
+  }
+
+  String statementDeallocateName() {
+    try {
+      return dfPlan.statementDeallocateName();
+    } catch (DfError e) {
+      throw new NativeDataFusionError(e);
+    }
+  }
+
+  // -- Dml --
+  WriteOp dmlWriteOp() {
+    try {
+      return switch (dfPlan.dmlWriteOp()) {
+        case INSERT_APPEND -> WriteOp.INSERT_APPEND;
+        case INSERT_OVERWRITE -> WriteOp.INSERT_OVERWRITE;
+        case INSERT_REPLACE -> WriteOp.INSERT_REPLACE;
+        case DELETE -> WriteOp.DELETE;
+        case UPDATE -> WriteOp.UPDATE;
+        case CTAS -> WriteOp.CTAS;
+      };
+    } catch (DfError e) {
+      throw new NativeDataFusionError(e);
+    }
+  }
+
+  TableReference dmlTableName() {
+    return buildTableRef(
+        dfPlan.dmlTableRefType(),
+        dfPlan.dmlTableName(),
+        dfPlan.dmlTableSchemaName(),
+        dfPlan.dmlTableCatalogName());
+  }
+
+  // -- Ddl --
+  DfDdlKind ddlKind() {
+    try {
+      return dfPlan.ddlKind();
+    } catch (DfError e) {
+      throw new NativeDataFusionError(e);
+    }
+  }
+
+  String ddlName() {
+    try {
+      return dfPlan.ddlName();
+    } catch (DfError e) {
+      throw new NativeDataFusionError(e);
+    }
+  }
+
+  TableReference ddlTableName() {
+    return buildTableRef(
+        dfPlan.ddlTableRefType(),
+        dfPlan.ddlName(),
+        dfPlan.ddlTableSchemaName(),
+        dfPlan.ddlTableCatalogName());
+  }
+
+  boolean ddlIfNotExists() {
+    try {
+      return dfPlan.ddlIfNotExists();
+    } catch (DfError e) {
+      throw new NativeDataFusionError(e);
+    }
+  }
+
+  boolean ddlIfExists() {
+    try {
+      return dfPlan.ddlIfExists();
+    } catch (DfError e) {
+      throw new NativeDataFusionError(e);
+    }
+  }
+
+  boolean ddlOrReplace() {
+    try {
+      return dfPlan.ddlOrReplace();
+    } catch (DfError e) {
+      throw new NativeDataFusionError(e);
+    }
+  }
+
+  boolean ddlTemporary() {
+    try {
+      return dfPlan.ddlTemporary();
+    } catch (DfError e) {
+      throw new NativeDataFusionError(e);
+    }
+  }
+
+  boolean ddlCascade() {
+    try {
+      return dfPlan.ddlCascade();
+    } catch (DfError e) {
+      throw new NativeDataFusionError(e);
+    }
+  }
+
+  String ddlLocation() {
+    try {
+      return dfPlan.ddlLocation();
+    } catch (DfError e) {
+      throw new NativeDataFusionError(e);
+    }
+  }
+
+  String ddlFileType() {
+    try {
+      return dfPlan.ddlFileType();
+    } catch (DfError e) {
+      throw new NativeDataFusionError(e);
+    }
+  }
+
+  Optional<String> ddlViewDefinition() {
+    if (!dfPlan.ddlViewHasDefinition()) {
+      return Optional.empty();
+    }
+    try {
+      return Optional.of(dfPlan.ddlViewDefinition());
+    } catch (DfError e) {
+      throw new NativeDataFusionError(e);
+    }
+  }
+
+  boolean ddlIndexHasName() {
+    return dfPlan.ddlIndexHasName();
+  }
+
+  boolean ddlIndexUnique() {
+    try {
+      return dfPlan.ddlIndexUnique();
+    } catch (DfError e) {
+      throw new NativeDataFusionError(e);
+    }
+  }
+
+  TableReference ddlIndexTable() {
+    return buildTableRef(
+        dfPlan.ddlIndexTableRefType(),
+        dfPlan.ddlIndexTableName(),
+        dfPlan.ddlIndexTableSchemaName(),
+        dfPlan.ddlIndexTableCatalogName());
+  }
+
   // ── Helper methods ──
+
+  private static TableReference buildTableRef(
+      DfTableRefType refType, String table, String schema, String catalog) {
+    return switch (refType) {
+      case BARE, NONE -> new TableReference.Bare(table);
+      case PARTIAL -> new TableReference.Partial(schema, table);
+      case FULL -> new TableReference.Full(catalog, schema, table);
+    };
+  }
 
   private static List<Expr> readExprs(DfExprBytes exprBytes) {
     try (exprBytes) {

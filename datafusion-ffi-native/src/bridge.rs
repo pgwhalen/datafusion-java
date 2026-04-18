@@ -11,7 +11,12 @@ pub mod ffi {
     use datafusion::execution::context::SessionContext;
     use datafusion::execution::runtime_env::RuntimeEnv;
     use datafusion::execution::SessionState;
-    use datafusion::logical_expr::{Distinct, Expr, LogicalPlan, LogicalPlanBuilder, SortExpr};
+    use datafusion::logical_expr::dml::WriteOp;
+    use datafusion::logical_expr::{
+        DdlStatement, Distinct, Expr, LogicalPlan, LogicalPlanBuilder, SortExpr,
+        Statement as DfStatementEnum,
+        TransactionAccessMode, TransactionConclusion, TransactionIsolationLevel,
+    };
     use datafusion_proto::logical_plan::from_proto::{parse_exprs, parse_sorts};
     use datafusion_proto::logical_plan::to_proto::{serialize_exprs, serialize_sorts};
     use datafusion_proto::logical_plan::DefaultLogicalExtensionCodec;
@@ -123,6 +128,63 @@ pub mod ffi {
     pub enum DfVarType {
         System,
         UserDefined,
+    }
+
+    /// Discriminant for Statement sub-variants.
+    pub enum DfStatementKind {
+        TransactionStart,
+        TransactionEnd,
+        SetVariable,
+        ResetVariable,
+        Prepare,
+        Execute,
+        Deallocate,
+    }
+
+    /// Transaction access mode (READ ONLY / READ WRITE).
+    pub enum DfTransactionAccessMode {
+        ReadOnly,
+        ReadWrite,
+    }
+
+    /// Transaction isolation level.
+    pub enum DfTransactionIsolationLevel {
+        ReadUncommitted,
+        ReadCommitted,
+        RepeatableRead,
+        Serializable,
+        Snapshot,
+    }
+
+    /// Transaction conclusion (COMMIT / ROLLBACK).
+    pub enum DfTransactionConclusion {
+        Commit,
+        Rollback,
+    }
+
+    /// DML write operation type.
+    pub enum DfWriteOp {
+        InsertAppend,
+        InsertOverwrite,
+        InsertReplace,
+        Delete,
+        Update,
+        Ctas,
+    }
+
+    /// Discriminant for DDL sub-variants.
+    pub enum DfDdlKind {
+        CreateExternalTable,
+        CreateMemoryTable,
+        CreateView,
+        CreateCatalogSchema,
+        CreateCatalog,
+        CreateIndex,
+        DropTable,
+        DropView,
+        DropCatalogSchema,
+        CreateFunction,
+        DropFunction,
     }
 
     /// Discriminant for LogicalPlan variants.
@@ -1293,6 +1355,510 @@ pub mod ffi {
             } else {
                 Err("Not a Window".into())
             }
+        }
+
+        // -- Statement --
+
+        /// Statement sub-variant kind. Errors if not a Statement.
+        pub fn statement_kind(&self) -> Result<DfStatementKind, Box<DfError>> {
+            if let LogicalPlan::Statement(s) = &self.plan {
+                Ok(match s {
+                    DfStatementEnum::TransactionStart(_) => DfStatementKind::TransactionStart,
+                    DfStatementEnum::TransactionEnd(_) => DfStatementKind::TransactionEnd,
+                    DfStatementEnum::SetVariable(_) => DfStatementKind::SetVariable,
+                    DfStatementEnum::ResetVariable(_) => DfStatementKind::ResetVariable,
+                    DfStatementEnum::Prepare(_) => DfStatementKind::Prepare,
+                    DfStatementEnum::Execute(_) => DfStatementKind::Execute,
+                    DfStatementEnum::Deallocate(_) => DfStatementKind::Deallocate,
+                })
+            } else {
+                Err("Not a Statement".into())
+            }
+        }
+
+        /// TransactionStart access mode.
+        pub fn statement_tx_start_access_mode(&self) -> Result<DfTransactionAccessMode, Box<DfError>> {
+            if let LogicalPlan::Statement(s) = &self.plan {
+                if let DfStatementEnum::TransactionStart(ts) = s {
+                    return Ok(match ts.access_mode {
+                        TransactionAccessMode::ReadOnly => DfTransactionAccessMode::ReadOnly,
+                        TransactionAccessMode::ReadWrite => DfTransactionAccessMode::ReadWrite,
+                    });
+                }
+            }
+            Err("Not a Statement::TransactionStart".into())
+        }
+
+        /// TransactionStart isolation level.
+        pub fn statement_tx_start_isolation_level(&self) -> Result<DfTransactionIsolationLevel, Box<DfError>> {
+            if let LogicalPlan::Statement(s) = &self.plan {
+                if let DfStatementEnum::TransactionStart(ts) = s {
+                    return Ok(match ts.isolation_level {
+                        TransactionIsolationLevel::ReadUncommitted => DfTransactionIsolationLevel::ReadUncommitted,
+                        TransactionIsolationLevel::ReadCommitted => DfTransactionIsolationLevel::ReadCommitted,
+                        TransactionIsolationLevel::RepeatableRead => DfTransactionIsolationLevel::RepeatableRead,
+                        TransactionIsolationLevel::Serializable => DfTransactionIsolationLevel::Serializable,
+                        TransactionIsolationLevel::Snapshot => DfTransactionIsolationLevel::Snapshot,
+                    });
+                }
+            }
+            Err("Not a Statement::TransactionStart".into())
+        }
+
+        /// TransactionEnd conclusion (Commit or Rollback).
+        pub fn statement_tx_end_conclusion(&self) -> Result<DfTransactionConclusion, Box<DfError>> {
+            if let LogicalPlan::Statement(s) = &self.plan {
+                if let DfStatementEnum::TransactionEnd(te) = s {
+                    return Ok(match te.conclusion {
+                        TransactionConclusion::Commit => DfTransactionConclusion::Commit,
+                        TransactionConclusion::Rollback => DfTransactionConclusion::Rollback,
+                    });
+                }
+            }
+            Err("Not a Statement::TransactionEnd".into())
+        }
+
+        /// TransactionEnd chain flag.
+        pub fn statement_tx_end_chain(&self) -> Result<bool, Box<DfError>> {
+            if let LogicalPlan::Statement(s) = &self.plan {
+                if let DfStatementEnum::TransactionEnd(te) = s {
+                    return Ok(te.chain);
+                }
+            }
+            Err("Not a Statement::TransactionEnd".into())
+        }
+
+        /// SetVariable variable name.
+        pub fn statement_set_variable_name(&self, write: &mut DiplomatWrite) -> Result<(), Box<DfError>> {
+            if let LogicalPlan::Statement(s) = &self.plan {
+                if let DfStatementEnum::SetVariable(sv) = s {
+                    let _ = write!(write, "{}", sv.variable);
+                    return Ok(());
+                }
+            }
+            Err("Not a Statement::SetVariable".into())
+        }
+
+        /// SetVariable value.
+        pub fn statement_set_variable_value(&self, write: &mut DiplomatWrite) -> Result<(), Box<DfError>> {
+            if let LogicalPlan::Statement(s) = &self.plan {
+                if let DfStatementEnum::SetVariable(sv) = s {
+                    let _ = write!(write, "{}", sv.value);
+                    return Ok(());
+                }
+            }
+            Err("Not a Statement::SetVariable".into())
+        }
+
+        /// ResetVariable variable name.
+        pub fn statement_reset_variable_name(&self, write: &mut DiplomatWrite) -> Result<(), Box<DfError>> {
+            if let LogicalPlan::Statement(s) = &self.plan {
+                if let DfStatementEnum::ResetVariable(rv) = s {
+                    let _ = write!(write, "{}", rv.variable);
+                    return Ok(());
+                }
+            }
+            Err("Not a Statement::ResetVariable".into())
+        }
+
+        /// Prepare statement name.
+        pub fn statement_prepare_name(&self, write: &mut DiplomatWrite) -> Result<(), Box<DfError>> {
+            if let LogicalPlan::Statement(s) = &self.plan {
+                if let DfStatementEnum::Prepare(p) = s {
+                    let _ = write!(write, "{}", p.name);
+                    return Ok(());
+                }
+            }
+            Err("Not a Statement::Prepare".into())
+        }
+
+        /// Prepare statement parameter types as Arrow FFI schema.
+        pub fn statement_prepare_schema_to(&self, out_addr: usize) -> Result<(), Box<DfError>> {
+            if let LogicalPlan::Statement(s) = &self.plan {
+                if let DfStatementEnum::Prepare(p) = s {
+                    if out_addr == 0 {
+                        return Err("Null output address".into());
+                    }
+                    let fields: Vec<arrow::datatypes::Field> = p.fields.iter().map(|f| f.as_ref().clone()).collect();
+                    let arrow_schema = ArrowSchema::new(fields);
+                    let ffi_schema = FFI_ArrowSchema::try_from(&arrow_schema)?;
+                    unsafe {
+                        std::ptr::write(out_addr as *mut FFI_ArrowSchema, ffi_schema);
+                    }
+                    return Ok(());
+                }
+            }
+            Err("Not a Statement::Prepare".into())
+        }
+
+        /// Execute statement name.
+        pub fn statement_execute_name(&self, write: &mut DiplomatWrite) -> Result<(), Box<DfError>> {
+            if let LogicalPlan::Statement(s) = &self.plan {
+                if let DfStatementEnum::Execute(e) = s {
+                    let _ = write!(write, "{}", e.name);
+                    return Ok(());
+                }
+            }
+            Err("Not a Statement::Execute".into())
+        }
+
+        /// Execute statement parameters as proto bytes.
+        pub fn statement_execute_params_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
+            if let LogicalPlan::Statement(s) = &self.plan {
+                if let DfStatementEnum::Execute(e) = s {
+                    return DfExprBytes::from_exprs(&e.parameters);
+                }
+            }
+            Err("Not a Statement::Execute".into())
+        }
+
+        /// Deallocate statement name.
+        pub fn statement_deallocate_name(&self, write: &mut DiplomatWrite) -> Result<(), Box<DfError>> {
+            if let LogicalPlan::Statement(s) = &self.plan {
+                if let DfStatementEnum::Deallocate(d) = s {
+                    let _ = write!(write, "{}", d.name);
+                    return Ok(());
+                }
+            }
+            Err("Not a Statement::Deallocate".into())
+        }
+
+        // -- Dml --
+
+        /// DML write operation type.
+        pub fn dml_write_op(&self) -> Result<DfWriteOp, Box<DfError>> {
+            if let LogicalPlan::Dml(dml) = &self.plan {
+                use datafusion::logical_expr::dml::InsertOp;
+                Ok(match &dml.op {
+                    WriteOp::Insert(InsertOp::Append) => DfWriteOp::InsertAppend,
+                    WriteOp::Insert(InsertOp::Overwrite) => DfWriteOp::InsertOverwrite,
+                    WriteOp::Insert(InsertOp::Replace) => DfWriteOp::InsertReplace,
+                    WriteOp::Delete => DfWriteOp::Delete,
+                    WriteOp::Update => DfWriteOp::Update,
+                    WriteOp::Ctas => DfWriteOp::Ctas,
+                })
+            } else {
+                Err("Not a Dml".into())
+            }
+        }
+
+        /// DML table reference type.
+        pub fn dml_table_ref_type(&self) -> DfTableRefType {
+            if let LogicalPlan::Dml(dml) = &self.plan {
+                table_ref_type(&dml.table_name)
+            } else {
+                DfTableRefType::None
+            }
+        }
+
+        /// DML table name.
+        pub fn dml_table_name(&self, write: &mut DiplomatWrite) {
+            if let LogicalPlan::Dml(dml) = &self.plan {
+                write_table_name(&dml.table_name, write);
+            }
+        }
+
+        /// DML table schema name (for Partial/Full refs).
+        pub fn dml_table_schema_name(&self, write: &mut DiplomatWrite) {
+            if let LogicalPlan::Dml(dml) = &self.plan {
+                write_table_schema(&dml.table_name, write);
+            }
+        }
+
+        /// DML table catalog name (for Full refs).
+        pub fn dml_table_catalog_name(&self, write: &mut DiplomatWrite) {
+            if let LogicalPlan::Dml(dml) = &self.plan {
+                write_table_catalog(&dml.table_name, write);
+            }
+        }
+
+        // -- Ddl --
+
+        /// DDL sub-variant kind.
+        pub fn ddl_kind(&self) -> Result<DfDdlKind, Box<DfError>> {
+            if let LogicalPlan::Ddl(ddl) = &self.plan {
+                Ok(match ddl {
+                    DdlStatement::CreateExternalTable(_) => DfDdlKind::CreateExternalTable,
+                    DdlStatement::CreateMemoryTable(_) => DfDdlKind::CreateMemoryTable,
+                    DdlStatement::CreateView(_) => DfDdlKind::CreateView,
+                    DdlStatement::CreateCatalogSchema(_) => DfDdlKind::CreateCatalogSchema,
+                    DdlStatement::CreateCatalog(_) => DfDdlKind::CreateCatalog,
+                    DdlStatement::CreateIndex(_) => DfDdlKind::CreateIndex,
+                    DdlStatement::DropTable(_) => DfDdlKind::DropTable,
+                    DdlStatement::DropView(_) => DfDdlKind::DropView,
+                    DdlStatement::DropCatalogSchema(_) => DfDdlKind::DropCatalogSchema,
+                    DdlStatement::CreateFunction(_) => DfDdlKind::CreateFunction,
+                    DdlStatement::DropFunction(_) => DfDdlKind::DropFunction,
+                })
+            } else {
+                Err("Not a Ddl".into())
+            }
+        }
+
+        /// DDL table/object name (works for all variants that have a name).
+        pub fn ddl_name(&self, write: &mut DiplomatWrite) -> Result<(), Box<DfError>> {
+            if let LogicalPlan::Ddl(ddl) = &self.plan {
+                match ddl {
+                    DdlStatement::CreateExternalTable(t) => { write_table_name(&t.name, write); }
+                    DdlStatement::CreateMemoryTable(t) => { write_table_name(&t.name, write); }
+                    DdlStatement::CreateView(v) => { write_table_name(&v.name, write); }
+                    DdlStatement::CreateCatalogSchema(s) => { let _ = write!(write, "{}", s.schema_name); }
+                    DdlStatement::CreateCatalog(c) => { let _ = write!(write, "{}", c.catalog_name); }
+                    DdlStatement::CreateIndex(i) => {
+                        if let Some(n) = &i.name { let _ = write!(write, "{}", n); }
+                    }
+                    DdlStatement::DropTable(t) => { write_table_name(&t.name, write); }
+                    DdlStatement::DropView(v) => { write_table_name(&v.name, write); }
+                    DdlStatement::DropCatalogSchema(s) => { let _ = write!(write, "{}", s.name); }
+                    DdlStatement::CreateFunction(f) => { let _ = write!(write, "{}", f.name); }
+                    DdlStatement::DropFunction(f) => { let _ = write!(write, "{}", f.name); }
+                }
+                Ok(())
+            } else {
+                Err("Not a Ddl".into())
+            }
+        }
+
+        /// DDL table reference type (for variants with TableReference name).
+        pub fn ddl_table_ref_type(&self) -> DfTableRefType {
+            if let LogicalPlan::Ddl(ddl) = &self.plan {
+                match ddl {
+                    DdlStatement::CreateExternalTable(t) => table_ref_type(&t.name),
+                    DdlStatement::CreateMemoryTable(t) => table_ref_type(&t.name),
+                    DdlStatement::CreateView(v) => table_ref_type(&v.name),
+                    DdlStatement::CreateIndex(i) => table_ref_type(&i.table),
+                    DdlStatement::DropTable(t) => table_ref_type(&t.name),
+                    DdlStatement::DropView(v) => table_ref_type(&v.name),
+                    _ => DfTableRefType::None,
+                }
+            } else {
+                DfTableRefType::None
+            }
+        }
+
+        /// DDL table schema name (for variants with TableReference name).
+        pub fn ddl_table_schema_name(&self, write: &mut DiplomatWrite) {
+            if let LogicalPlan::Ddl(ddl) = &self.plan {
+                match ddl {
+                    DdlStatement::CreateExternalTable(t) => write_table_schema(&t.name, write),
+                    DdlStatement::CreateMemoryTable(t) => write_table_schema(&t.name, write),
+                    DdlStatement::CreateView(v) => write_table_schema(&v.name, write),
+                    DdlStatement::CreateIndex(i) => write_table_schema(&i.table, write),
+                    DdlStatement::DropTable(t) => write_table_schema(&t.name, write),
+                    DdlStatement::DropView(v) => write_table_schema(&v.name, write),
+                    _ => {}
+                }
+            }
+        }
+
+        /// DDL table catalog name (for variants with TableReference name).
+        pub fn ddl_table_catalog_name(&self, write: &mut DiplomatWrite) {
+            if let LogicalPlan::Ddl(ddl) = &self.plan {
+                match ddl {
+                    DdlStatement::CreateExternalTable(t) => write_table_catalog(&t.name, write),
+                    DdlStatement::CreateMemoryTable(t) => write_table_catalog(&t.name, write),
+                    DdlStatement::CreateView(v) => write_table_catalog(&v.name, write),
+                    DdlStatement::CreateIndex(i) => write_table_catalog(&i.table, write),
+                    DdlStatement::DropTable(t) => write_table_catalog(&t.name, write),
+                    DdlStatement::DropView(v) => write_table_catalog(&v.name, write),
+                    _ => {}
+                }
+            }
+        }
+
+        /// DDL if_not_exists flag (for CREATE variants).
+        pub fn ddl_if_not_exists(&self) -> Result<bool, Box<DfError>> {
+            if let LogicalPlan::Ddl(ddl) = &self.plan {
+                Ok(match ddl {
+                    DdlStatement::CreateExternalTable(t) => t.if_not_exists,
+                    DdlStatement::CreateMemoryTable(t) => t.if_not_exists,
+                    DdlStatement::CreateCatalogSchema(s) => s.if_not_exists,
+                    DdlStatement::CreateCatalog(c) => c.if_not_exists,
+                    DdlStatement::CreateIndex(i) => i.if_not_exists,
+                    _ => return Err("DDL variant does not have if_not_exists".into()),
+                })
+            } else {
+                Err("Not a Ddl".into())
+            }
+        }
+
+        /// DDL if_exists flag (for DROP variants).
+        pub fn ddl_if_exists(&self) -> Result<bool, Box<DfError>> {
+            if let LogicalPlan::Ddl(ddl) = &self.plan {
+                Ok(match ddl {
+                    DdlStatement::DropTable(t) => t.if_exists,
+                    DdlStatement::DropView(v) => v.if_exists,
+                    DdlStatement::DropCatalogSchema(s) => s.if_exists,
+                    DdlStatement::DropFunction(f) => f.if_exists,
+                    _ => return Err("DDL variant does not have if_exists".into()),
+                })
+            } else {
+                Err("Not a Ddl".into())
+            }
+        }
+
+        /// DDL or_replace flag (for CREATE variants that support it).
+        pub fn ddl_or_replace(&self) -> Result<bool, Box<DfError>> {
+            if let LogicalPlan::Ddl(ddl) = &self.plan {
+                Ok(match ddl {
+                    DdlStatement::CreateExternalTable(t) => t.or_replace,
+                    DdlStatement::CreateMemoryTable(t) => t.or_replace,
+                    DdlStatement::CreateView(v) => v.or_replace,
+                    DdlStatement::CreateFunction(f) => f.or_replace,
+                    _ => return Err("DDL variant does not have or_replace".into()),
+                })
+            } else {
+                Err("Not a Ddl".into())
+            }
+        }
+
+        /// DDL temporary flag.
+        pub fn ddl_temporary(&self) -> Result<bool, Box<DfError>> {
+            if let LogicalPlan::Ddl(ddl) = &self.plan {
+                Ok(match ddl {
+                    DdlStatement::CreateExternalTable(t) => t.temporary,
+                    DdlStatement::CreateMemoryTable(t) => t.temporary,
+                    DdlStatement::CreateView(v) => v.temporary,
+                    DdlStatement::CreateFunction(f) => f.temporary,
+                    _ => return Err("DDL variant does not have temporary".into()),
+                })
+            } else {
+                Err("Not a Ddl".into())
+            }
+        }
+
+        /// DDL cascade flag (DropCatalogSchema only).
+        pub fn ddl_cascade(&self) -> Result<bool, Box<DfError>> {
+            if let LogicalPlan::Ddl(ddl) = &self.plan {
+                if let DdlStatement::DropCatalogSchema(s) = ddl {
+                    return Ok(s.cascade);
+                }
+            }
+            Err("Not a Ddl::DropCatalogSchema".into())
+        }
+
+        /// DDL CreateExternalTable location.
+        pub fn ddl_location(&self, write: &mut DiplomatWrite) -> Result<(), Box<DfError>> {
+            if let LogicalPlan::Ddl(DdlStatement::CreateExternalTable(t)) = &self.plan {
+                let _ = write!(write, "{}", t.location);
+                Ok(())
+            } else {
+                Err("Not a Ddl::CreateExternalTable".into())
+            }
+        }
+
+        /// DDL CreateExternalTable file_type.
+        pub fn ddl_file_type(&self, write: &mut DiplomatWrite) -> Result<(), Box<DfError>> {
+            if let LogicalPlan::Ddl(DdlStatement::CreateExternalTable(t)) = &self.plan {
+                let _ = write!(write, "{}", t.file_type);
+                Ok(())
+            } else {
+                Err("Not a Ddl::CreateExternalTable".into())
+            }
+        }
+
+        /// DDL CreateView definition string, or empty if none.
+        pub fn ddl_view_definition(&self, write: &mut DiplomatWrite) -> Result<(), Box<DfError>> {
+            if let LogicalPlan::Ddl(DdlStatement::CreateView(v)) = &self.plan {
+                if let Some(def) = &v.definition {
+                    let _ = write!(write, "{}", def);
+                }
+                Ok(())
+            } else {
+                Err("Not a Ddl::CreateView".into())
+            }
+        }
+
+        /// DDL CreateView has definition flag.
+        pub fn ddl_view_has_definition(&self) -> bool {
+            if let LogicalPlan::Ddl(DdlStatement::CreateView(v)) = &self.plan {
+                v.definition.is_some()
+            } else {
+                false
+            }
+        }
+
+        /// DDL CreateIndex has name flag.
+        pub fn ddl_index_has_name(&self) -> bool {
+            if let LogicalPlan::Ddl(DdlStatement::CreateIndex(i)) = &self.plan {
+                i.name.is_some()
+            } else {
+                false
+            }
+        }
+
+        /// DDL CreateIndex unique flag.
+        pub fn ddl_index_unique(&self) -> Result<bool, Box<DfError>> {
+            if let LogicalPlan::Ddl(DdlStatement::CreateIndex(i)) = &self.plan {
+                Ok(i.unique)
+            } else {
+                Err("Not a Ddl::CreateIndex".into())
+            }
+        }
+
+        /// DDL CreateIndex table reference type.
+        pub fn ddl_index_table_ref_type(&self) -> DfTableRefType {
+            if let LogicalPlan::Ddl(DdlStatement::CreateIndex(i)) = &self.plan {
+                table_ref_type(&i.table)
+            } else {
+                DfTableRefType::None
+            }
+        }
+
+        /// DDL CreateIndex table name.
+        pub fn ddl_index_table_name(&self, write: &mut DiplomatWrite) {
+            if let LogicalPlan::Ddl(DdlStatement::CreateIndex(i)) = &self.plan {
+                write_table_name(&i.table, write);
+            }
+        }
+
+        /// DDL CreateIndex table schema name.
+        pub fn ddl_index_table_schema_name(&self, write: &mut DiplomatWrite) {
+            if let LogicalPlan::Ddl(DdlStatement::CreateIndex(i)) = &self.plan {
+                write_table_schema(&i.table, write);
+            }
+        }
+
+        /// DDL CreateIndex table catalog name.
+        pub fn ddl_index_table_catalog_name(&self, write: &mut DiplomatWrite) {
+            if let LogicalPlan::Ddl(DdlStatement::CreateIndex(i)) = &self.plan {
+                write_table_catalog(&i.table, write);
+            }
+        }
+    }
+
+    // ============================================================================
+    // TableReference helpers
+    // ============================================================================
+
+    fn table_ref_type(tr: &datafusion::common::TableReference) -> DfTableRefType {
+        use datafusion::common::TableReference;
+        match tr {
+            TableReference::Bare { .. } => DfTableRefType::Bare,
+            TableReference::Partial { .. } => DfTableRefType::Partial,
+            TableReference::Full { .. } => DfTableRefType::Full,
+        }
+    }
+
+    fn write_table_name(tr: &datafusion::common::TableReference, write: &mut DiplomatWrite) {
+        let _ = write!(write, "{}", tr.table());
+    }
+
+    fn write_table_schema(tr: &datafusion::common::TableReference, write: &mut DiplomatWrite) {
+        use datafusion::common::TableReference;
+        match tr {
+            TableReference::Partial { schema, .. }
+            | TableReference::Full { schema, .. } => {
+                let _ = write!(write, "{}", schema);
+            }
+            _ => {}
+        }
+    }
+
+    fn write_table_catalog(tr: &datafusion::common::TableReference, write: &mut DiplomatWrite) {
+        use datafusion::common::TableReference;
+        if let TableReference::Full { catalog, .. } = tr {
+            let _ = write!(write, "{}", catalog);
         }
     }
 

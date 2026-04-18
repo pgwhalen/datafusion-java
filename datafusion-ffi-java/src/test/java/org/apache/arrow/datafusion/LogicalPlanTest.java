@@ -524,15 +524,189 @@ public class LogicalPlanTest {
   }
 
   @Test
-  void testDdlVariant() {
+  void testDdlCreateViewVariant() {
     try (BufferAllocator allocator = new RootAllocator();
         SessionContext ctx = new SessionContext()) {
       registerTestTable(ctx, allocator);
       try (SessionState state = ctx.state();
           LogicalPlan plan = state.createLogicalPlan("CREATE VIEW my_view AS SELECT * FROM t")) {
-        assertInstanceOf(LogicalPlan.Ddl.class, plan);
-        LogicalPlan.Ddl ddl = (LogicalPlan.Ddl) plan;
-        assertNotNull(ddl.schema());
+        assertInstanceOf(LogicalPlan.Ddl.CreateView.class, plan);
+        LogicalPlan.Ddl.CreateView cv = (LogicalPlan.Ddl.CreateView) plan;
+        assertEquals("my_view", ((TableReference.Bare) cv.name()).table());
+        assertFalse(cv.orReplace());
+        assertFalse(cv.temporary());
+        assertNotNull(cv.input());
+        assertNotNull(cv.schema());
+      }
+    }
+  }
+
+  @Test
+  void testDdlDropTableVariant() {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+      registerTestTable(ctx, allocator);
+      try (SessionState state = ctx.state();
+          LogicalPlan plan = state.createLogicalPlan("DROP TABLE IF EXISTS t")) {
+        assertInstanceOf(LogicalPlan.Ddl.DropTable.class, plan);
+        LogicalPlan.Ddl.DropTable dt = (LogicalPlan.Ddl.DropTable) plan;
+        assertEquals("t", ((TableReference.Bare) dt.name()).table());
+        assertTrue(dt.ifExists());
+        assertTrue(dt.inputs().isEmpty());
+      }
+    }
+  }
+
+  @Test
+  void testDdlDropViewVariant() {
+    try (SessionContext ctx = new SessionContext();
+        SessionState state = ctx.state();
+        LogicalPlan plan = state.createLogicalPlan("DROP VIEW IF EXISTS my_view")) {
+      assertInstanceOf(LogicalPlan.Ddl.DropView.class, plan);
+      LogicalPlan.Ddl.DropView dv = (LogicalPlan.Ddl.DropView) plan;
+      assertEquals("my_view", ((TableReference.Bare) dv.name()).table());
+      assertTrue(dv.ifExists());
+    }
+  }
+
+  @Test
+  void testDdlCreateSchema() {
+    try (SessionContext ctx = new SessionContext();
+        SessionState state = ctx.state();
+        LogicalPlan plan = state.createLogicalPlan("CREATE SCHEMA IF NOT EXISTS my_schema")) {
+      assertInstanceOf(LogicalPlan.Ddl.CreateCatalogSchema.class, plan);
+      LogicalPlan.Ddl.CreateCatalogSchema cs = (LogicalPlan.Ddl.CreateCatalogSchema) plan;
+      assertEquals("my_schema", cs.schemaName());
+      assertTrue(cs.ifNotExists());
+      assertTrue(cs.inputs().isEmpty());
+    }
+  }
+
+  @Test
+  void testDdlCreateDatabase() {
+    try (SessionContext ctx = new SessionContext();
+        SessionState state = ctx.state();
+        LogicalPlan plan = state.createLogicalPlan("CREATE DATABASE IF NOT EXISTS my_db")) {
+      assertInstanceOf(LogicalPlan.Ddl.CreateCatalog.class, plan);
+      LogicalPlan.Ddl.CreateCatalog cc = (LogicalPlan.Ddl.CreateCatalog) plan;
+      assertEquals("my_db", cc.catalogName());
+      assertTrue(cc.ifNotExists());
+    }
+  }
+
+  @Test
+  void testDdlCreateMemoryTable() {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+      registerTestTable(ctx, allocator);
+      try (SessionState state = ctx.state();
+          LogicalPlan plan = state.createLogicalPlan("CREATE TABLE new_t AS SELECT * FROM t")) {
+        assertInstanceOf(LogicalPlan.Ddl.CreateMemoryTable.class, plan);
+        LogicalPlan.Ddl.CreateMemoryTable cmt = (LogicalPlan.Ddl.CreateMemoryTable) plan;
+        assertEquals("new_t", ((TableReference.Bare) cmt.name()).table());
+        assertFalse(cmt.ifNotExists());
+        assertFalse(cmt.orReplace());
+        assertFalse(cmt.temporary());
+        assertNotNull(cmt.input());
+        assertEquals(1, cmt.inputs().size());
+      }
+    }
+  }
+
+  @Test
+  void testDdlCreateExternalTable() {
+    try (SessionContext ctx = new SessionContext();
+        SessionState state = ctx.state();
+        LogicalPlan plan =
+            state.createLogicalPlan(
+                "CREATE EXTERNAL TABLE ext_t (id INT) STORED AS CSV LOCATION '/tmp/ext.csv'")) {
+      assertInstanceOf(LogicalPlan.Ddl.CreateExternalTable.class, plan);
+      LogicalPlan.Ddl.CreateExternalTable cet = (LogicalPlan.Ddl.CreateExternalTable) plan;
+      assertEquals("ext_t", ((TableReference.Bare) cet.name()).table());
+      assertEquals("/tmp/ext.csv", cet.location());
+      assertEquals("CSV", cet.fileType());
+      assertFalse(cet.ifNotExists());
+      assertFalse(cet.orReplace());
+      assertFalse(cet.temporary());
+      assertTrue(cet.inputs().isEmpty());
+    }
+  }
+
+  @Test
+  void testDdlCreateIndex() {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+      registerTestTable(ctx, allocator);
+      try (SessionState state = ctx.state();
+          LogicalPlan plan =
+              state.createLogicalPlan("CREATE UNIQUE INDEX IF NOT EXISTS my_idx ON t (id)")) {
+        assertInstanceOf(LogicalPlan.Ddl.CreateIndex.class, plan);
+        LogicalPlan.Ddl.CreateIndex ci = (LogicalPlan.Ddl.CreateIndex) plan;
+        assertTrue(ci.name().isPresent());
+        assertEquals("my_idx", ci.name().get());
+        assertEquals("t", ((TableReference.Bare) ci.table()).table());
+        assertTrue(ci.unique());
+        assertTrue(ci.ifNotExists());
+        assertTrue(ci.inputs().isEmpty());
+      }
+    }
+  }
+
+  @Test
+  void testDdlDropSchema() {
+    try (SessionContext ctx = new SessionContext();
+        SessionState state = ctx.state();
+        LogicalPlan plan = state.createLogicalPlan("DROP SCHEMA IF EXISTS my_schema CASCADE")) {
+      assertInstanceOf(LogicalPlan.Ddl.DropCatalogSchema.class, plan);
+      LogicalPlan.Ddl.DropCatalogSchema dcs = (LogicalPlan.Ddl.DropCatalogSchema) plan;
+      assertEquals("my_schema", dcs.name());
+      assertTrue(dcs.ifExists());
+      assertTrue(dcs.cascade());
+    }
+  }
+
+  @Test
+  void testDdlCreateFunction() {
+    try (SessionContext ctx = new SessionContext();
+        SessionState state = ctx.state();
+        LogicalPlan plan =
+            state.createLogicalPlan(
+                "CREATE OR REPLACE FUNCTION add_one(INTEGER) RETURNS INTEGER AS $$ x + 1 $$")) {
+      assertInstanceOf(LogicalPlan.Ddl.CreateFunction.class, plan);
+      LogicalPlan.Ddl.CreateFunction cf = (LogicalPlan.Ddl.CreateFunction) plan;
+      assertEquals("add_one", cf.name());
+      assertTrue(cf.orReplace());
+      assertFalse(cf.temporary());
+      assertTrue(cf.inputs().isEmpty());
+    }
+  }
+
+  @Test
+  void testDdlDropFunction() {
+    try (SessionContext ctx = new SessionContext();
+        SessionState state = ctx.state();
+        LogicalPlan plan = state.createLogicalPlan("DROP FUNCTION IF EXISTS add_one")) {
+      assertInstanceOf(LogicalPlan.Ddl.DropFunction.class, plan);
+      LogicalPlan.Ddl.DropFunction df = (LogicalPlan.Ddl.DropFunction) plan;
+      assertEquals("add_one", df.name());
+      assertTrue(df.ifExists());
+      assertTrue(df.inputs().isEmpty());
+    }
+  }
+
+  @Test
+  void testDmlInsert() {
+    try (BufferAllocator allocator = new RootAllocator();
+        SessionContext ctx = new SessionContext()) {
+      registerTestTable(ctx, allocator);
+      try (SessionState state = ctx.state();
+          LogicalPlan plan = state.createLogicalPlan("INSERT INTO t VALUES (4, 'Dave')")) {
+        assertInstanceOf(LogicalPlan.Dml.class, plan);
+        LogicalPlan.Dml dml = (LogicalPlan.Dml) plan;
+        assertEquals("t", ((TableReference.Bare) dml.tableName()).table());
+        assertEquals(WriteOp.INSERT_APPEND, dml.op());
+        assertNotNull(dml.input());
+        assertEquals(1, dml.inputs().size());
       }
     }
   }
@@ -555,14 +729,105 @@ public class LogicalPlanTest {
   }
 
   @Test
-  void testStatementVariant() {
+  void testStatementSetVariableVariant() {
     try (SessionContext ctx = new SessionContext();
         SessionState state = ctx.state();
         LogicalPlan plan = state.createLogicalPlan("SET datafusion.execution.batch_size = 1024")) {
-      assertInstanceOf(LogicalPlan.Statement.class, plan);
-      LogicalPlan.Statement stmt = (LogicalPlan.Statement) plan;
-      assertTrue(stmt.inputs().isEmpty(), "Statement has no children");
-      assertNotNull(stmt.schema());
+      assertInstanceOf(LogicalPlan.Statement.SetVariable.class, plan);
+      LogicalPlan.Statement.SetVariable sv = (LogicalPlan.Statement.SetVariable) plan;
+      assertEquals("datafusion.execution.batch_size", sv.variable());
+      assertEquals("1024", sv.value());
+      assertTrue(sv.inputs().isEmpty());
+      assertNotNull(sv.schema());
+    }
+  }
+
+  @Test
+  void testStatementResetVariable() {
+    try (SessionContext ctx = new SessionContext();
+        SessionState state = ctx.state();
+        LogicalPlan plan = state.createLogicalPlan("RESET datafusion.execution.batch_size")) {
+      assertInstanceOf(LogicalPlan.Statement.ResetVariable.class, plan);
+      LogicalPlan.Statement.ResetVariable rv = (LogicalPlan.Statement.ResetVariable) plan;
+      assertEquals("datafusion.execution.batch_size", rv.variable());
+      assertTrue(rv.inputs().isEmpty());
+    }
+  }
+
+  @Test
+  void testStatementTransactionStart() {
+    try (SessionContext ctx = new SessionContext();
+        SessionState state = ctx.state();
+        LogicalPlan plan =
+            state.createLogicalPlan("START TRANSACTION READ ONLY ISOLATION LEVEL READ COMMITTED")) {
+      assertInstanceOf(LogicalPlan.Statement.TransactionStart.class, plan);
+      LogicalPlan.Statement.TransactionStart tx = (LogicalPlan.Statement.TransactionStart) plan;
+      assertEquals(TransactionAccessMode.READ_ONLY, tx.accessMode());
+      assertEquals(TransactionIsolationLevel.READ_COMMITTED, tx.isolationLevel());
+      assertTrue(tx.inputs().isEmpty());
+    }
+  }
+
+  @Test
+  void testStatementCommit() {
+    try (SessionContext ctx = new SessionContext();
+        SessionState state = ctx.state();
+        LogicalPlan plan = state.createLogicalPlan("COMMIT")) {
+      assertInstanceOf(LogicalPlan.Statement.TransactionEnd.class, plan);
+      LogicalPlan.Statement.TransactionEnd te = (LogicalPlan.Statement.TransactionEnd) plan;
+      assertEquals(TransactionConclusion.COMMIT, te.conclusion());
+      assertFalse(te.chain());
+      assertTrue(te.inputs().isEmpty());
+    }
+  }
+
+  @Test
+  void testStatementRollback() {
+    try (SessionContext ctx = new SessionContext();
+        SessionState state = ctx.state();
+        LogicalPlan plan = state.createLogicalPlan("ROLLBACK")) {
+      assertInstanceOf(LogicalPlan.Statement.TransactionEnd.class, plan);
+      LogicalPlan.Statement.TransactionEnd te = (LogicalPlan.Statement.TransactionEnd) plan;
+      assertEquals(TransactionConclusion.ROLLBACK, te.conclusion());
+    }
+  }
+
+  @Test
+  void testStatementPrepare() {
+    try (SessionContext ctx = new SessionContext();
+        SessionState state = ctx.state();
+        LogicalPlan plan = state.createLogicalPlan("PREPARE my_plan AS SELECT 1")) {
+      assertInstanceOf(LogicalPlan.Statement.Prepare.class, plan);
+      LogicalPlan.Statement.Prepare prep = (LogicalPlan.Statement.Prepare) plan;
+      assertEquals("my_plan", prep.name());
+      assertNotNull(prep.fields());
+      assertNotNull(prep.input());
+      assertEquals(1, prep.inputs().size());
+    }
+  }
+
+  @Test
+  void testStatementExecute() {
+    try (SessionContext ctx = new SessionContext();
+        SessionState state = ctx.state();
+        LogicalPlan plan = state.createLogicalPlan("EXECUTE my_plan")) {
+      assertInstanceOf(LogicalPlan.Statement.Execute.class, plan);
+      LogicalPlan.Statement.Execute exec = (LogicalPlan.Statement.Execute) plan;
+      assertEquals("my_plan", exec.name());
+      assertTrue(exec.parameters().isEmpty());
+      assertTrue(exec.inputs().isEmpty());
+    }
+  }
+
+  @Test
+  void testStatementDeallocate() {
+    try (SessionContext ctx = new SessionContext();
+        SessionState state = ctx.state();
+        LogicalPlan plan = state.createLogicalPlan("DEALLOCATE my_plan")) {
+      assertInstanceOf(LogicalPlan.Statement.Deallocate.class, plan);
+      LogicalPlan.Statement.Deallocate dealloc = (LogicalPlan.Statement.Deallocate) plan;
+      assertEquals("my_plan", dealloc.name());
+      assertTrue(dealloc.inputs().isEmpty());
     }
   }
 

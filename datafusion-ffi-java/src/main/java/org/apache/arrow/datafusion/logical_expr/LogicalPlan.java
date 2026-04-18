@@ -289,7 +289,40 @@ public sealed interface LogicalPlan extends AutoCloseable {
         LogicalPlan input = fromBridge(bridge.inputAt(0));
         yield new Limit(input, skipExpr, fetchExpr, schema, bridge);
       }
-      case STATEMENT -> new Statement(schema, bridge);
+      case STATEMENT -> {
+        var stmtKind = bridge.statementKind();
+        yield switch (stmtKind) {
+          case TRANSACTION_START ->
+              new Statement.TransactionStart(
+                  bridge.statementTxStartAccessMode(),
+                  bridge.statementTxStartIsolationLevel(),
+                  schema,
+                  bridge);
+          case TRANSACTION_END ->
+              new Statement.TransactionEnd(
+                  bridge.statementTxEndConclusion(), bridge.statementTxEndChain(), schema, bridge);
+          case SET_VARIABLE ->
+              new Statement.SetVariable(
+                  bridge.statementSetVariableName(),
+                  bridge.statementSetVariableValue(),
+                  schema,
+                  bridge);
+          case RESET_VARIABLE ->
+              new Statement.ResetVariable(bridge.statementResetVariableName(), schema, bridge);
+          case PREPARE ->
+              new Statement.Prepare(
+                  bridge.statementPrepareName(),
+                  bridge.statementPrepareFields(),
+                  fromBridge(bridge.inputAt(0)),
+                  schema,
+                  bridge);
+          case EXECUTE ->
+              new Statement.Execute(
+                  bridge.statementExecuteName(), bridge.statementExecuteParams(), schema, bridge);
+          case DEALLOCATE ->
+              new Statement.Deallocate(bridge.statementDeallocateName(), schema, bridge);
+        };
+      }
       case VALUES -> {
         List<List<Expr>> values = bridge.valuesExprs();
         yield new Values(values, schema, bridge);
@@ -319,17 +352,68 @@ public sealed interface LogicalPlan extends AutoCloseable {
         }
       }
       case DML -> {
-        int count = bridge.inputsCount();
-        List<LogicalPlan> inputs = count > 0 ? List.of(fromBridge(bridge.inputAt(0))) : List.of();
-        yield new Dml(inputs, schema, bridge);
+        TableReference tableName = bridge.dmlTableName();
+        WriteOp op = bridge.dmlWriteOp();
+        LogicalPlan input = fromBridge(bridge.inputAt(0));
+        yield new Dml(tableName, op, input, schema, bridge);
       }
       case DDL -> {
-        int count = bridge.inputsCount();
-        List<LogicalPlan> inputs = new java.util.ArrayList<>(count);
-        for (int i = 0; i < count; i++) {
-          inputs.add(fromBridge(bridge.inputAt(i)));
-        }
-        yield new Ddl(List.copyOf(inputs), schema, bridge);
+        var ddlKind = bridge.ddlKind();
+        yield switch (ddlKind) {
+          case CREATE_EXTERNAL_TABLE ->
+              new Ddl.CreateExternalTable(
+                  bridge.ddlTableName(),
+                  bridge.ddlLocation(),
+                  bridge.ddlFileType(),
+                  bridge.ddlIfNotExists(),
+                  bridge.ddlOrReplace(),
+                  bridge.ddlTemporary(),
+                  schema,
+                  bridge);
+          case CREATE_MEMORY_TABLE ->
+              new Ddl.CreateMemoryTable(
+                  bridge.ddlTableName(),
+                  bridge.ddlIfNotExists(),
+                  bridge.ddlOrReplace(),
+                  bridge.ddlTemporary(),
+                  fromBridge(bridge.inputAt(0)),
+                  schema,
+                  bridge);
+          case CREATE_VIEW ->
+              new Ddl.CreateView(
+                  bridge.ddlTableName(),
+                  bridge.ddlOrReplace(),
+                  bridge.ddlViewDefinition(),
+                  bridge.ddlTemporary(),
+                  fromBridge(bridge.inputAt(0)),
+                  schema,
+                  bridge);
+          case CREATE_CATALOG_SCHEMA ->
+              new Ddl.CreateCatalogSchema(
+                  bridge.ddlName(), bridge.ddlIfNotExists(), schema, bridge);
+          case CREATE_CATALOG ->
+              new Ddl.CreateCatalog(bridge.ddlName(), bridge.ddlIfNotExists(), schema, bridge);
+          case CREATE_INDEX ->
+              new Ddl.CreateIndex(
+                  bridge.ddlIndexHasName() ? Optional.of(bridge.ddlName()) : Optional.empty(),
+                  bridge.ddlIndexTable(),
+                  bridge.ddlIndexUnique(),
+                  bridge.ddlIfNotExists(),
+                  schema,
+                  bridge);
+          case DROP_TABLE ->
+              new Ddl.DropTable(bridge.ddlTableName(), bridge.ddlIfExists(), schema, bridge);
+          case DROP_VIEW ->
+              new Ddl.DropView(bridge.ddlTableName(), bridge.ddlIfExists(), schema, bridge);
+          case DROP_CATALOG_SCHEMA ->
+              new Ddl.DropCatalogSchema(
+                  bridge.ddlName(), bridge.ddlIfExists(), bridge.ddlCascade(), schema, bridge);
+          case CREATE_FUNCTION ->
+              new Ddl.CreateFunction(
+                  bridge.ddlName(), bridge.ddlOrReplace(), bridge.ddlTemporary(), schema, bridge);
+          case DROP_FUNCTION ->
+              new Ddl.DropFunction(bridge.ddlName(), bridge.ddlIfExists(), schema, bridge);
+        };
       }
       case COPY -> {
         LogicalPlan input = fromBridge(bridge.inputAt(0));
@@ -583,16 +667,122 @@ public sealed interface LogicalPlan extends AutoCloseable {
   /**
    * A non-relational SQL statement (SET, TRANSACTION, PREPARE, EXECUTE).
    *
-   * <p>Sub-variant details are not yet exposed. See {@code LOGICAL_PLAN_MISSING_FEATURES.md}.
+   * <p>This is a sealed sub-interface with variants for each statement type.
    *
    * @see <a
    *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/statement/enum.Statement.html">Rust
    *     DataFusion: Statement</a>
    */
-  record Statement(Schema schema, LogicalPlanBridge bridge) implements LogicalPlan {
-    @Override
-    public List<LogicalPlan> inputs() {
-      return List.of();
+  sealed interface Statement extends LogicalPlan {
+
+    /**
+     * BEGIN TRANSACTION statement.
+     *
+     * @see <a
+     *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/statement/struct.TransactionStart.html">Rust
+     *     DataFusion: TransactionStart</a>
+     */
+    record TransactionStart(
+        TransactionAccessMode accessMode,
+        TransactionIsolationLevel isolationLevel,
+        Schema schema,
+        LogicalPlanBridge bridge)
+        implements Statement {
+      @Override
+      public List<LogicalPlan> inputs() {
+        return List.of();
+      }
+    }
+
+    /**
+     * COMMIT or ROLLBACK statement.
+     *
+     * @see <a
+     *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/statement/struct.TransactionEnd.html">Rust
+     *     DataFusion: TransactionEnd</a>
+     */
+    record TransactionEnd(
+        TransactionConclusion conclusion, boolean chain, Schema schema, LogicalPlanBridge bridge)
+        implements Statement {
+      @Override
+      public List<LogicalPlan> inputs() {
+        return List.of();
+      }
+    }
+
+    /**
+     * SET variable = value statement.
+     *
+     * @see <a
+     *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/statement/struct.SetVariable.html">Rust
+     *     DataFusion: SetVariable</a>
+     */
+    record SetVariable(String variable, String value, Schema schema, LogicalPlanBridge bridge)
+        implements Statement {
+      @Override
+      public List<LogicalPlan> inputs() {
+        return List.of();
+      }
+    }
+
+    /**
+     * RESET variable statement.
+     *
+     * @see <a
+     *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/statement/struct.ResetVariable.html">Rust
+     *     DataFusion: ResetVariable</a>
+     */
+    record ResetVariable(String variable, Schema schema, LogicalPlanBridge bridge)
+        implements Statement {
+      @Override
+      public List<LogicalPlan> inputs() {
+        return List.of();
+      }
+    }
+
+    /**
+     * PREPARE statement.
+     *
+     * @see <a
+     *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/statement/struct.Prepare.html">Rust
+     *     DataFusion: Prepare</a>
+     */
+    record Prepare(
+        String name, Schema fields, LogicalPlan input, Schema schema, LogicalPlanBridge bridge)
+        implements Statement {
+      @Override
+      public List<LogicalPlan> inputs() {
+        return List.of(input);
+      }
+    }
+
+    /**
+     * EXECUTE prepared statement.
+     *
+     * @see <a
+     *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/statement/struct.Execute.html">Rust
+     *     DataFusion: Execute</a>
+     */
+    record Execute(String name, List<Expr> parameters, Schema schema, LogicalPlanBridge bridge)
+        implements Statement {
+      @Override
+      public List<LogicalPlan> inputs() {
+        return List.of();
+      }
+    }
+
+    /**
+     * DEALLOCATE prepared statement.
+     *
+     * @see <a
+     *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/statement/struct.Deallocate.html">Rust
+     *     DataFusion: Deallocate</a>
+     */
+    record Deallocate(String name, Schema schema, LogicalPlanBridge bridge) implements Statement {
+      @Override
+      public List<LogicalPlan> inputs() {
+        return List.of();
+      }
     }
   }
 
@@ -709,34 +899,229 @@ public sealed interface LogicalPlan extends AutoCloseable {
   /**
    * Data Manipulation Language operations (INSERT, UPDATE, DELETE).
    *
-   * <p>Sub-variant details are not yet exposed. See {@code LOGICAL_PLAN_MISSING_FEATURES.md}.
-   *
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/dml/enum.DmlStatement.html">Rust
+   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/dml/struct.DmlStatement.html">Rust
    *     DataFusion: DmlStatement</a>
    */
-  record Dml(List<LogicalPlan> dmlInputs, Schema schema, LogicalPlanBridge bridge)
+  record Dml(
+      TableReference tableName,
+      WriteOp op,
+      LogicalPlan input,
+      Schema schema,
+      LogicalPlanBridge bridge)
       implements LogicalPlan {
     @Override
     public List<LogicalPlan> inputs() {
-      return dmlInputs;
+      return List.of(input);
     }
   }
 
   /**
    * Data Definition Language operations (CREATE, DROP).
    *
-   * <p>Sub-variant details are not yet exposed. See {@code LOGICAL_PLAN_MISSING_FEATURES.md}.
+   * <p>This is a sealed sub-interface with variants for each DDL operation type.
    *
    * @see <a
    *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/ddl/enum.DdlStatement.html">Rust
    *     DataFusion: DdlStatement</a>
    */
-  record Ddl(List<LogicalPlan> ddlInputs, Schema schema, LogicalPlanBridge bridge)
-      implements LogicalPlan {
-    @Override
-    public List<LogicalPlan> inputs() {
-      return ddlInputs;
+  sealed interface Ddl extends LogicalPlan {
+
+    /**
+     * CREATE EXTERNAL TABLE statement.
+     *
+     * @see <a
+     *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/ddl/struct.CreateExternalTable.html">Rust
+     *     DataFusion: CreateExternalTable</a>
+     */
+    record CreateExternalTable(
+        TableReference name,
+        String location,
+        String fileType,
+        boolean ifNotExists,
+        boolean orReplace,
+        boolean temporary,
+        Schema schema,
+        LogicalPlanBridge bridge)
+        implements Ddl {
+      @Override
+      public List<LogicalPlan> inputs() {
+        return List.of();
+      }
+    }
+
+    /**
+     * CREATE TABLE AS SELECT statement.
+     *
+     * @see <a
+     *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/ddl/struct.CreateMemoryTable.html">Rust
+     *     DataFusion: CreateMemoryTable</a>
+     */
+    record CreateMemoryTable(
+        TableReference name,
+        boolean ifNotExists,
+        boolean orReplace,
+        boolean temporary,
+        LogicalPlan input,
+        Schema schema,
+        LogicalPlanBridge bridge)
+        implements Ddl {
+      @Override
+      public List<LogicalPlan> inputs() {
+        return List.of(input);
+      }
+    }
+
+    /**
+     * CREATE VIEW statement.
+     *
+     * @see <a
+     *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/ddl/struct.CreateView.html">Rust
+     *     DataFusion: CreateView</a>
+     */
+    record CreateView(
+        TableReference name,
+        boolean orReplace,
+        Optional<String> definition,
+        boolean temporary,
+        LogicalPlan input,
+        Schema schema,
+        LogicalPlanBridge bridge)
+        implements Ddl {
+      @Override
+      public List<LogicalPlan> inputs() {
+        return List.of(input);
+      }
+    }
+
+    /**
+     * CREATE SCHEMA statement.
+     *
+     * @see <a
+     *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/ddl/struct.CreateCatalogSchema.html">Rust
+     *     DataFusion: CreateCatalogSchema</a>
+     */
+    record CreateCatalogSchema(
+        String schemaName, boolean ifNotExists, Schema schema, LogicalPlanBridge bridge)
+        implements Ddl {
+      @Override
+      public List<LogicalPlan> inputs() {
+        return List.of();
+      }
+    }
+
+    /**
+     * CREATE DATABASE statement.
+     *
+     * @see <a
+     *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/ddl/struct.CreateCatalog.html">Rust
+     *     DataFusion: CreateCatalog</a>
+     */
+    record CreateCatalog(
+        String catalogName, boolean ifNotExists, Schema schema, LogicalPlanBridge bridge)
+        implements Ddl {
+      @Override
+      public List<LogicalPlan> inputs() {
+        return List.of();
+      }
+    }
+
+    /**
+     * CREATE INDEX statement.
+     *
+     * @see <a
+     *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/ddl/struct.CreateIndex.html">Rust
+     *     DataFusion: CreateIndex</a>
+     */
+    record CreateIndex(
+        Optional<String> name,
+        TableReference table,
+        boolean unique,
+        boolean ifNotExists,
+        Schema schema,
+        LogicalPlanBridge bridge)
+        implements Ddl {
+      @Override
+      public List<LogicalPlan> inputs() {
+        return List.of();
+      }
+    }
+
+    /**
+     * DROP TABLE statement.
+     *
+     * @see <a
+     *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/ddl/struct.DropTable.html">Rust
+     *     DataFusion: DropTable</a>
+     */
+    record DropTable(TableReference name, boolean ifExists, Schema schema, LogicalPlanBridge bridge)
+        implements Ddl {
+      @Override
+      public List<LogicalPlan> inputs() {
+        return List.of();
+      }
+    }
+
+    /**
+     * DROP VIEW statement.
+     *
+     * @see <a
+     *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/ddl/struct.DropView.html">Rust
+     *     DataFusion: DropView</a>
+     */
+    record DropView(TableReference name, boolean ifExists, Schema schema, LogicalPlanBridge bridge)
+        implements Ddl {
+      @Override
+      public List<LogicalPlan> inputs() {
+        return List.of();
+      }
+    }
+
+    /**
+     * DROP SCHEMA statement.
+     *
+     * @see <a
+     *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/ddl/struct.DropCatalogSchema.html">Rust
+     *     DataFusion: DropCatalogSchema</a>
+     */
+    record DropCatalogSchema(
+        String name, boolean ifExists, boolean cascade, Schema schema, LogicalPlanBridge bridge)
+        implements Ddl {
+      @Override
+      public List<LogicalPlan> inputs() {
+        return List.of();
+      }
+    }
+
+    /**
+     * CREATE FUNCTION statement.
+     *
+     * @see <a
+     *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/ddl/struct.CreateFunction.html">Rust
+     *     DataFusion: CreateFunction</a>
+     */
+    record CreateFunction(
+        String name, boolean orReplace, boolean temporary, Schema schema, LogicalPlanBridge bridge)
+        implements Ddl {
+      @Override
+      public List<LogicalPlan> inputs() {
+        return List.of();
+      }
+    }
+
+    /**
+     * DROP FUNCTION statement.
+     *
+     * @see <a
+     *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/ddl/struct.DropFunction.html">Rust
+     *     DataFusion: DropFunction</a>
+     */
+    record DropFunction(String name, boolean ifExists, Schema schema, LogicalPlanBridge bridge)
+        implements Ddl {
+      @Override
+      public List<LogicalPlan> inputs() {
+        return List.of();
+      }
     }
   }
 
