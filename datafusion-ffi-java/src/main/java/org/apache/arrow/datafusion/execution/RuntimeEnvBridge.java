@@ -29,6 +29,11 @@ public final class RuntimeEnvBridge implements AutoCloseable {
     }
   }
 
+  /** Adopt an existing Diplomat-generated DfRuntimeEnv (e.g. from TaskContext). */
+  RuntimeEnvBridge(DfRuntimeEnv dfRuntimeEnv) {
+    this.dfRuntimeEnv = dfRuntimeEnv;
+  }
+
   /** Returns the underlying DfRuntimeEnv for passing to DfSessionContext. */
   DfRuntimeEnv dfRuntimeEnv() {
     if (closed) {

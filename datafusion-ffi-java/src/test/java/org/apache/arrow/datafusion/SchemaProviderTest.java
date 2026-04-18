@@ -8,6 +8,7 @@ import org.apache.arrow.datafusion.catalog.ScanArgs;
 import org.apache.arrow.datafusion.catalog.SchemaProvider;
 import org.apache.arrow.datafusion.catalog.Session;
 import org.apache.arrow.datafusion.catalog.TableProvider;
+import org.apache.arrow.datafusion.execution.TaskContext;
 import org.apache.arrow.datafusion.physical_plan.ExecutionPlan;
 import org.apache.arrow.datafusion.physical_plan.PlanProperties;
 import org.apache.arrow.datafusion.physical_plan.RecordBatchReader;
@@ -77,7 +78,8 @@ public class SchemaProviderTest {
           }
 
           @Override
-          public RecordBatchReader execute(int partition, BufferAllocator allocator) {
+          public RecordBatchReader execute(
+              int partition, TaskContext taskContext, BufferAllocator allocator) {
             throw new UnsupportedOperationException("not implemented");
           }
         };

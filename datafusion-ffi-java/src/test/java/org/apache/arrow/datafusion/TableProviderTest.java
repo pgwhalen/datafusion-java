@@ -7,6 +7,7 @@ import org.apache.arrow.datafusion.catalog.ScanArgs;
 import org.apache.arrow.datafusion.catalog.Session;
 import org.apache.arrow.datafusion.catalog.TableProvider;
 import org.apache.arrow.datafusion.common.ScalarValue;
+import org.apache.arrow.datafusion.execution.TaskContext;
 import org.apache.arrow.datafusion.logical_expr.Expr;
 import org.apache.arrow.datafusion.logical_expr.TableProviderFilterPushDown;
 import org.apache.arrow.datafusion.physical_plan.ExecutionPlan;
@@ -55,7 +56,8 @@ public class TableProviderTest {
           }
 
           @Override
-          public RecordBatchReader execute(int partition, BufferAllocator allocator) {
+          public RecordBatchReader execute(
+              int partition, TaskContext taskContext, BufferAllocator allocator) {
             throw new UnsupportedOperationException("not implemented");
           }
         };

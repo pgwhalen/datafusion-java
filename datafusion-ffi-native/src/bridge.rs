@@ -2310,6 +2310,163 @@ pub mod ffi {
     }
 
     // ============================================================================
+    // DfSessionConfig
+    // ============================================================================
+
+    /// Opaque wrapper for a SessionConfig.
+    #[diplomat::opaque]
+    pub struct DfSessionConfig {
+        pub(crate) cfg: SessionConfig,
+    }
+
+    impl DfSessionConfig {
+        /// Create a SessionConfig from parallel key/value string slices.
+        pub fn new_from_options(
+            keys: &[DiplomatStrSlice],
+            values: &[DiplomatStrSlice],
+        ) -> Result<Box<DfSessionConfig>, Box<DfError>> {
+            let cfg = build_session_config(keys, values)?;
+            Ok(Box::new(DfSessionConfig { cfg }))
+        }
+
+        /// Keys of all configured options (parallel with options_values).
+        pub fn options_keys(&self) -> Box<DfStringArray> {
+            let strings: Vec<String> = self
+                .cfg
+                .options()
+                .entries()
+                .into_iter()
+                .map(|e| e.key)
+                .collect();
+            Box::new(DfStringArray { strings })
+        }
+
+        /// Values of all configured options (parallel with options_keys).
+        /// Unset Option<String> values become the empty string.
+        pub fn options_values(&self) -> Box<DfStringArray> {
+            let strings: Vec<String> = self
+                .cfg
+                .options()
+                .entries()
+                .into_iter()
+                .map(|e| e.value.unwrap_or_default())
+                .collect();
+            Box::new(DfStringArray { strings })
+        }
+    }
+
+    // ============================================================================
+    // DfMemoryPool
+    // ============================================================================
+
+    /// Opaque wrapper for a MemoryPool. Currently exposes no methods; the type
+    /// exists so Java code can obtain a handle from TaskContext for future
+    /// expansion (reserved(), pool_size(), etc.).
+    #[diplomat::opaque]
+    pub struct DfMemoryPool {
+        pub(crate) pool: Arc<dyn datafusion::execution::memory_pool::MemoryPool>,
+    }
+
+    impl DfMemoryPool {
+        /// Placeholder accessor so Diplomat generates the opaque with at least one
+        /// method. Returns the total reserved bytes across the pool.
+        pub fn reserved(&self) -> u64 {
+            self.pool.reserved() as u64
+        }
+    }
+
+    // ============================================================================
+    // DfTaskContext
+    // ============================================================================
+
+    /// Opaque wrapper for a TaskContext handed to a Java ExecutionPlan during
+    /// execute(). Java owns the Box and must close it.
+    #[diplomat::opaque]
+    pub struct DfTaskContext {
+        pub(crate) ctx: Arc<datafusion::execution::TaskContext>,
+    }
+
+    impl DfTaskContext {
+        /// Take ownership of a raw pointer previously produced by leaking a
+        /// `Box<DfTaskContext>` across the FFI boundary (as done by the
+        /// ExecutionPlan::execute upcall). The caller transfers ownership and
+        /// must close the returned handle.
+        pub fn take_from_raw(addr: usize) -> Box<DfTaskContext> {
+            unsafe { Box::from_raw(addr as *mut DfTaskContext) }
+        }
+
+        /// Session ID.
+        pub fn session_id(&self, write: &mut DiplomatWrite) {
+            let _ = write!(write, "{}", self.ctx.session_id());
+        }
+
+        /// True if this TaskContext has a task_id.
+        pub fn has_task_id(&self) -> bool {
+            self.ctx.task_id().is_some()
+        }
+
+        /// Task ID (writes the empty string if none; pair with has_task_id).
+        pub fn task_id(&self, write: &mut DiplomatWrite) {
+            if let Some(id) = self.ctx.task_id() {
+                let _ = write!(write, "{}", id);
+            }
+        }
+
+        /// Snapshot of the session config.
+        pub fn session_config(&self) -> Box<DfSessionConfig> {
+            Box::new(DfSessionConfig {
+                cfg: self.ctx.session_config().clone(),
+            })
+        }
+
+        /// Runtime environment.
+        pub fn runtime_env(&self) -> Box<DfRuntimeEnv> {
+            Box::new(DfRuntimeEnv {
+                rt_env: Arc::clone(&self.ctx.runtime_env()),
+            })
+        }
+
+        /// Memory pool (cloned from the runtime env).
+        pub fn memory_pool(&self) -> Box<DfMemoryPool> {
+            Box::new(DfMemoryPool {
+                pool: Arc::clone(&self.ctx.runtime_env().memory_pool),
+            })
+        }
+
+        /// Registered scalar function names.
+        pub fn scalar_function_names(&self) -> Box<DfStringArray> {
+            let strings: Vec<String> = self.ctx.scalar_functions().keys().cloned().collect();
+            Box::new(DfStringArray { strings })
+        }
+
+        /// Registered aggregate function names.
+        pub fn aggregate_function_names(&self) -> Box<DfStringArray> {
+            let strings: Vec<String> = self.ctx.aggregate_functions().keys().cloned().collect();
+            Box::new(DfStringArray { strings })
+        }
+
+        /// Returns a new TaskContext with the given SessionConfig. Does not
+        /// consume self; a fresh TaskContext is constructed from this one's
+        /// fields (TaskContext does not impl Clone in DataFusion 52.1).
+        pub fn with_session_config(&self, cfg: &DfSessionConfig) -> Box<DfTaskContext> {
+            let new_ctx = super::clone_task_context(&self.ctx).with_session_config(cfg.cfg.clone());
+            Box::new(DfTaskContext {
+                ctx: Arc::new(new_ctx),
+            })
+        }
+
+        /// Returns a new TaskContext with the given RuntimeEnv. Does not
+        /// consume self; a fresh TaskContext is constructed from this one's
+        /// fields.
+        pub fn with_runtime(&self, rt: &DfRuntimeEnv) -> Box<DfTaskContext> {
+            let new_ctx = super::clone_task_context(&self.ctx).with_runtime(Arc::clone(&rt.rt_env));
+            Box::new(DfTaskContext {
+                ctx: Arc::new(new_ctx),
+            })
+        }
+    }
+
+    // ============================================================================
     // DfSessionContext
     // ============================================================================
 
@@ -3148,6 +3305,23 @@ pub mod ffi {
             Ok(())
         }
     }
+}
+
+/// Clone a TaskContext by re-constructing it from its field accessors.
+/// `TaskContext` does not impl `Clone` in DataFusion 52.1 so we build a new
+/// one. Used by `DfTaskContext::with_session_config` / `with_runtime`.
+fn clone_task_context(
+    ctx: &datafusion::execution::TaskContext,
+) -> datafusion::execution::TaskContext {
+    datafusion::execution::TaskContext::new(
+        ctx.task_id().map(|s| s.to_string()),
+        ctx.session_id().to_string(),
+        ctx.session_config().clone(),
+        ctx.scalar_functions().clone(),
+        ctx.aggregate_functions().clone(),
+        ctx.window_functions().clone(),
+        std::sync::Arc::clone(&ctx.runtime_env()),
+    )
 }
 
 impl ffi::DfExprBytes {

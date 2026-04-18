@@ -16,6 +16,7 @@ import org.apache.arrow.datafusion.catalog.SchemaProvider;
 import org.apache.arrow.datafusion.catalog.Session;
 import org.apache.arrow.datafusion.execution.SessionContext;
 import org.apache.arrow.datafusion.execution.SessionState;
+import org.apache.arrow.datafusion.execution.TaskContext;
 import org.apache.arrow.datafusion.catalog.ScanArgs;
 import org.apache.arrow.datafusion.catalog.TableProvider;
 import org.apache.arrow.memory.BufferAllocator;
@@ -313,7 +314,8 @@ public class GraalNativeImageTest {
     }
 
     @Override
-    public RecordBatchReader execute(int partition, BufferAllocator allocator) {
+    public RecordBatchReader execute(
+        int partition, TaskContext taskContext, BufferAllocator allocator) {
       return new SimpleRecordBatchReader(schema, allocator);
     }
   }
