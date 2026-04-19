@@ -5,22 +5,21 @@ pub mod ffi {
     use arrow::datatypes::Schema as ArrowSchema;
     use arrow::ffi::{from_ffi, to_ffi, FFI_ArrowArray, FFI_ArrowSchema};
     use arrow::record_batch::RecordBatch;
-    use datafusion::common::{DFSchema, DataFusionError, JoinConstraint, JoinType, NullEquality};
+    use datafusion::common::{DFSchema, DataFusionError, JoinType};
     use datafusion::datasource::MemTable;
     use datafusion::execution::config::SessionConfig;
     use datafusion::execution::context::SessionContext;
     use datafusion::execution::runtime_env::RuntimeEnv;
     use datafusion::execution::SessionState;
-    use datafusion::logical_expr::dml::WriteOp;
     use datafusion::logical_expr::{
-        DdlStatement, Distinct, Expr, LogicalPlan, LogicalPlanBuilder, SortExpr,
-        Statement as DfStatementEnum,
-        TransactionAccessMode, TransactionConclusion, TransactionIsolationLevel,
+        DdlStatement, Expr, LogicalPlan, LogicalPlanBuilder, SortExpr,
+        Statement as DfStatementEnum, TransactionAccessMode, TransactionConclusion,
+        TransactionIsolationLevel,
     };
     use datafusion_proto::logical_plan::from_proto::{parse_exprs, parse_sorts};
-    use datafusion_proto::logical_plan::to_proto::{serialize_exprs, serialize_sorts};
-    use datafusion_proto::logical_plan::DefaultLogicalExtensionCodec;
-    use datafusion_proto::protobuf::{LogicalExprList, SortExprNodeCollection};
+    use datafusion_proto::logical_plan::to_proto::serialize_exprs;
+    use datafusion_proto::logical_plan::{AsLogicalPlan, DefaultLogicalExtensionCodec};
+    use datafusion_proto::protobuf::{LogicalExprList, LogicalPlanNode, SortExprNodeCollection};
     use diplomat_runtime::{DiplomatStr, DiplomatStrSlice, DiplomatWrite};
     use prost::Message;
     use std::collections::HashMap;
@@ -162,16 +161,6 @@ pub mod ffi {
         Rollback,
     }
 
-    /// DML write operation type.
-    pub enum DfWriteOp {
-        InsertAppend,
-        InsertOverwrite,
-        InsertReplace,
-        Delete,
-        Update,
-        Ctas,
-    }
-
     /// Discriminant for DDL sub-variants.
     pub enum DfDdlKind {
         CreateExternalTable,
@@ -216,17 +205,6 @@ pub mod ffi {
         RecursiveQuery,
     }
 
-    /// Join constraint type (ON vs USING).
-    pub enum DfJoinConstraint {
-        On,
-        Using,
-    }
-
-    /// Null equality semantics for joins.
-    pub enum DfNullEquality {
-        NullEqualsNothing,
-        NullEqualsNull,
-    }
 
     /// A source-code span with start/end line and column.
     #[diplomat::attr(auto, abi_compatible)]
@@ -614,16 +592,6 @@ pub mod ffi {
             Ok(DfExprBytes::from_bytes(proto_list.encode_to_vec()))
         }
 
-        /// Construct from sort expressions, serialized as protobuf `SortExprNodeCollection`.
-        fn from_sort_exprs(sort_exprs: &[SortExpr]) -> Result<Box<DfExprBytes>, Box<DfError>> {
-            let codec = DefaultLogicalExtensionCodec {};
-            let nodes = serialize_sorts(sort_exprs, &codec)?;
-            let collection = SortExprNodeCollection {
-                sort_expr_nodes: nodes,
-            };
-            Ok(DfExprBytes::from_bytes(collection.encode_to_vec()))
-        }
-
         /// Construct an empty `DfExprBytes` (no data).
         fn empty() -> Box<DfExprBytes> {
             Box::new(DfExprBytes { bytes: Vec::new() })
@@ -975,162 +943,30 @@ pub mod ffi {
             self.plan.contains_outer_reference()
         }
 
-        // ── Variant-specific accessors ──
-
-        // -- Filter --
-
-        /// Filter predicate as proto bytes. Errors if not a Filter.
-        pub fn filter_predicate_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
-            if let LogicalPlan::Filter(f) = &self.plan {
-                DfExprBytes::from_exprs(&[f.predicate.clone()])
-            } else {
-                Err("Not a Filter".into())
-            }
+        /// Serialize this plan node (recursively, including all children) as a
+        /// protobuf `LogicalPlanNode`. Returns an error for variants that
+        /// `datafusion-proto` cannot encode (Statement, CreateMemoryTable,
+        /// CreateIndex, DropTable, DropCatalogSchema, CreateFunction,
+        /// DropFunction, Subquery, DescribeTable, Extension) — Java falls
+        /// back to variant-specific accessors in that case.
+        ///
+        /// Uses [`crate::logical_plan::JavaSerializationCodec`], which emits
+        /// empty bytes for custom table providers (e.g. `MemTable`). The Java
+        /// side never round-trips these bytes back to Rust — it reads the
+        /// fields it cares about via variant-specific bridge accessors — so
+        /// the table-provider encoded form can safely be empty.
+        pub fn to_proto_bytes(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
+            let codec = crate::logical_plan::JavaSerializationCodec;
+            let node = LogicalPlanNode::try_from_logical_plan(&self.plan, &codec)?;
+            Ok(DfExprBytes::from_bytes(node.encode_to_vec()))
         }
 
-        // -- Sort --
-
-        /// Sort expressions as proto bytes (SortExprNodeCollection). Errors if not a Sort.
-        pub fn sort_exprs_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
-            if let LogicalPlan::Sort(s) = &self.plan {
-                DfExprBytes::from_sort_exprs(&s.expr)
-            } else {
-                Err("Not a Sort".into())
-            }
-        }
-
-        /// Sort fetch limit, or -1 if none. Errors if not a Sort.
-        pub fn sort_fetch(&self) -> i64 {
-            if let LogicalPlan::Sort(s) = &self.plan {
-                s.fetch.map_or(-1, |n| n as i64)
-            } else {
-                -1
-            }
-        }
-
-        // -- Join --
-
-        /// Join type. Errors if not a Join.
-        pub fn join_type(&self) -> Result<DfJoinType, Box<DfError>> {
-            if let LogicalPlan::Join(j) = &self.plan {
-                Ok(match j.join_type {
-                    JoinType::Inner => DfJoinType::Inner,
-                    JoinType::Left => DfJoinType::Left,
-                    JoinType::Right => DfJoinType::Right,
-                    JoinType::Full => DfJoinType::Full,
-                    JoinType::LeftSemi => DfJoinType::LeftSemi,
-                    JoinType::LeftAnti => DfJoinType::LeftAnti,
-                    JoinType::RightSemi => DfJoinType::RightSemi,
-                    JoinType::RightAnti => DfJoinType::RightAnti,
-                    // LeftMark and RightMark map to closest existing variants
-                    _ => DfJoinType::Inner,
-                })
-            } else {
-                Err("Not a Join".into())
-            }
-        }
-
-        /// Join constraint (ON or USING). Errors if not a Join.
-        pub fn join_constraint(&self) -> Result<DfJoinConstraint, Box<DfError>> {
-            if let LogicalPlan::Join(j) = &self.plan {
-                Ok(match j.join_constraint {
-                    JoinConstraint::On => DfJoinConstraint::On,
-                    JoinConstraint::Using => DfJoinConstraint::Using,
-                })
-            } else {
-                Err("Not a Join".into())
-            }
-        }
-
-        /// Left-side equijoin key expressions as proto bytes. Errors if not a Join.
-        pub fn join_on_left_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
-            if let LogicalPlan::Join(j) = &self.plan {
-                let left_exprs: Vec<Expr> = j.on.iter().map(|(l, _)| l.clone()).collect();
-                DfExprBytes::from_exprs(&left_exprs)
-            } else {
-                Err("Not a Join".into())
-            }
-        }
-
-        /// Right-side equijoin key expressions as proto bytes. Errors if not a Join.
-        pub fn join_on_right_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
-            if let LogicalPlan::Join(j) = &self.plan {
-                let right_exprs: Vec<Expr> = j.on.iter().map(|(_, r)| r.clone()).collect();
-                DfExprBytes::from_exprs(&right_exprs)
-            } else {
-                Err("Not a Join".into())
-            }
-        }
-
-        /// Join filter (non-equi condition) as proto bytes, empty if none. Errors if not a Join.
-        pub fn join_filter_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
-            if let LogicalPlan::Join(j) = &self.plan {
-                match &j.filter {
-                    Some(f) => DfExprBytes::from_exprs(&[f.clone()]),
-                    None => Ok(DfExprBytes::empty()),
-                }
-            } else {
-                Err("Not a Join".into())
-            }
-        }
-
-        /// Null equality semantics. Errors if not a Join.
-        pub fn join_null_equality(&self) -> Result<DfNullEquality, Box<DfError>> {
-            if let LogicalPlan::Join(j) = &self.plan {
-                Ok(match j.null_equality {
-                    NullEquality::NullEqualsNothing => DfNullEquality::NullEqualsNothing,
-                    NullEquality::NullEqualsNull => DfNullEquality::NullEqualsNull,
-                })
-            } else {
-                Err("Not a Join".into())
-            }
-        }
-
-        // -- Aggregate --
-
-        /// Aggregate grouping expressions as proto bytes. Errors if not an Aggregate.
-        pub fn aggregate_group_exprs_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
-            if let LogicalPlan::Aggregate(a) = &self.plan {
-                DfExprBytes::from_exprs(&a.group_expr)
-            } else {
-                Err("Not an Aggregate".into())
-            }
-        }
-
-        /// Aggregate function expressions as proto bytes. Errors if not an Aggregate.
-        pub fn aggregate_aggr_exprs_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
-            if let LogicalPlan::Aggregate(a) = &self.plan {
-                DfExprBytes::from_exprs(&a.aggr_expr)
-            } else {
-                Err("Not an Aggregate".into())
-            }
-        }
-
-        // -- Limit --
-
-        /// Limit skip expression as proto bytes, empty if none. Errors if not a Limit.
-        pub fn limit_skip_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
-            if let LogicalPlan::Limit(l) = &self.plan {
-                match &l.skip {
-                    Some(expr) => DfExprBytes::from_exprs(&[*expr.clone()]),
-                    None => Ok(DfExprBytes::empty()),
-                }
-            } else {
-                Err("Not a Limit".into())
-            }
-        }
-
-        /// Limit fetch expression as proto bytes, empty if none. Errors if not a Limit.
-        pub fn limit_fetch_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
-            if let LogicalPlan::Limit(l) = &self.plan {
-                match &l.fetch {
-                    Some(expr) => DfExprBytes::from_exprs(&[*expr.clone()]),
-                    None => Ok(DfExprBytes::empty()),
-                }
-            } else {
-                Err("Not a Limit".into())
-            }
-        }
+        // ── Variant-specific accessors (fallback paths only) ──
+        //
+        // Most LogicalPlan variants are materialized on the Java side by decoding the proto bytes
+        // returned by `to_proto_bytes`. The only accessors that remain here are the ones used by
+        // the TableScan fallback (the proto representation is lossy) and the unsupported-variant
+        // fallback (Statement and a subset of DDL variants that `datafusion-proto` cannot encode).
 
         // -- TableScan --
 
@@ -1216,144 +1052,6 @@ pub mod ffi {
                 DfExprBytes::from_exprs(&ts.filters)
             } else {
                 Err("Not a TableScan".into())
-            }
-        }
-
-        // -- EmptyRelation --
-
-        /// Whether the EmptyRelation produces one row.
-        pub fn empty_relation_produce_one_row(&self) -> bool {
-            if let LogicalPlan::EmptyRelation(e) = &self.plan {
-                e.produce_one_row
-            } else {
-                false
-            }
-        }
-
-        // -- SubqueryAlias --
-
-        /// SubqueryAlias alias name. Writes empty if not a SubqueryAlias.
-        pub fn subquery_alias_name(&self, write: &mut DiplomatWrite) {
-            if let LogicalPlan::SubqueryAlias(sa) = &self.plan {
-                let _ = write!(write, "{}", sa.alias.table());
-            }
-        }
-
-        // -- Explain --
-
-        /// Whether the Explain is verbose.
-        pub fn explain_verbose(&self) -> bool {
-            if let LogicalPlan::Explain(e) = &self.plan {
-                e.verbose
-            } else {
-                false
-            }
-        }
-
-        // -- Analyze --
-
-        /// Whether the Analyze is verbose.
-        pub fn analyze_verbose(&self) -> bool {
-            if let LogicalPlan::Analyze(a) = &self.plan {
-                a.verbose
-            } else {
-                false
-            }
-        }
-
-        // -- RecursiveQuery --
-
-        /// RecursiveQuery name. Writes empty if not a RecursiveQuery.
-        pub fn recursive_query_name(&self, write: &mut DiplomatWrite) {
-            if let LogicalPlan::RecursiveQuery(rq) = &self.plan {
-                let _ = write!(write, "{}", rq.name);
-            }
-        }
-
-        /// Whether the RecursiveQuery is distinct (UNION vs UNION ALL).
-        pub fn recursive_query_is_distinct(&self) -> bool {
-            if let LogicalPlan::RecursiveQuery(rq) = &self.plan {
-                rq.is_distinct
-            } else {
-                false
-            }
-        }
-
-        // -- Distinct --
-
-        /// Whether this Distinct is a Distinct::On (vs Distinct::All).
-        pub fn distinct_is_on(&self) -> bool {
-            matches!(&self.plan, LogicalPlan::Distinct(Distinct::On(_)))
-        }
-
-        /// DistinctOn ON expressions as proto bytes. Errors if not Distinct::On.
-        pub fn distinct_on_on_exprs_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
-            if let LogicalPlan::Distinct(Distinct::On(d)) = &self.plan {
-                DfExprBytes::from_exprs(&d.on_expr)
-            } else {
-                Err("Not a Distinct::On".into())
-            }
-        }
-
-        /// DistinctOn SELECT expressions as proto bytes. Errors if not Distinct::On.
-        pub fn distinct_on_select_exprs_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
-            if let LogicalPlan::Distinct(Distinct::On(d)) = &self.plan {
-                DfExprBytes::from_exprs(&d.select_expr)
-            } else {
-                Err("Not a Distinct::On".into())
-            }
-        }
-
-        /// DistinctOn sort expressions as proto bytes, empty if none.
-        pub fn distinct_on_sort_exprs_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
-            if let LogicalPlan::Distinct(Distinct::On(d)) = &self.plan {
-                match &d.sort_expr {
-                    Some(sort_exprs) => DfExprBytes::from_sort_exprs(sort_exprs),
-                    None => Ok(DfExprBytes::empty()),
-                }
-            } else {
-                Err("Not a Distinct::On".into())
-            }
-        }
-
-        // -- Values --
-
-        /// Number of rows in the Values node.
-        pub fn values_row_count(&self) -> i64 {
-            if let LogicalPlan::Values(v) = &self.plan {
-                v.values.len() as i64
-            } else {
-                0
-            }
-        }
-
-        /// Number of columns in the Values node.
-        pub fn values_col_count(&self) -> i64 {
-            if let LogicalPlan::Values(v) = &self.plan {
-                v.values.first().map_or(0, |row| row.len()) as i64
-            } else {
-                0
-            }
-        }
-
-        /// All Values expressions flattened row-major as proto bytes.
-        pub fn values_all_exprs_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
-            if let LogicalPlan::Values(v) = &self.plan {
-                let flat: Vec<Expr> = v.values.iter().flatten().cloned().collect();
-                DfExprBytes::from_exprs(&flat)
-            } else {
-                Err("Not a Values".into())
-            }
-        }
-
-        // -- Window --
-
-        /// Window expressions as proto bytes. Errors if not a Window.
-        pub fn window_exprs_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
-            if let LogicalPlan::Window(w) = &self.plan {
-                DfExprBytes::from_exprs(&w.window_expr)
-            } else {
-                Err("Not a Window".into())
             }
         }
 
@@ -1523,55 +1221,6 @@ pub mod ffi {
             Err("Not a Statement::Deallocate".into())
         }
 
-        // -- Dml --
-
-        /// DML write operation type.
-        pub fn dml_write_op(&self) -> Result<DfWriteOp, Box<DfError>> {
-            if let LogicalPlan::Dml(dml) = &self.plan {
-                use datafusion::logical_expr::dml::InsertOp;
-                Ok(match &dml.op {
-                    WriteOp::Insert(InsertOp::Append) => DfWriteOp::InsertAppend,
-                    WriteOp::Insert(InsertOp::Overwrite) => DfWriteOp::InsertOverwrite,
-                    WriteOp::Insert(InsertOp::Replace) => DfWriteOp::InsertReplace,
-                    WriteOp::Delete => DfWriteOp::Delete,
-                    WriteOp::Update => DfWriteOp::Update,
-                    WriteOp::Ctas => DfWriteOp::Ctas,
-                })
-            } else {
-                Err("Not a Dml".into())
-            }
-        }
-
-        /// DML table reference type.
-        pub fn dml_table_ref_type(&self) -> DfTableRefType {
-            if let LogicalPlan::Dml(dml) = &self.plan {
-                table_ref_type(&dml.table_name)
-            } else {
-                DfTableRefType::None
-            }
-        }
-
-        /// DML table name.
-        pub fn dml_table_name(&self, write: &mut DiplomatWrite) {
-            if let LogicalPlan::Dml(dml) = &self.plan {
-                write_table_name(&dml.table_name, write);
-            }
-        }
-
-        /// DML table schema name (for Partial/Full refs).
-        pub fn dml_table_schema_name(&self, write: &mut DiplomatWrite) {
-            if let LogicalPlan::Dml(dml) = &self.plan {
-                write_table_schema(&dml.table_name, write);
-            }
-        }
-
-        /// DML table catalog name (for Full refs).
-        pub fn dml_table_catalog_name(&self, write: &mut DiplomatWrite) {
-            if let LogicalPlan::Dml(dml) = &self.plan {
-                write_table_catalog(&dml.table_name, write);
-            }
-        }
-
         // -- Ddl --
 
         /// DDL sub-variant kind.
@@ -1737,47 +1386,6 @@ pub mod ffi {
             Err("Not a Ddl::DropCatalogSchema".into())
         }
 
-        /// DDL CreateExternalTable location.
-        pub fn ddl_location(&self, write: &mut DiplomatWrite) -> Result<(), Box<DfError>> {
-            if let LogicalPlan::Ddl(DdlStatement::CreateExternalTable(t)) = &self.plan {
-                let _ = write!(write, "{}", t.location);
-                Ok(())
-            } else {
-                Err("Not a Ddl::CreateExternalTable".into())
-            }
-        }
-
-        /// DDL CreateExternalTable file_type.
-        pub fn ddl_file_type(&self, write: &mut DiplomatWrite) -> Result<(), Box<DfError>> {
-            if let LogicalPlan::Ddl(DdlStatement::CreateExternalTable(t)) = &self.plan {
-                let _ = write!(write, "{}", t.file_type);
-                Ok(())
-            } else {
-                Err("Not a Ddl::CreateExternalTable".into())
-            }
-        }
-
-        /// DDL CreateView definition string, or empty if none.
-        pub fn ddl_view_definition(&self, write: &mut DiplomatWrite) -> Result<(), Box<DfError>> {
-            if let LogicalPlan::Ddl(DdlStatement::CreateView(v)) = &self.plan {
-                if let Some(def) = &v.definition {
-                    let _ = write!(write, "{}", def);
-                }
-                Ok(())
-            } else {
-                Err("Not a Ddl::CreateView".into())
-            }
-        }
-
-        /// DDL CreateView has definition flag.
-        pub fn ddl_view_has_definition(&self) -> bool {
-            if let LogicalPlan::Ddl(DdlStatement::CreateView(v)) = &self.plan {
-                v.definition.is_some()
-            } else {
-                false
-            }
-        }
-
         /// DDL CreateIndex has name flag.
         pub fn ddl_index_has_name(&self) -> bool {
             if let LogicalPlan::Ddl(DdlStatement::CreateIndex(i)) = &self.plan {
@@ -1827,40 +1435,10 @@ pub mod ffi {
         }
     }
 
-    // ============================================================================
-    // TableReference helpers
-    // ============================================================================
-
-    fn table_ref_type(tr: &datafusion::common::TableReference) -> DfTableRefType {
-        use datafusion::common::TableReference;
-        match tr {
-            TableReference::Bare { .. } => DfTableRefType::Bare,
-            TableReference::Partial { .. } => DfTableRefType::Partial,
-            TableReference::Full { .. } => DfTableRefType::Full,
-        }
-    }
-
-    fn write_table_name(tr: &datafusion::common::TableReference, write: &mut DiplomatWrite) {
-        let _ = write!(write, "{}", tr.table());
-    }
-
-    fn write_table_schema(tr: &datafusion::common::TableReference, write: &mut DiplomatWrite) {
-        use datafusion::common::TableReference;
-        match tr {
-            TableReference::Partial { schema, .. }
-            | TableReference::Full { schema, .. } => {
-                let _ = write!(write, "{}", schema);
-            }
-            _ => {}
-        }
-    }
-
-    fn write_table_catalog(tr: &datafusion::common::TableReference, write: &mut DiplomatWrite) {
-        use datafusion::common::TableReference;
-        if let TableReference::Full { catalog, .. } = tr {
-            let _ = write!(write, "{}", catalog);
-        }
-    }
+    // TableReference helpers live in `crate::logical_plan`.
+    use crate::logical_plan::{
+        table_ref_type, write_table_catalog, write_table_name, write_table_schema,
+    };
 
     // ============================================================================
     // DfLogicalPlanBuilder

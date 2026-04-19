@@ -53,12 +53,12 @@ public final class LogicalPlanBridge implements AutoCloseable {
 
   // ── Common methods ──
 
-  DfLogicalPlanKind kind() {
+  public DfLogicalPlanKind kind() {
     checkNotClosed();
     return dfPlan.kind();
   }
 
-  Schema schema() {
+  public Schema schema() {
     checkNotClosed();
     try (RootAllocator tempAllocator = new RootAllocator();
         ArrowSchema ffiSchema = ArrowSchema.allocateNew(tempAllocator)) {
@@ -71,23 +71,18 @@ public final class LogicalPlanBridge implements AutoCloseable {
     }
   }
 
-  int inputsCount() {
+  public int inputsCount() {
     checkNotClosed();
     return (int) dfPlan.inputsCount();
   }
 
-  LogicalPlanBridge inputAt(int index) {
+  public LogicalPlanBridge inputAt(int index) {
     checkNotClosed();
     try {
       return new LogicalPlanBridge(dfPlan.inputAt(index));
     } catch (DfError e) {
       throw new NativeDataFusionError(e);
     }
-  }
-
-  List<Expr> expressions() {
-    checkNotClosed();
-    return readExprs(dfPlan.expressionsProto());
   }
 
   String displayIndent() {
@@ -126,95 +121,29 @@ public final class LogicalPlanBridge implements AutoCloseable {
     return dfPlan.containsOuterReference();
   }
 
-  // ── Variant-specific accessors ──
-
-  // -- Filter --
-  Expr filterPredicate() {
-    return readExprs(dfPlan.filterPredicateProto()).get(0);
-  }
-
-  // -- Sort --
-  List<SortExpr> sortExprs() {
-    return readSortExprs(dfPlan.sortExprsProto());
-  }
-
-  OptionalLong sortFetch() {
-    long val = dfPlan.sortFetch();
-    return val < 0 ? OptionalLong.empty() : OptionalLong.of(val);
-  }
-
-  // -- Join --
-  JoinType joinType() {
-    try {
-      return switch (dfPlan.joinType()) {
-        case INNER -> JoinType.INNER;
-        case LEFT -> JoinType.LEFT;
-        case RIGHT -> JoinType.RIGHT;
-        case FULL -> JoinType.FULL;
-        case LEFT_SEMI -> JoinType.LEFT_SEMI;
-        case LEFT_ANTI -> JoinType.LEFT_ANTI;
-        case RIGHT_SEMI -> JoinType.RIGHT_SEMI;
-        case RIGHT_ANTI -> JoinType.RIGHT_ANTI;
-      };
+  /**
+   * Serialize this plan node (recursively, including all children) as a protobuf {@code
+   * LogicalPlanNode}. Returns {@code null} when {@code datafusion-proto} cannot encode the variant
+   * (Statement, CreateMemoryTable, CreateIndex, DropTable, DropCatalogSchema, CreateFunction,
+   * DropFunction) — callers fall back to variant-specific accessors in that case.
+   */
+  public byte[] toProtoBytesOrNull() {
+    checkNotClosed();
+    try (DfExprBytes bytes = dfPlan.toProtoBytes()) {
+      return readRawBytes(bytes);
     } catch (DfError e) {
-      throw new NativeDataFusionError(e);
+      try (e) {
+        return null;
+      }
     }
   }
 
-  JoinConstraint joinConstraint() {
-    try {
-      return switch (dfPlan.joinConstraint()) {
-        case ON -> JoinConstraint.ON;
-        case USING -> JoinConstraint.USING;
-      };
-    } catch (DfError e) {
-      throw new NativeDataFusionError(e);
-    }
-  }
-
-  List<Expr> joinOnLeftKeys() {
-    return readExprs(dfPlan.joinOnLeftProto());
-  }
-
-  List<Expr> joinOnRightKeys() {
-    return readExprs(dfPlan.joinOnRightProto());
-  }
-
-  Optional<Expr> joinFilter() {
-    List<Expr> exprs = readExprs(dfPlan.joinFilterProto());
-    return exprs.isEmpty() ? Optional.empty() : Optional.of(exprs.get(0));
-  }
-
-  NullEquality joinNullEquality() {
-    try {
-      return switch (dfPlan.joinNullEquality()) {
-        case NULL_EQUALS_NOTHING -> NullEquality.NULL_EQUALS_NOTHING;
-        case NULL_EQUALS_NULL -> NullEquality.NULL_EQUALS_NULL;
-      };
-    } catch (DfError e) {
-      throw new NativeDataFusionError(e);
-    }
-  }
-
-  // -- Aggregate --
-  List<Expr> aggregateGroupExprs() {
-    return readExprs(dfPlan.aggregateGroupExprsProto());
-  }
-
-  List<Expr> aggregateAggrExprs() {
-    return readExprs(dfPlan.aggregateAggrExprsProto());
-  }
-
-  // -- Limit --
-  Optional<Expr> limitSkip() {
-    List<Expr> exprs = readExprs(dfPlan.limitSkipProto());
-    return exprs.isEmpty() ? Optional.empty() : Optional.of(exprs.get(0));
-  }
-
-  Optional<Expr> limitFetch() {
-    List<Expr> exprs = readExprs(dfPlan.limitFetchProto());
-    return exprs.isEmpty() ? Optional.empty() : Optional.of(exprs.get(0));
-  }
+  // ── Variant-specific accessors (fallback paths only) ──
+  //
+  // Most LogicalPlan variants are materialized via the proto converter. The only accessors that
+  // remain here are the ones used by {@link LogicalPlan#fromBridgeTableScan} (TableScan — the
+  // proto representation is lossy) and {@link LogicalPlan#fromBridgeUnsupported} (Statement and a
+  // subset of DDL variants that {@code datafusion-proto} cannot encode).
 
   // -- TableScan --
   TableReference tableScanTableName() {
@@ -259,85 +188,6 @@ public final class LogicalPlanBridge implements AutoCloseable {
 
   List<Expr> tableScanFilters() {
     return readExprs(dfPlan.tableScanFiltersProto());
-  }
-
-  // -- EmptyRelation --
-  boolean emptyRelationProduceOneRow() {
-    return dfPlan.emptyRelationProduceOneRow();
-  }
-
-  // -- SubqueryAlias --
-  String subqueryAliasName() {
-    return dfPlan.subqueryAliasName();
-  }
-
-  // -- Explain --
-  boolean explainVerbose() {
-    return dfPlan.explainVerbose();
-  }
-
-  // -- Analyze --
-  boolean analyzeVerbose() {
-    return dfPlan.analyzeVerbose();
-  }
-
-  // -- RecursiveQuery --
-  String recursiveQueryName() {
-    return dfPlan.recursiveQueryName();
-  }
-
-  boolean recursiveQueryIsDistinct() {
-    return dfPlan.recursiveQueryIsDistinct();
-  }
-
-  // -- Distinct --
-  boolean distinctIsOn() {
-    return dfPlan.distinctIsOn();
-  }
-
-  List<Expr> distinctOnOnExprs() {
-    return readExprs(dfPlan.distinctOnOnExprsProto());
-  }
-
-  List<Expr> distinctOnSelectExprs() {
-    return readExprs(dfPlan.distinctOnSelectExprsProto());
-  }
-
-  Optional<List<SortExpr>> distinctOnSortExprs() {
-    List<SortExpr> exprs = readSortExprs(dfPlan.distinctOnSortExprsProto());
-    return exprs.isEmpty() ? Optional.empty() : Optional.of(exprs);
-  }
-
-  // -- Values --
-  int valuesRowCount() {
-    return (int) dfPlan.valuesRowCount();
-  }
-
-  int valuesColCount() {
-    return (int) dfPlan.valuesColCount();
-  }
-
-  List<List<Expr>> valuesExprs() {
-    List<Expr> flat = readExprs(dfPlan.valuesAllExprsProto());
-    int rows = valuesRowCount();
-    int cols = valuesColCount();
-    if (rows == 0 || cols == 0) {
-      return List.of();
-    }
-    List<List<Expr>> result = new ArrayList<>(rows);
-    for (int r = 0; r < rows; r++) {
-      List<Expr> row = new ArrayList<>(cols);
-      for (int c = 0; c < cols; c++) {
-        row.add(flat.get(r * cols + c));
-      }
-      result.add(List.copyOf(row));
-    }
-    return List.copyOf(result);
-  }
-
-  // -- Window --
-  List<Expr> windowExprs() {
-    return readExprs(dfPlan.windowExprsProto());
   }
 
   // -- Statement --
@@ -457,31 +307,7 @@ public final class LogicalPlanBridge implements AutoCloseable {
     }
   }
 
-  // -- Dml --
-  WriteOp dmlWriteOp() {
-    try {
-      return switch (dfPlan.dmlWriteOp()) {
-        case INSERT_APPEND -> WriteOp.INSERT_APPEND;
-        case INSERT_OVERWRITE -> WriteOp.INSERT_OVERWRITE;
-        case INSERT_REPLACE -> WriteOp.INSERT_REPLACE;
-        case DELETE -> WriteOp.DELETE;
-        case UPDATE -> WriteOp.UPDATE;
-        case CTAS -> WriteOp.CTAS;
-      };
-    } catch (DfError e) {
-      throw new NativeDataFusionError(e);
-    }
-  }
-
-  TableReference dmlTableName() {
-    return buildTableRef(
-        dfPlan.dmlTableRefType(),
-        dfPlan.dmlTableName(),
-        dfPlan.dmlTableSchemaName(),
-        dfPlan.dmlTableCatalogName());
-  }
-
-  // -- Ddl --
+  // -- Ddl (unsupported sub-kinds only) --
   DfDdlKind ddlKind() {
     try {
       return dfPlan.ddlKind();
@@ -541,33 +367,6 @@ public final class LogicalPlanBridge implements AutoCloseable {
   boolean ddlCascade() {
     try {
       return dfPlan.ddlCascade();
-    } catch (DfError e) {
-      throw new NativeDataFusionError(e);
-    }
-  }
-
-  String ddlLocation() {
-    try {
-      return dfPlan.ddlLocation();
-    } catch (DfError e) {
-      throw new NativeDataFusionError(e);
-    }
-  }
-
-  String ddlFileType() {
-    try {
-      return dfPlan.ddlFileType();
-    } catch (DfError e) {
-      throw new NativeDataFusionError(e);
-    }
-  }
-
-  Optional<String> ddlViewDefinition() {
-    if (!dfPlan.ddlViewHasDefinition()) {
-      return Optional.empty();
-    }
-    try {
-      return Optional.of(dfPlan.ddlViewDefinition());
     } catch (DfError e) {
       throw new NativeDataFusionError(e);
     }

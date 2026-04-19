@@ -110,7 +110,9 @@ public class DocsValidationDoclet implements Doclet {
           "builder",
           "of",
           "bridge",
-          "fromBridge");
+          "fromBridge",
+          "fromBridgeTableScan",
+          "fromBridgeUnsupported");
 
   /** Per-class method exclusions for methods with no Rust equivalent. */
   private static final Map<String, Set<String>> CLASS_METHOD_EXCLUSIONS =

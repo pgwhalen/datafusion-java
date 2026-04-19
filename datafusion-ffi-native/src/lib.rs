@@ -4,6 +4,7 @@ mod catalog;
 mod file_format;
 mod file_opener;
 mod file_source;
+mod logical_plan;
 mod execution_plan;
 mod schema;
 mod stream;

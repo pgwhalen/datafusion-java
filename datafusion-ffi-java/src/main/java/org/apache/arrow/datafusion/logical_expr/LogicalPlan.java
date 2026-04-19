@@ -194,101 +194,46 @@ public sealed interface LogicalPlan extends AutoCloseable {
   /**
    * Creates a LogicalPlan sealed interface variant from a bridge.
    *
-   * <p>This recursively materializes the entire plan tree.
+   * <p>This recursively materializes the entire plan tree. Variants that {@code datafusion-proto}
+   * supports are materialized via {@link
+   * org.apache.arrow.datafusion.LogicalPlanProtoConverter#fromBridge} (one FFI call per node
+   * returns proto bytes, the rest of the fields are decoded in Java). Variants that proto cannot
+   * encode — TableScan (lossy), Statement, Subquery, DescribeTable, Extension, and the subset of
+   * DDL variants listed in {@link #fromBridgeUnsupported} — fall through to variant-specific
+   * bridge accessors.
    *
    * @param bridge the bridge wrapping the native plan
    * @return the appropriate variant record
    */
   static LogicalPlan fromBridge(LogicalPlanBridge bridge) {
+    return org.apache.arrow.datafusion.LogicalPlanProtoConverter.fromBridge(bridge);
+  }
+
+  /**
+   * TableScan fallback: proto serialization loses projection indices and fetch, so we use
+   * variant-specific bridge accessors instead. Called by {@code LogicalPlanProtoConverter} when it
+   * sees a {@code ListingScan}, {@code ViewScan}, {@code CustomScan}, or {@code CteWorkTableScan}
+   * proto variant.
+   */
+  static LogicalPlan fromBridgeTableScan(LogicalPlanBridge bridge) {
+    Schema schema = bridge.schema();
+    TableReference tableName = bridge.tableScanTableName();
+    Optional<List<Integer>> projection = bridge.tableScanProjection();
+    List<Expr> filters = bridge.tableScanFilters();
+    OptionalLong fetch = bridge.tableScanFetch();
+    return new TableScan(tableName, projection, filters, fetch, schema, bridge);
+  }
+
+  /**
+   * Fallback for plan variants that {@code datafusion-proto} cannot encode: all {@link Statement}
+   * variants, {@link Subquery}, {@link DescribeTable}, {@link Extension}, and the DDL variants
+   * {@code CreateMemoryTable}, {@code CreateIndex}, {@code DropTable}, {@code DropCatalogSchema},
+   * {@code CreateFunction}, {@code DropFunction}.
+   */
+  static LogicalPlan fromBridgeUnsupported(LogicalPlanBridge bridge) {
     DfLogicalPlanKind kind = bridge.kind();
     Schema schema = bridge.schema();
     return switch (kind) {
-      case PROJECTION -> {
-        List<Expr> exprs = bridge.expressions();
-        LogicalPlan input = fromBridge(bridge.inputAt(0));
-        yield new Projection(exprs, input, schema, bridge);
-      }
-      case FILTER -> {
-        Expr predicate = bridge.filterPredicate();
-        LogicalPlan input = fromBridge(bridge.inputAt(0));
-        yield new Filter(predicate, input, schema, bridge);
-      }
-      case WINDOW -> {
-        List<Expr> windowExprs = bridge.windowExprs();
-        LogicalPlan input = fromBridge(bridge.inputAt(0));
-        yield new Window(input, windowExprs, schema, bridge);
-      }
-      case AGGREGATE -> {
-        List<Expr> groupExprs = bridge.aggregateGroupExprs();
-        List<Expr> aggrExprs = bridge.aggregateAggrExprs();
-        LogicalPlan input = fromBridge(bridge.inputAt(0));
-        yield new Aggregate(input, groupExprs, aggrExprs, schema, bridge);
-      }
-      case SORT -> {
-        List<SortExpr> sortExprs = bridge.sortExprs();
-        OptionalLong fetch = bridge.sortFetch();
-        LogicalPlan input = fromBridge(bridge.inputAt(0));
-        yield new Sort(sortExprs, input, fetch, schema, bridge);
-      }
-      case JOIN -> {
-        LogicalPlan left = fromBridge(bridge.inputAt(0));
-        LogicalPlan right = fromBridge(bridge.inputAt(1));
-        JoinType joinType = bridge.joinType();
-        JoinConstraint joinConstraint = bridge.joinConstraint();
-        List<Expr> onLeftKeys = bridge.joinOnLeftKeys();
-        List<Expr> onRightKeys = bridge.joinOnRightKeys();
-        Optional<Expr> filter = bridge.joinFilter();
-        NullEquality nullEquality = bridge.joinNullEquality();
-        yield new Join(
-            left,
-            right,
-            joinType,
-            joinConstraint,
-            onLeftKeys,
-            onRightKeys,
-            filter,
-            nullEquality,
-            schema,
-            bridge);
-      }
-      case REPARTITION -> {
-        LogicalPlan input = fromBridge(bridge.inputAt(0));
-        yield new Repartition(input, schema, bridge);
-      }
-      case UNION -> {
-        int count = bridge.inputsCount();
-        List<LogicalPlan> inputs = new java.util.ArrayList<>(count);
-        for (int i = 0; i < count; i++) {
-          inputs.add(fromBridge(bridge.inputAt(i)));
-        }
-        yield new Union(List.copyOf(inputs), schema, bridge);
-      }
-      case TABLE_SCAN -> {
-        TableReference tableName = bridge.tableScanTableName();
-        Optional<List<Integer>> projection = bridge.tableScanProjection();
-        List<Expr> filters = bridge.tableScanFilters();
-        OptionalLong fetch = bridge.tableScanFetch();
-        yield new TableScan(tableName, projection, filters, fetch, schema, bridge);
-      }
-      case EMPTY_RELATION -> {
-        boolean produceOneRow = bridge.emptyRelationProduceOneRow();
-        yield new EmptyRelation(produceOneRow, schema, bridge);
-      }
-      case SUBQUERY -> {
-        LogicalPlan subquery = fromBridge(bridge.inputAt(0));
-        yield new Subquery(subquery, schema, bridge);
-      }
-      case SUBQUERY_ALIAS -> {
-        String alias = bridge.subqueryAliasName();
-        LogicalPlan input = fromBridge(bridge.inputAt(0));
-        yield new SubqueryAlias(input, alias, schema, bridge);
-      }
-      case LIMIT -> {
-        Optional<Expr> skipExpr = bridge.limitSkip();
-        Optional<Expr> fetchExpr = bridge.limitFetch();
-        LogicalPlan input = fromBridge(bridge.inputAt(0));
-        yield new Limit(input, skipExpr, fetchExpr, schema, bridge);
-      }
       case STATEMENT -> {
         var stmtKind = bridge.statementKind();
         yield switch (stmtKind) {
@@ -323,53 +268,9 @@ public sealed interface LogicalPlan extends AutoCloseable {
               new Statement.Deallocate(bridge.statementDeallocateName(), schema, bridge);
         };
       }
-      case VALUES -> {
-        List<List<Expr>> values = bridge.valuesExprs();
-        yield new Values(values, schema, bridge);
-      }
-      case EXPLAIN -> {
-        boolean verbose = bridge.explainVerbose();
-        LogicalPlan plan = fromBridge(bridge.inputAt(0));
-        yield new Explain(plan, verbose, schema, bridge);
-      }
-      case ANALYZE -> {
-        boolean verbose = bridge.analyzeVerbose();
-        LogicalPlan input = fromBridge(bridge.inputAt(0));
-        yield new Analyze(input, verbose, schema, bridge);
-      }
-      case EXTENSION -> new Extension(schema, bridge);
-      case DISTINCT -> {
-        boolean isOn = bridge.distinctIsOn();
-        if (isOn) {
-          List<Expr> onExprs = bridge.distinctOnOnExprs();
-          List<Expr> selectExprs = bridge.distinctOnSelectExprs();
-          Optional<List<SortExpr>> sortExprs = bridge.distinctOnSortExprs();
-          LogicalPlan input = fromBridge(bridge.inputAt(0));
-          yield new Distinct.On(onExprs, selectExprs, sortExprs, input, schema, bridge);
-        } else {
-          LogicalPlan input = fromBridge(bridge.inputAt(0));
-          yield new Distinct.All(input, schema, bridge);
-        }
-      }
-      case DML -> {
-        TableReference tableName = bridge.dmlTableName();
-        WriteOp op = bridge.dmlWriteOp();
-        LogicalPlan input = fromBridge(bridge.inputAt(0));
-        yield new Dml(tableName, op, input, schema, bridge);
-      }
       case DDL -> {
         var ddlKind = bridge.ddlKind();
         yield switch (ddlKind) {
-          case CREATE_EXTERNAL_TABLE ->
-              new Ddl.CreateExternalTable(
-                  bridge.ddlTableName(),
-                  bridge.ddlLocation(),
-                  bridge.ddlFileType(),
-                  bridge.ddlIfNotExists(),
-                  bridge.ddlOrReplace(),
-                  bridge.ddlTemporary(),
-                  schema,
-                  bridge);
           case CREATE_MEMORY_TABLE ->
               new Ddl.CreateMemoryTable(
                   bridge.ddlTableName(),
@@ -379,20 +280,6 @@ public sealed interface LogicalPlan extends AutoCloseable {
                   fromBridge(bridge.inputAt(0)),
                   schema,
                   bridge);
-          case CREATE_VIEW ->
-              new Ddl.CreateView(
-                  bridge.ddlTableName(),
-                  bridge.ddlOrReplace(),
-                  bridge.ddlViewDefinition(),
-                  bridge.ddlTemporary(),
-                  fromBridge(bridge.inputAt(0)),
-                  schema,
-                  bridge);
-          case CREATE_CATALOG_SCHEMA ->
-              new Ddl.CreateCatalogSchema(
-                  bridge.ddlName(), bridge.ddlIfNotExists(), schema, bridge);
-          case CREATE_CATALOG ->
-              new Ddl.CreateCatalog(bridge.ddlName(), bridge.ddlIfNotExists(), schema, bridge);
           case CREATE_INDEX ->
               new Ddl.CreateIndex(
                   bridge.ddlIndexHasName() ? Optional.of(bridge.ddlName()) : Optional.empty(),
@@ -403,8 +290,6 @@ public sealed interface LogicalPlan extends AutoCloseable {
                   bridge);
           case DROP_TABLE ->
               new Ddl.DropTable(bridge.ddlTableName(), bridge.ddlIfExists(), schema, bridge);
-          case DROP_VIEW ->
-              new Ddl.DropView(bridge.ddlTableName(), bridge.ddlIfExists(), schema, bridge);
           case DROP_CATALOG_SCHEMA ->
               new Ddl.DropCatalogSchema(
                   bridge.ddlName(), bridge.ddlIfExists(), bridge.ddlCascade(), schema, bridge);
@@ -413,24 +298,17 @@ public sealed interface LogicalPlan extends AutoCloseable {
                   bridge.ddlName(), bridge.ddlOrReplace(), bridge.ddlTemporary(), schema, bridge);
           case DROP_FUNCTION ->
               new Ddl.DropFunction(bridge.ddlName(), bridge.ddlIfExists(), schema, bridge);
+          default ->
+              throw new IllegalStateException(
+                  "DDL kind " + ddlKind + " should have been handled by proto converter");
         };
       }
-      case COPY -> {
-        LogicalPlan input = fromBridge(bridge.inputAt(0));
-        yield new Copy(input, schema, bridge);
-      }
+      case SUBQUERY -> new Subquery(fromBridge(bridge.inputAt(0)), schema, bridge);
       case DESCRIBE_TABLE -> new DescribeTable(schema, bridge);
-      case UNNEST -> {
-        LogicalPlan input = fromBridge(bridge.inputAt(0));
-        yield new Unnest(input, schema, bridge);
-      }
-      case RECURSIVE_QUERY -> {
-        String name = bridge.recursiveQueryName();
-        boolean isDistinct = bridge.recursiveQueryIsDistinct();
-        LogicalPlan staticTerm = fromBridge(bridge.inputAt(0));
-        LogicalPlan recursiveTerm = fromBridge(bridge.inputAt(1));
-        yield new RecursiveQuery(name, staticTerm, recursiveTerm, isDistinct, schema, bridge);
-      }
+      case EXTENSION -> new Extension(schema, bridge);
+      default ->
+          throw new IllegalStateException(
+              "LogicalPlan kind " + kind + " should have been handled by proto converter");
     };
   }
 
