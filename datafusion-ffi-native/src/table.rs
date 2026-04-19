@@ -1,5 +1,5 @@
 use crate::bridge::ffi::DfTableTrait;
-use crate::plan::ffi::DfExecutionPlan;
+use crate::execution_plan::ffi::DfExecutionPlan;
 use crate::bridge::{ffi::DfLazyRecordBatchStream, ffi::DfStringArray, LazyStreamState};
 use crate::bridge::{import_schema, ExecutionPlanBridge, TableProviderBridge};
 use crate::upcall_utils::{do_counted_upcall, do_returning_upcall, ErrorBuffer};

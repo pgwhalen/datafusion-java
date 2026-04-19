@@ -30,7 +30,7 @@ pub mod ffi {
     impl DfExecutionPlan {
         /// Create from a DfExecutionPlanTrait impl and return the raw pointer address.
         pub fn create_raw(t: impl DfExecutionPlanTrait + 'static) -> usize {
-            let wrapper = crate::plan::ForeignDfPlan::new(t);
+            let wrapper = crate::execution_plan::ForeignDfPlan::new(t);
             let boxed: Box<dyn crate::bridge::ExecutionPlanBridge> = Box::new(wrapper);
             let ptr = Box::into_raw(Box::new(DfExecutionPlan(boxed)));
             ptr as usize
