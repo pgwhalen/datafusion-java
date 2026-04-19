@@ -47,6 +47,12 @@ jobs:
           RELEASE="${SNAPSHOT%-SNAPSHOT}"
           echo "Release version: $RELEASE"
 
+          # Fail fast if this version has already been released (tag exists on origin)
+          if git ls-remote --tags origin "v$RELEASE" | grep -q "refs/tags/v$RELEASE$"; then
+            echo "::error::Version $RELEASE has already been released (tag v$RELEASE exists on origin). Bump the version in datafusion-ffi-java/build.gradle before re-running."
+            exit 1
+          fi
+
           # Compute next SNAPSHOT (increment patch)
           MAJOR=$(echo "$RELEASE" | cut -d. -f1)
           MINOR=$(echo "$RELEASE" | cut -d. -f2)

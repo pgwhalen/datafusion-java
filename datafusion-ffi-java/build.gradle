@@ -8,7 +8,7 @@ plugins {
 }
 
 group = 'io.github.datafusion-contrib'
-version = project.findProperty('releaseVersion') ?: '0.17.6-SNAPSHOT'
+version = project.findProperty('releaseVersion') ?: '0.17.7-SNAPSHOT'
 
 repositories {
     mavenCentral()
