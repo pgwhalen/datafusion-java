@@ -249,6 +249,23 @@ let filter_bytes = encode_exprs(filters)?;
 self.inner.callback(filter_bytes.as_ptr() as usize, filter_bytes.len(), ...);
 ```
 
+#### `export_schema_to` (`bridge.rs`)
+
+Writes an `ArrowSchema` as `FFI_ArrowSchema` to a Java-provided `out_addr`. Centralizes the null-address check, `FFI_ArrowSchema::try_from`, and the `unsafe { std::ptr::write(...) }`. **Always use this helper** in any bridge method that exports a schema to a Java-allocated address — do not open-code the pattern:
+
+```rust
+pub fn schema_to(&self, out_addr: usize) -> Result<(), Box<DfError>> {
+    export_schema_to(self.schema.as_ref(), out_addr)
+}
+```
+
+If the schema must be constructed first (e.g., from `Field`s), build it, then pass a reference:
+
+```rust
+let arrow_schema = ArrowSchema::new(fields);
+export_schema_to(&arrow_schema, out_addr)
+```
+
 ### NativeUtil (Java)
 
 Contains adapter helpers used by `Df*Adapter` classes:

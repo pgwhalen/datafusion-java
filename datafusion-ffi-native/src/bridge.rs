@@ -83,6 +83,19 @@ pub mod ffi {
         Ok(SessionConfig::from_string_hash_map(&settings)?)
     }
 
+    /// Write an Arrow schema as `FFI_ArrowSchema` to a Java-provided address.
+    /// Returns an error if `out_addr` is 0.
+    fn export_schema_to(schema: &ArrowSchema, out_addr: usize) -> Result<(), Box<DfError>> {
+        if out_addr == 0 {
+            return Err("Null output address".into());
+        }
+        let ffi_schema = FFI_ArrowSchema::try_from(schema)?;
+        unsafe {
+            std::ptr::write(out_addr as *mut FFI_ArrowSchema, ffi_schema);
+        }
+        Ok(())
+    }
+
     // ============================================================================
     // Diplomat enums
     // ============================================================================
@@ -533,14 +546,7 @@ pub mod ffi {
 
         /// Export this schema as FFI_ArrowSchema to a Java-provided address.
         pub fn export_to(&self, out_addr: usize) -> Result<(), Box<DfError>> {
-            if out_addr == 0 {
-                return Err("Null output address".into());
-            }
-            let ffi_schema = FFI_ArrowSchema::try_from(self.schema.as_ref())?;
-            unsafe {
-                std::ptr::write(out_addr as *mut FFI_ArrowSchema, ffi_schema);
-            }
-            Ok(())
+            export_schema_to(self.schema.as_ref(), out_addr)
         }
     }
 
@@ -696,14 +702,7 @@ pub mod ffi {
 
         /// Export the stream's schema as FFI_ArrowSchema to a Java-provided address.
         pub fn schema_to(&self, out_addr: usize) -> Result<(), Box<DfError>> {
-            if out_addr == 0 {
-                return Err("Null output address".into());
-            }
-            let ffi_schema = FFI_ArrowSchema::try_from(self.schema.as_ref())?;
-            unsafe {
-                std::ptr::write(out_addr as *mut FFI_ArrowSchema, ffi_schema);
-            }
-            Ok(())
+            export_schema_to(self.schema.as_ref(), out_addr)
         }
 
         /// Get the next batch. Writes FFI_ArrowArray and FFI_ArrowSchema to provided addresses.
@@ -744,14 +743,7 @@ pub mod ffi {
     impl DfLazyRecordBatchStream {
         /// Export the stream's schema as FFI_ArrowSchema to a Java-provided address.
         pub fn schema_to(&self, out_addr: usize) -> Result<(), Box<DfError>> {
-            if out_addr == 0 {
-                return Err("Null output address".into());
-            }
-            let ffi_schema = FFI_ArrowSchema::try_from(self.schema.as_ref())?;
-            unsafe {
-                std::ptr::write(out_addr as *mut FFI_ArrowSchema, ffi_schema);
-            }
-            Ok(())
+            export_schema_to(self.schema.as_ref(), out_addr)
         }
 
         /// Fetch the next batch from the live async stream.
@@ -873,15 +865,7 @@ pub mod ffi {
 
         /// Export the output schema as FFI_ArrowSchema to a Java-provided address.
         pub fn schema_to(&self, out_addr: usize) -> Result<(), Box<DfError>> {
-            if out_addr == 0 {
-                return Err("Null output address".into());
-            }
-            let arrow_schema = self.plan.schema().as_arrow().as_ref().clone();
-            let ffi_schema = FFI_ArrowSchema::try_from(&arrow_schema)?;
-            unsafe {
-                std::ptr::write(out_addr as *mut FFI_ArrowSchema, ffi_schema);
-            }
-            Ok(())
+            export_schema_to(self.plan.schema().as_arrow().as_ref(), out_addr)
         }
 
         /// Return the number of direct child inputs.
@@ -1174,16 +1158,9 @@ pub mod ffi {
         pub fn statement_prepare_schema_to(&self, out_addr: usize) -> Result<(), Box<DfError>> {
             if let LogicalPlan::Statement(s) = &self.plan {
                 if let DfStatementEnum::Prepare(p) = s {
-                    if out_addr == 0 {
-                        return Err("Null output address".into());
-                    }
                     let fields: Vec<arrow::datatypes::Field> = p.fields.iter().map(|f| f.as_ref().clone()).collect();
                     let arrow_schema = ArrowSchema::new(fields);
-                    let ffi_schema = FFI_ArrowSchema::try_from(&arrow_schema)?;
-                    unsafe {
-                        std::ptr::write(out_addr as *mut FFI_ArrowSchema, ffi_schema);
-                    }
-                    return Ok(());
+                    return export_schema_to(&arrow_schema, out_addr);
                 }
             }
             Err("Not a Statement::Prepare".into())
@@ -2609,15 +2586,7 @@ pub mod ffi {
 
         /// Export the schema as FFI_ArrowSchema to a Java-provided address.
         pub fn schema_to(&self, out_addr: usize) -> Result<(), Box<DfError>> {
-            if out_addr == 0 {
-                return Err("Null output address".into());
-            }
-            let arrow_schema = self.df.schema().as_arrow().as_ref().clone();
-            let ffi_schema = FFI_ArrowSchema::try_from(&arrow_schema)?;
-            unsafe {
-                std::ptr::write(out_addr as *mut FFI_ArrowSchema, ffi_schema);
-            }
-            Ok(())
+            export_schema_to(self.df.schema().as_arrow().as_ref(), out_addr)
         }
 
         // ── Transformation methods ──
