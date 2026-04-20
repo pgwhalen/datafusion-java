@@ -18,6 +18,7 @@ import org.apache.arrow.datafusion.datasource.ParquetReadOptions;
 import org.apache.arrow.datafusion.logical_expr.Expr;
 import org.apache.arrow.datafusion.logical_expr.LogicalPlan;
 import org.apache.arrow.datafusion.logical_expr.ScalarUDF;
+import org.apache.arrow.datafusion.providers.RustTableProvider;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.dictionary.DictionaryProvider;
@@ -140,6 +141,36 @@ public class SessionContext implements AutoCloseable {
   }
 
   /**
+   * Creates a new session context with federation support enabled.
+   *
+   * <p>Federation-aware providers (for example, {@code
+   * org.apache.arrow.datafusion.providers.flight.FlightSqlFederatedCatalog}) push filters,
+   * projections, joins, and aggregates down to their remote systems. Providers registered with
+   * this context that are <em>not</em> federation-aware behave exactly as they do in a regular
+   * session — the federation optimizer and planner only rewrite plans whose scans resolve to a
+   * {@code FederationProvider}.
+   *
+   * {@snippet :
+   * try (SessionContext ctx = SessionContext.newWithFederation(ConfigOptions.defaults())) {
+   *     // Register federated catalogs / schemas here ...
+   *     DataFrame df = ctx.sql("SELECT * FROM remote1.public.t1 JOIN remote2.public.t2 USING (id)");
+   *     df.show();
+   * }
+   * }
+   *
+   * @param config the session configuration
+   * @return a new SessionContext wired with {@code FederationOptimizerRule} and
+   *     {@code FederatedQueryPlanner}
+   * @throws DataFusionError if context creation fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/context/struct.SessionContext.html#method.new_with_state">Rust
+   *     DataFusion: SessionContext::new_with_state</a>
+   */
+  public static SessionContext newWithFederation(ConfigOptions config) {
+    return new SessionContext(SessionContextBridge.federated(config));
+  }
+
+  /**
    * Registers a VectorSchemaRoot as a table in the session context.
    *
    * <p>This is equivalent to Rust's {@code register_batch}: it takes Arrow data directly and wraps
@@ -212,6 +243,36 @@ public class SessionContext implements AutoCloseable {
   public void registerTable(String name, TableProvider provider, BufferAllocator allocator) {
     checkNotClosed();
     bridge.registerTableProvider(name, provider, allocator);
+  }
+
+  /**
+   * Registers a Rust-side table provider (for example one produced by {@link
+   * org.apache.arrow.datafusion.providers.flight.FlightSqlTableProvider#builder()}).
+   *
+   * <p>The provider handle remains owned by the caller — registering it does not transfer
+   * ownership, and callers must still {@link RustTableProvider#close() close} the handle when
+   * done.
+   *
+   * {@snippet :
+   * try (FlightSqlTableProvider taxi = FlightSqlTableProvider.builder()
+   *         .endpoint("http://localhost:32010")
+   *         .query("SELECT * FROM taxi")
+   *         .build()) {
+   *     ctx.registerTable("taxi", taxi);
+   *     ctx.sql("SELECT count(*) FROM taxi").show();
+   * }
+   * }
+   *
+   * @param name the table name used in SQL
+   * @param provider a Rust-backed table provider
+   * @throws DataFusionError if registration fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/context/struct.SessionContext.html#method.register_table">Rust
+   *     DataFusion: SessionContext::register_table</a>
+   */
+  public void registerTable(String name, RustTableProvider provider) {
+    checkNotClosed();
+    bridge.registerRustTable(name, provider);
   }
 
   /**

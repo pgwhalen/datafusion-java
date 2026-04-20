@@ -40,6 +40,7 @@ import org.apache.arrow.datafusion.generated.DfStringArray;
 import org.apache.arrow.datafusion.generated.DfVarType;
 import org.apache.arrow.datafusion.logical_expr.Expr;
 import org.apache.arrow.datafusion.logical_expr.ScalarUDF;
+import org.apache.arrow.datafusion.providers.RustTableProvider;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.dictionary.DictionaryProvider;
@@ -73,6 +74,33 @@ public final class SessionContextBridge implements AutoCloseable {
         this.dfCtx = new DfSessionContext();
       }
       logger.debug("Created SessionContext via Diplomat bridge");
+    } catch (DfError e) {
+      sharedArena.close();
+      throw new NativeDataFusionError(e);
+    } catch (Exception e) {
+      sharedArena.close();
+      throw new DataFusionError("Failed to create SessionContext", e);
+    }
+  }
+
+  /** Create a federated SessionContext (wires FederationOptimizerRule + FederatedQueryPlanner). */
+  static SessionContextBridge federated(ConfigOptions config) {
+    return new SessionContextBridge(config, /* federated= */ true);
+  }
+
+  private SessionContextBridge(ConfigOptions config, boolean federated) {
+    this.config = config;
+    this.sharedArena = Arena.ofShared();
+    try {
+      Map<String, String> options = config.hasOptions() ? config.toOptionsMap() : Map.of();
+      String[] keys = options.keySet().toArray(new String[0]);
+      String[] values = options.values().toArray(new String[0]);
+      if (federated) {
+        this.dfCtx = DfSessionContext.newWithFederation(keys, values);
+      } else {
+        this.dfCtx = DfSessionContext.newWithConfig(keys, values);
+      }
+      logger.debug("Created SessionContext (federated={}) via Diplomat bridge", federated);
     } catch (DfError e) {
       sharedArena.close();
       throw new NativeDataFusionError(e);
@@ -150,6 +178,17 @@ public final class SessionContextBridge implements AutoCloseable {
       throw new NativeDataFusionError(e);
     } catch (Exception e) {
       throw new DataFusionError("Failed to register table provider", e);
+    }
+  }
+
+  void registerRustTable(String name, RustTableProvider provider) {
+    try {
+      dfCtx.registerRustTableProvider(name, provider.handle());
+      logger.debug("Registered Rust table provider '{}'", name);
+    } catch (DfError e) {
+      throw new NativeDataFusionError(e);
+    } catch (Exception e) {
+      throw new DataFusionError("Failed to register Rust table provider", e);
     }
   }
 

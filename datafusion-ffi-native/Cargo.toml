@@ -23,6 +23,8 @@ async-trait = "0.1"
 half = "2"
 prost = "0.14"
 object_store = "0.13"
+datafusion-federation = { version = "0.5", features = ["sql"] }
+datafusion-table-providers = { version = "0.11", default-features = false, features = ["flight"] }
 diplomat = { git = "https://github.com/pgwhalen/diplomat", tag = "v0.14.0-java" }
 diplomat-runtime = { git = "https://github.com/pgwhalen/diplomat", tag = "v0.14.0-java" }
 

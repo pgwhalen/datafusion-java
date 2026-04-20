@@ -22,7 +22,6 @@ pub mod ffi {
     use datafusion_proto::protobuf::{LogicalExprList, LogicalPlanNode, SortExprNodeCollection};
     use diplomat_runtime::{DiplomatStr, DiplomatStrSlice, DiplomatWrite};
     use prost::Message;
-    use std::collections::HashMap;
     use std::fmt::Write;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
@@ -50,21 +49,11 @@ pub mod ffi {
         Ok(parse_sorts(collection.sort_expr_nodes.iter(), ctx, &codec)?)
     }
 
-    fn diplomat_str(s: &DiplomatStr) -> Result<&str, Box<DfError>> {
-        Ok(std::str::from_utf8(s)?)
-    }
-
-    /// Convert a slice of DiplomatStrSlice to Vec<String>.
-    fn diplomat_str_slice_to_vec(slices: &[DiplomatStrSlice]) -> Result<Vec<String>, Box<DfError>> {
-        slices
-            .iter()
-            .map(|s| {
-                std::str::from_utf8(s)
-                    .map(|s| s.to_string())
-                    .map_err(|e| Box::new(DfError(e.to_string().into())))
-            })
-            .collect()
-    }
+    // String-conversion helpers live in `crate::diplomat_util` so every bridge module can reuse
+    // them. Re-imported here so existing call sites (`diplomat_str(name)?`, ...) still resolve.
+    use crate::diplomat_util::{
+        diplomat_str, diplomat_str_pairs_to_map, diplomat_str_slice_to_vec,
+    };
 
     /// Parse session config from parallel key/value string slices.
     fn build_session_config(
@@ -74,12 +63,7 @@ pub mod ffi {
         if keys.is_empty() {
             return Ok(SessionConfig::new());
         }
-        let key_strs = diplomat_str_slice_to_vec(keys)?;
-        let value_strs = diplomat_str_slice_to_vec(values)?;
-        let mut settings = HashMap::with_capacity(key_strs.len());
-        for (k, v) in key_strs.into_iter().zip(value_strs) {
-            settings.insert(k, v);
-        }
+        let settings = diplomat_str_pairs_to_map(keys, values)?;
         Ok(SessionConfig::from_string_hash_map(&settings)?)
     }
 
@@ -2074,6 +2058,38 @@ pub mod ffi {
             }))
         }
 
+        /// Create a SessionContext with federation support enabled.
+        ///
+        /// Wires the `FederationOptimizerRule` and `FederatedQueryPlanner` from
+        /// `datafusion_federation` into a fresh `SessionState`. Once any registered
+        /// table or schema is backed by a federation-aware provider (e.g. `SQLSchemaProvider`
+        /// from a Flight SQL executor), DataFusion will push filters, projections, joins,
+        /// and aggregates down to the remote system transparently.
+        ///
+        /// keys and values are parallel string slices of config key-value pairs that are
+        /// applied on top of the federated default state via `SessionStateBuilder::with_config`.
+        pub fn new_with_federation(
+            keys: &[DiplomatStrSlice],
+            values: &[DiplomatStrSlice],
+        ) -> Result<Box<DfSessionContext>, Box<DfError>> {
+            let config = build_session_config(keys, values)?;
+            let rt = Runtime::new()?;
+            let rules = datafusion_federation::default_optimizer_rules();
+            let state = datafusion::execution::SessionStateBuilder::new()
+                .with_config(config)
+                .with_optimizer_rules(rules)
+                .with_query_planner(Arc::new(
+                    datafusion_federation::FederatedQueryPlanner::new(),
+                ))
+                .with_default_features()
+                .build();
+            let ctx = SessionContext::new_with_state(state);
+            Ok(Box::new(DfSessionContext {
+                ctx,
+                rt: Arc::new(rt),
+            }))
+        }
+
         fn wrap_df(&self, df: datafusion::dataframe::DataFrame) -> Box<DfDataFrame> {
             Box::new(DfDataFrame {
                 df,
@@ -2127,6 +2143,47 @@ pub mod ffi {
             let name_str = diplomat_str(name)?;
             let foreign = crate::table::ForeignDfTable::new(table);
             self.ctx.register_table(name_str, Arc::new(foreign))?;
+            Ok(())
+        }
+
+        /// Register an `Arc<dyn TableProvider>` constructed on the Rust side
+        /// (e.g. by a Flight SQL / Postgres / MySQL factory opaque).
+        pub fn register_rust_table_provider(
+            &self,
+            name: &DiplomatStr,
+            provider: &crate::rust_table_provider::ffi::DfRustTableProvider,
+        ) -> Result<(), Box<DfError>> {
+            let name_str = diplomat_str(name)?;
+            self.ctx.register_table(name_str, Arc::clone(&provider.0))?;
+            Ok(())
+        }
+
+        /// Register an `Arc<dyn CatalogProvider>` constructed on the Rust side.
+        pub fn register_rust_catalog(
+            &self,
+            name: &DiplomatStr,
+            catalog: &crate::rust_table_provider::ffi::DfRustCatalogProvider,
+        ) -> Result<(), Box<DfError>> {
+            let name_str = diplomat_str(name)?;
+            self.ctx.register_catalog(name_str, Arc::clone(&catalog.0));
+            Ok(())
+        }
+
+        /// Register an `Arc<dyn SchemaProvider>` as a schema under an existing catalog.
+        pub fn register_rust_schema(
+            &self,
+            catalog_name: &DiplomatStr,
+            schema_name: &DiplomatStr,
+            schema: &crate::rust_table_provider::ffi::DfRustSchemaProvider,
+        ) -> Result<(), Box<DfError>> {
+            let catalog_str = diplomat_str(catalog_name)?;
+            let schema_str = diplomat_str(schema_name)?;
+            let catalog = self.ctx.catalog(catalog_str).ok_or_else(|| {
+                Box::new(DfError(
+                    format!("Catalog '{}' is not registered", catalog_str).into(),
+                ))
+            })?;
+            catalog.register_schema(schema_str, Arc::clone(&schema.0))?;
             Ok(())
         }
 
