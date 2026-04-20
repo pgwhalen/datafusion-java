@@ -20,7 +20,7 @@ package org.apache.arrow.datafusion.execution;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/runtime_env/struct.RuntimeEnv.html">Rust
+ *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/runtime_env/struct.RuntimeEnv.html">Rust
  *     DataFusion: RuntimeEnv</a>
  */
 public class RuntimeEnv implements AutoCloseable {

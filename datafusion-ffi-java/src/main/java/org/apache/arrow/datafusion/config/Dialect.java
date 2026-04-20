@@ -15,7 +15,7 @@ package org.apache.arrow.datafusion.config;
  *     .build();
  * }
  *
- * @see <a href="https://docs.rs/datafusion/52.1.0/datafusion/config/enum.Dialect.html">Rust
+ * @see <a href="https://docs.rs/datafusion/53.1.0/datafusion/config/enum.Dialect.html">Rust
  *     DataFusion: Dialect</a>
  */
 public enum Dialect {

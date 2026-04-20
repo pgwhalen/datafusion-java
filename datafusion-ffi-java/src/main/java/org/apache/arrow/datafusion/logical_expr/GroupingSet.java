@@ -12,7 +12,7 @@ package org.apache.arrow.datafusion.logical_expr;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/expr/enum.GroupingSet.html">Rust
+ *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/expr/enum.GroupingSet.html">Rust
  *     DataFusion: GroupingSet</a>
  */
 public enum GroupingSet {

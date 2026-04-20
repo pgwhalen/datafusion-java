@@ -23,7 +23,7 @@ import org.apache.arrow.datafusion.execution.SessionContext;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html">Rust
+ *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html">Rust
  *     DataFusion: LogicalPlanBuilder</a>
  */
 public class LogicalPlanBuilder implements AutoCloseable {
@@ -47,7 +47,7 @@ public class LogicalPlanBuilder implements AutoCloseable {
    * @param ctx the session context
    * @return a new LogicalPlanBuilder
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.empty">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.empty">Rust
    *     DataFusion: LogicalPlanBuilder::empty</a>
    */
   public static LogicalPlanBuilder empty(boolean produceOneRow, SessionContext ctx) {
@@ -70,7 +70,7 @@ public class LogicalPlanBuilder implements AutoCloseable {
    * @param ctx the session context
    * @return a new LogicalPlanBuilder
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.from">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.from">Rust
    *     DataFusion: LogicalPlanBuilder::from</a>
    */
   public static LogicalPlanBuilder from(LogicalPlan plan, SessionContext ctx) {
@@ -94,7 +94,7 @@ public class LogicalPlanBuilder implements AutoCloseable {
    * @param exprs the expressions to project
    * @return a new LogicalPlanBuilder with the projection applied
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.project">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.project">Rust
    *     DataFusion: LogicalPlanBuilder::project</a>
    */
   public LogicalPlanBuilder project(List<Expr> exprs) {
@@ -111,7 +111,7 @@ public class LogicalPlanBuilder implements AutoCloseable {
    * @param exprs the expressions to project (see {@link #project(List)})
    * @return a new LogicalPlanBuilder with the projection applied
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.project">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.project">Rust
    *     DataFusion: LogicalPlanBuilder::project</a>
    */
   public LogicalPlanBuilder project(Expr... exprs) {
@@ -134,7 +134,7 @@ public class LogicalPlanBuilder implements AutoCloseable {
    * @param predicate the filter predicate
    * @return a new LogicalPlanBuilder with the filter applied
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.filter">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.filter">Rust
    *     DataFusion: LogicalPlanBuilder::filter</a>
    */
   public LogicalPlanBuilder filter(Expr predicate) {
@@ -161,7 +161,7 @@ public class LogicalPlanBuilder implements AutoCloseable {
    * @param sortExprs the sort expressions
    * @return a new LogicalPlanBuilder with the sort applied
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.sort">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.sort">Rust
    *     DataFusion: LogicalPlanBuilder::sort</a>
    */
   public LogicalPlanBuilder sort(List<SortExpr> sortExprs) {
@@ -178,7 +178,7 @@ public class LogicalPlanBuilder implements AutoCloseable {
    * @param sortExprs the sort expressions (see {@link #sort(List)})
    * @return a new LogicalPlanBuilder with the sort applied
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.sort">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.sort">Rust
    *     DataFusion: LogicalPlanBuilder::sort</a>
    */
   public LogicalPlanBuilder sort(SortExpr... sortExprs) {
@@ -200,7 +200,7 @@ public class LogicalPlanBuilder implements AutoCloseable {
    * @param fetch the maximum number of rows to return, or -1 for no limit
    * @return a new LogicalPlanBuilder with the limit applied
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.limit">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.limit">Rust
    *     DataFusion: LogicalPlanBuilder::limit</a>
    */
   public LogicalPlanBuilder limit(long skip, long fetch) {
@@ -228,7 +228,7 @@ public class LogicalPlanBuilder implements AutoCloseable {
    * @param aggrExprs the aggregate expressions
    * @return a new LogicalPlanBuilder with the aggregation applied
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.aggregate">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.aggregate">Rust
    *     DataFusion: LogicalPlanBuilder::aggregate</a>
    */
   public LogicalPlanBuilder aggregate(List<Expr> groupExprs, List<Expr> aggrExprs) {
@@ -250,7 +250,7 @@ public class LogicalPlanBuilder implements AutoCloseable {
    *
    * @return a new LogicalPlanBuilder with the distinct applied
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.distinct">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.distinct">Rust
    *     DataFusion: LogicalPlanBuilder::distinct</a>
    */
   public LogicalPlanBuilder distinct() {
@@ -278,7 +278,7 @@ public class LogicalPlanBuilder implements AutoCloseable {
    * @param predicate the having predicate
    * @return a new LogicalPlanBuilder with the having applied
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.having">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.having">Rust
    *     DataFusion: LogicalPlanBuilder::having</a>
    */
   public LogicalPlanBuilder having(Expr predicate) {
@@ -307,7 +307,7 @@ public class LogicalPlanBuilder implements AutoCloseable {
    * @param windowExprs the window expressions
    * @return a new LogicalPlanBuilder with the window applied
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.window">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.window">Rust
    *     DataFusion: LogicalPlanBuilder::window</a>
    */
   public LogicalPlanBuilder window(List<Expr> windowExprs) {
@@ -330,7 +330,7 @@ public class LogicalPlanBuilder implements AutoCloseable {
    * @param alias the alias name
    * @return a new LogicalPlanBuilder with the alias applied
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.alias">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.alias">Rust
    *     DataFusion: LogicalPlanBuilder::alias</a>
    */
   public LogicalPlanBuilder alias(String alias) {
@@ -354,7 +354,7 @@ public class LogicalPlanBuilder implements AutoCloseable {
    * @param analyze if true, actually execute and show timing
    * @return a new LogicalPlanBuilder with the explain applied
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.explain">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.explain">Rust
    *     DataFusion: LogicalPlanBuilder::explain</a>
    */
   public LogicalPlanBuilder explain(boolean verbose, boolean analyze) {
@@ -382,7 +382,7 @@ public class LogicalPlanBuilder implements AutoCloseable {
    * @param rightCols the right-side join column names
    * @return a new LogicalPlanBuilder with the join applied
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.join">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.join">Rust
    *     DataFusion: LogicalPlanBuilder::join</a>
    */
   public LogicalPlanBuilder join(
@@ -406,7 +406,7 @@ public class LogicalPlanBuilder implements AutoCloseable {
    * @param right the right-side plan to cross join with
    * @return a new LogicalPlanBuilder with the cross join applied
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.cross_join">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.cross_join">Rust
    *     DataFusion: LogicalPlanBuilder::cross_join</a>
    */
   public LogicalPlanBuilder crossJoin(LogicalPlan right) {
@@ -429,7 +429,7 @@ public class LogicalPlanBuilder implements AutoCloseable {
    * @param other the plan to union with
    * @return a new LogicalPlanBuilder with the union applied
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.union">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.union">Rust
    *     DataFusion: LogicalPlanBuilder::union</a>
    */
   public LogicalPlanBuilder union(LogicalPlan other) {
@@ -452,7 +452,7 @@ public class LogicalPlanBuilder implements AutoCloseable {
    * @param other the plan to union distinct with
    * @return a new LogicalPlanBuilder with the union distinct applied
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.union_distinct">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.union_distinct">Rust
    *     DataFusion: LogicalPlanBuilder::union_distinct</a>
    */
   public LogicalPlanBuilder unionDistinct(LogicalPlan other) {
@@ -475,7 +475,7 @@ public class LogicalPlanBuilder implements AutoCloseable {
    * @param isAll if true, INTERSECT ALL (keeps duplicates); if false, INTERSECT
    * @return the intersected LogicalPlan
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.intersect">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.intersect">Rust
    *     DataFusion: LogicalPlanBuilder::intersect</a>
    */
   public static LogicalPlan intersect(LogicalPlan left, LogicalPlan right, boolean isAll) {
@@ -497,7 +497,7 @@ public class LogicalPlanBuilder implements AutoCloseable {
    * @param isAll if true, EXCEPT ALL (keeps duplicates); if false, EXCEPT
    * @return the excepted LogicalPlan
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.except">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.except">Rust
    *     DataFusion: LogicalPlanBuilder::except</a>
    */
   public static LogicalPlan except(LogicalPlan left, LogicalPlan right, boolean isAll) {
@@ -519,7 +519,7 @@ public class LogicalPlanBuilder implements AutoCloseable {
    *
    * @return the built LogicalPlan
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.build">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/builder/struct.LogicalPlanBuilder.html#method.build">Rust
    *     DataFusion: LogicalPlanBuilder::build</a>
    */
   public LogicalPlan build() {

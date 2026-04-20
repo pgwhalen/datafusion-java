@@ -24,7 +24,7 @@ import org.apache.arrow.vector.types.pojo.Schema;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingTable.html">Rust
+ *     href="https://docs.rs/datafusion/53.1.0/datafusion/datasource/listing/struct.ListingTable.html">Rust
  *     DataFusion: ListingTable</a>
  */
 public class ListingTable {
@@ -38,7 +38,7 @@ public class ListingTable {
    * @param config the listing table configuration
    * @throws IllegalStateException if options or schema are not set on the config
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingTable.html#method.try_new">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/datasource/listing/struct.ListingTable.html#method.try_new">Rust
    *     DataFusion: ListingTable::try_new</a>
    */
   public ListingTable(ListingTableConfig config) {
@@ -64,7 +64,7 @@ public class ListingTable {
    * }
    *
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingTable.html#method.table_paths">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/datasource/listing/struct.ListingTable.html#method.table_paths">Rust
    *     DataFusion: ListingTable::table_paths</a>
    */
   public List<ListingTableUrl> tablePaths() {
@@ -84,7 +84,7 @@ public class ListingTable {
    * }
    *
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingTable.html#method.options">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/datasource/listing/struct.ListingTable.html#method.options">Rust
    *     DataFusion: ListingTable::options</a>
    */
   public ListingOptions options() {
@@ -104,7 +104,7 @@ public class ListingTable {
    * }
    *
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingTable.html#method.schema">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/datasource/listing/struct.ListingTable.html#method.schema">Rust
    *     DataFusion: ListingTable::schema</a>
    */
   public Schema schema() {

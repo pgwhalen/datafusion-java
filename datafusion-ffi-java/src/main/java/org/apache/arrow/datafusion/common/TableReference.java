@@ -14,7 +14,7 @@ package org.apache.arrow.datafusion.common;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/enum.TableReference.html">Rust
+ *     href="https://docs.rs/datafusion-common/53.1.0/datafusion_common/enum.TableReference.html">Rust
  *     DataFusion: TableReference</a>
  */
 public sealed interface TableReference {
@@ -31,7 +31,7 @@ public sealed interface TableReference {
      *
      * @return the table name
      * @see <a
-     *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/enum.TableReference.html#method.table">Rust
+     *     href="https://docs.rs/datafusion-common/53.1.0/datafusion_common/enum.TableReference.html#method.table">Rust
      *     DataFusion: TableReference::table</a>
      */
     public String table() {
@@ -52,7 +52,7 @@ public sealed interface TableReference {
      *
      * @return the schema name
      * @see <a
-     *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/enum.TableReference.html#method.schema">Rust
+     *     href="https://docs.rs/datafusion-common/53.1.0/datafusion_common/enum.TableReference.html#method.schema">Rust
      *     DataFusion: TableReference::schema</a>
      */
     public String schema() {
@@ -64,7 +64,7 @@ public sealed interface TableReference {
      *
      * @return the table name
      * @see <a
-     *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/enum.TableReference.html#method.table">Rust
+     *     href="https://docs.rs/datafusion-common/53.1.0/datafusion_common/enum.TableReference.html#method.table">Rust
      *     DataFusion: TableReference::table</a>
      */
     public String table() {
@@ -86,7 +86,7 @@ public sealed interface TableReference {
      *
      * @return the catalog name
      * @see <a
-     *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/enum.TableReference.html#method.catalog">Rust
+     *     href="https://docs.rs/datafusion-common/53.1.0/datafusion_common/enum.TableReference.html#method.catalog">Rust
      *     DataFusion: TableReference::catalog</a>
      */
     public String catalog() {
@@ -98,7 +98,7 @@ public sealed interface TableReference {
      *
      * @return the schema name
      * @see <a
-     *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/enum.TableReference.html#method.schema">Rust
+     *     href="https://docs.rs/datafusion-common/53.1.0/datafusion_common/enum.TableReference.html#method.schema">Rust
      *     DataFusion: TableReference::schema</a>
      */
     public String schema() {
@@ -110,7 +110,7 @@ public sealed interface TableReference {
      *
      * @return the table name
      * @see <a
-     *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/enum.TableReference.html#method.table">Rust
+     *     href="https://docs.rs/datafusion-common/53.1.0/datafusion_common/enum.TableReference.html#method.table">Rust
      *     DataFusion: TableReference::table</a>
      */
     public String table() {

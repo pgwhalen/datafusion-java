@@ -135,8 +135,8 @@ public class ConfigOptionsTest {
                     .enforceBatchSizeInJoins(false)
                     .objectstoreWriterBufferSize(5242880L)
                     .enableAnsiMode(true)
-                    // perfectHashJoinSmallBuildThreshold and perfectHashJoinMinKeyDensity
-                    // are not available in DataFusion 52.1
+                    .perfectHashJoinSmallBuildThreshold(2048)
+                    .perfectHashJoinMinKeyDensity(0.25)
                     .build())
             .build();
 
@@ -182,8 +182,10 @@ public class ConfigOptionsTest {
       assertShow(ctx, allocator, "datafusion.execution.enforce_batch_size_in_joins", "false");
       assertShow(ctx, allocator, "datafusion.execution.objectstore_writer_buffer_size", "5242880");
       assertShow(ctx, allocator, "datafusion.execution.enable_ansi_mode", "true");
-      // perfectHashJoinSmallBuildThreshold and perfectHashJoinMinKeyDensity
-      // are not available in DataFusion 52.1
+      assertShow(
+          ctx, allocator, "datafusion.execution.perfect_hash_join_small_build_threshold", "2048");
+      assertShow(
+          ctx, allocator, "datafusion.execution.perfect_hash_join_min_key_density", "0.25");
     }
   }
 
@@ -311,6 +313,7 @@ public class ConfigOptionsTest {
                     .preferExistingUnion(true)
                     .expandViewsAtOutput(true)
                     .enableSortPushdown(false)
+                    .enableLeafExpressionPushdown(false)
                     .build())
             .build();
 
@@ -349,6 +352,7 @@ public class ConfigOptionsTest {
       assertShow(ctx, allocator, p + "prefer_existing_union", "true");
       assertShow(ctx, allocator, p + "expand_views_at_output", "true");
       assertShow(ctx, allocator, p + "enable_sort_pushdown", "false");
+      assertShow(ctx, allocator, p + "enable_leaf_expression_pushdown", "false");
     }
   }
 

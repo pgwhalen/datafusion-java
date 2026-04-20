@@ -11,7 +11,7 @@ package org.apache.arrow.datafusion.logical_expr;
  * DataFrame joined = left.join(right, JoinType.INNER, new String[]{"id"}, new String[]{"id"});
  * }
  *
- * @see <a href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.JoinType.html">Rust
+ * @see <a href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/enum.JoinType.html">Rust
  *     DataFusion: JoinType</a>
  */
 public enum JoinType {

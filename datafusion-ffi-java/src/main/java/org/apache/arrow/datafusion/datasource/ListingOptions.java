@@ -18,7 +18,7 @@ package org.apache.arrow.datafusion.datasource;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingOptions.html">Rust
+ *     href="https://docs.rs/datafusion/53.1.0/datafusion/datasource/listing/struct.ListingOptions.html">Rust
  *     DataFusion: ListingOptions</a>
  */
 public class ListingOptions {
@@ -58,7 +58,7 @@ public class ListingOptions {
    * }
    *
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingOptions.html#structfield.format">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/datasource/listing/struct.ListingOptions.html#structfield.format">Rust
    *     DataFusion: ListingOptions::format</a>
    */
   public FileFormat format() {
@@ -78,7 +78,7 @@ public class ListingOptions {
    * }
    *
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingOptions.html#structfield.file_extension">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/datasource/listing/struct.ListingOptions.html#structfield.file_extension">Rust
    *     DataFusion: ListingOptions::file_extension</a>
    */
   public String fileExtension() {
@@ -98,7 +98,7 @@ public class ListingOptions {
    * }
    *
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingOptions.html#structfield.collect_stat">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/datasource/listing/struct.ListingOptions.html#structfield.collect_stat">Rust
    *     DataFusion: ListingOptions::collect_stat</a>
    */
   public boolean collectStat() {
@@ -118,7 +118,7 @@ public class ListingOptions {
    * }
    *
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingOptions.html#structfield.target_partitions">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/datasource/listing/struct.ListingOptions.html#structfield.target_partitions">Rust
    *     DataFusion: ListingOptions::target_partitions</a>
    */
   public int targetPartitions() {

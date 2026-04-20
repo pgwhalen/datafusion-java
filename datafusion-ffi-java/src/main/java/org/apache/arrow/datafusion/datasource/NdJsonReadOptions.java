@@ -18,7 +18,7 @@ import org.apache.arrow.vector.types.pojo.Schema;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/file_format/options/struct.NdJsonReadOptions.html">Rust
+ *     href="https://docs.rs/datafusion/53.1.0/datafusion/datasource/file_format/options/struct.NdJsonReadOptions.html">Rust
  *     DataFusion: NdJsonReadOptions</a>
  */
 public final class NdJsonReadOptions {
@@ -48,7 +48,7 @@ public final class NdJsonReadOptions {
    * }
    *
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/file_format/options/struct.NdJsonReadOptions.html#method.schema">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/datasource/file_format/options/struct.NdJsonReadOptions.html#method.schema">Rust
    *     DataFusion: NdJsonReadOptions::schema</a>
    */
   public Schema schema() {

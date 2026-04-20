@@ -2002,7 +2002,7 @@ pub mod ffi {
 
         /// Returns a new TaskContext with the given SessionConfig. Does not
         /// consume self; a fresh TaskContext is constructed from this one's
-        /// fields (TaskContext does not impl Clone in DataFusion 52.1).
+        /// fields (TaskContext does not impl Clone in DataFusion 53.1).
         pub fn with_session_config(&self, cfg: &DfSessionConfig) -> Box<DfTaskContext> {
             let new_ctx = super::clone_task_context(&self.ctx).with_session_config(cfg.cfg.clone());
             Box::new(DfTaskContext {
@@ -2855,7 +2855,7 @@ pub mod ffi {
 }
 
 /// Clone a TaskContext by re-constructing it from its field accessors.
-/// `TaskContext` does not impl `Clone` in DataFusion 52.1 so we build a new
+/// `TaskContext` does not impl `Clone` in DataFusion 53.1 so we build a new
 /// one. Used by `DfTaskContext::with_session_config` / `with_runtime`.
 fn clone_task_context(
     ctx: &datafusion::execution::TaskContext,
@@ -3166,8 +3166,8 @@ fn parse_parquet_options<'a>(
 fn parse_json_options<'a>(
     options: &[u8],
     schema_addr: usize,
-) -> Result<datafusion::prelude::NdJsonReadOptions<'a>, Box<ffi::DfError>> {
-    let mut opts = datafusion::prelude::NdJsonReadOptions::default();
+) -> Result<datafusion::prelude::JsonReadOptions<'a>, Box<ffi::DfError>> {
+    let mut opts = datafusion::prelude::JsonReadOptions::default();
 
     if !options.is_empty() {
         let proto = datafusion_proto::protobuf::JsonOptions::decode(options).map_err(|e| {

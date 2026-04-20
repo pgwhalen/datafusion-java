@@ -20,7 +20,7 @@ import org.apache.arrow.vector.types.pojo.Schema;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/file_format/options/struct.CsvReadOptions.html">Rust
+ *     href="https://docs.rs/datafusion/53.1.0/datafusion/datasource/file_format/options/struct.CsvReadOptions.html">Rust
  *     DataFusion: CsvReadOptions</a>
  */
 public final class CsvReadOptions {
@@ -74,7 +74,7 @@ public final class CsvReadOptions {
    *
    * @return the schema, or null
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/file_format/options/struct.CsvReadOptions.html#method.schema">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/datasource/file_format/options/struct.CsvReadOptions.html#method.schema">Rust
    *     DataFusion: CsvReadOptions::schema</a>
    */
   public Schema schema() {

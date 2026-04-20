@@ -17,7 +17,7 @@ package org.apache.arrow.datafusion.logical_expr;
  * @param asc true for ascending order, false for descending
  * @param nullsFirst true to sort nulls before non-null values
  * @see <a
- *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/struct.SortExpr.html">Rust
+ *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/struct.SortExpr.html">Rust
  *     DataFusion: SortExpr</a>
  */
 public record SortExpr(Expr expr, boolean asc, boolean nullsFirst) {
@@ -27,7 +27,7 @@ public record SortExpr(Expr expr, boolean asc, boolean nullsFirst) {
    *
    * @return the sort expression
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/struct.SortExpr.html#structfield.expr">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/struct.SortExpr.html#structfield.expr">Rust
    *     DataFusion: SortExpr::expr</a>
    */
   public Expr expr() {
@@ -39,7 +39,7 @@ public record SortExpr(Expr expr, boolean asc, boolean nullsFirst) {
    *
    * @return true for ascending order, false for descending
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/struct.SortExpr.html#structfield.asc">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/struct.SortExpr.html#structfield.asc">Rust
    *     DataFusion: SortExpr::asc</a>
    */
   public boolean asc() {
@@ -51,7 +51,7 @@ public record SortExpr(Expr expr, boolean asc, boolean nullsFirst) {
    *
    * @return true to sort nulls first
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/struct.SortExpr.html#structfield.nulls_first">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/struct.SortExpr.html#structfield.nulls_first">Rust
    *     DataFusion: SortExpr::nulls_first</a>
    */
   public boolean nullsFirst() {

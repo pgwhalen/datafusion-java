@@ -16,7 +16,7 @@ package org.apache.arrow.datafusion.config;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion/52.1.0/datafusion/common/format/enum.ExplainAnalyzeLevel.html">Rust
+ *     href="https://docs.rs/datafusion/53.1.0/datafusion/common/format/enum.ExplainAnalyzeLevel.html">Rust
  *     DataFusion: ExplainAnalyzeLevel</a>
  */
 public enum ExplainAnalyzeLevel {

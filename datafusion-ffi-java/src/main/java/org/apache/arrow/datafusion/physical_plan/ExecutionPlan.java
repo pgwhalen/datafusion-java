@@ -31,7 +31,7 @@ import org.apache.arrow.vector.types.pojo.Schema;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion/52.1.0/datafusion/physical_plan/trait.ExecutionPlan.html">Rust
+ *     href="https://docs.rs/datafusion/53.1.0/datafusion/physical_plan/trait.ExecutionPlan.html">Rust
  *     DataFusion: ExecutionPlan</a>
  */
 public interface ExecutionPlan {
@@ -49,7 +49,7 @@ public interface ExecutionPlan {
    *
    * @return The Arrow schema
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/physical_plan/trait.ExecutionPlan.html#method.schema">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/physical_plan/trait.ExecutionPlan.html#method.schema">Rust
    *     DataFusion: ExecutionPlan::schema</a>
    */
   Schema schema();
@@ -70,7 +70,7 @@ public interface ExecutionPlan {
    *
    * @return The number of partitions
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/physical_plan/trait.ExecutionPlan.html#method.output_partitioning">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/physical_plan/trait.ExecutionPlan.html#method.output_partitioning">Rust
    *     DataFusion: ExecutionPlan::output_partitioning</a>
    */
   default int outputPartitioning() {
@@ -94,7 +94,7 @@ public interface ExecutionPlan {
    *
    * @return The plan properties
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/physical_plan/trait.ExecutionPlan.html#method.properties">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/physical_plan/trait.ExecutionPlan.html#method.properties">Rust
    *     DataFusion: ExecutionPlan::properties</a>
    */
   default PlanProperties properties() {
@@ -128,7 +128,7 @@ public interface ExecutionPlan {
    * @return A reader that produces record batches for this partition
    * @throws DataFusionError if execution fails
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/physical_plan/trait.ExecutionPlan.html#method.execute">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/physical_plan/trait.ExecutionPlan.html#method.execute">Rust
    *     DataFusion: ExecutionPlan::execute</a>
    */
   RecordBatchReader execute(int partition, TaskContext taskContext, BufferAllocator allocator);

@@ -15,7 +15,7 @@ package org.apache.arrow.datafusion.datasource;
  * @param start start byte offset (inclusive)
  * @param end end byte offset (exclusive)
  * @see <a
- *     href="https://docs.rs/datafusion-datasource/52.1.0/datafusion_datasource/struct.FileRange.html">Rust
+ *     href="https://docs.rs/datafusion-datasource/53.1.0/datafusion_datasource/struct.FileRange.html">Rust
  *     DataFusion: FileRange</a>
  */
 public record FileRange(long start, long end) {
@@ -25,7 +25,7 @@ public record FileRange(long start, long end) {
    *
    * @return start offset
    * @see <a
-   *     href="https://docs.rs/datafusion-datasource/52.1.0/datafusion_datasource/struct.FileRange.html#structfield.start">Rust
+   *     href="https://docs.rs/datafusion-datasource/53.1.0/datafusion_datasource/struct.FileRange.html#structfield.start">Rust
    *     DataFusion: FileRange::start</a>
    */
   public long start() {
@@ -37,7 +37,7 @@ public record FileRange(long start, long end) {
    *
    * @return end offset
    * @see <a
-   *     href="https://docs.rs/datafusion-datasource/52.1.0/datafusion_datasource/struct.FileRange.html#structfield.end">Rust
+   *     href="https://docs.rs/datafusion-datasource/53.1.0/datafusion_datasource/struct.FileRange.html#structfield.end">Rust
    *     DataFusion: FileRange::end</a>
    */
   public long end() {

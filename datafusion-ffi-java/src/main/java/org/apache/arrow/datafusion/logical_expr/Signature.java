@@ -12,7 +12,7 @@ package org.apache.arrow.datafusion.logical_expr;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/struct.Signature.html">Rust
+ *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/struct.Signature.html">Rust
  *     DataFusion: Signature</a>
  */
 public record Signature(Volatility volatility) {
@@ -21,7 +21,7 @@ public record Signature(Volatility volatility) {
    * Returns the volatility of this signature.
    *
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/struct.Signature.html#structfield.volatility">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/struct.Signature.html#structfield.volatility">Rust
    *     DataFusion: Signature::volatility</a>
    */
   @Override

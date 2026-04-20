@@ -30,7 +30,7 @@ import java.util.Map;
  * @param hasHeader Default value for has_header for CREATE EXTERNAL TABLE CSV
  * @param newlinesInValues Specifies whether newlines in quoted CSV values are supported
  * @see <a
- *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/config/struct.CatalogOptions.html">Rust
+ *     href="https://docs.rs/datafusion-common/53.1.0/datafusion_common/config/struct.CatalogOptions.html">Rust
  *     DataFusion: CatalogOptions</a>
  */
 public record CatalogOptions(

@@ -25,7 +25,7 @@ import org.apache.arrow.vector.types.pojo.Schema;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.LogicalPlan.html">Rust
+ *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/enum.LogicalPlan.html">Rust
  *     DataFusion: LogicalPlan</a>
  */
 public sealed interface LogicalPlan extends AutoCloseable {
@@ -41,7 +41,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
    *
    * @return the Arrow schema
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/plan/enum.LogicalPlan.html#method.schema">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/plan/enum.LogicalPlan.html#method.schema">Rust
    *     DataFusion: LogicalPlan::schema</a>
    */
   Schema schema();
@@ -55,7 +55,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
    *
    * @return immutable list of child plans
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/plan/enum.LogicalPlan.html#method.inputs">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/plan/enum.LogicalPlan.html#method.inputs">Rust
    *     DataFusion: LogicalPlan::inputs</a>
    */
   List<LogicalPlan> inputs();
@@ -76,7 +76,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
    *
    * @return a single-line description
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/plan/enum.LogicalPlan.html#method.display">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/plan/enum.LogicalPlan.html#method.display">Rust
    *     DataFusion: LogicalPlan::display</a>
    */
   default String display() {
@@ -92,7 +92,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
    *
    * @return the indented plan tree string
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/plan/enum.LogicalPlan.html#method.display_indent">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/plan/enum.LogicalPlan.html#method.display_indent">Rust
    *     DataFusion: LogicalPlan::display_indent</a>
    */
   default String displayIndent() {
@@ -108,7 +108,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
    *
    * @return the indented plan tree string with schemas
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/plan/enum.LogicalPlan.html#method.display_indent_schema">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/plan/enum.LogicalPlan.html#method.display_indent_schema">Rust
    *     DataFusion: LogicalPlan::display_indent_schema</a>
    */
   default String displayIndentSchema() {
@@ -124,7 +124,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
    *
    * @return the plan in DOT language format
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/plan/enum.LogicalPlan.html#method.display_graphviz">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/plan/enum.LogicalPlan.html#method.display_graphviz">Rust
    *     DataFusion: LogicalPlan::display_graphviz</a>
    */
   default String displayGraphviz() {
@@ -140,7 +140,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
    *
    * @return the plan in PostgreSQL JSON format
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/plan/enum.LogicalPlan.html#method.display_pg_json">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/plan/enum.LogicalPlan.html#method.display_pg_json">Rust
    *     DataFusion: LogicalPlan::display_pg_json</a>
    */
   default String displayPgJson() {
@@ -157,7 +157,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
    *
    * @return the maximum row count, or empty
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/plan/enum.LogicalPlan.html#method.max_rows">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/plan/enum.LogicalPlan.html#method.max_rows">Rust
    *     DataFusion: LogicalPlan::max_rows</a>
    */
   default OptionalLong maxRows() {
@@ -173,7 +173,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
    *
    * @return true if outer references exist
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/plan/enum.LogicalPlan.html#method.contains_outer_reference">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/plan/enum.LogicalPlan.html#method.contains_outer_reference">Rust
    *     DataFusion: LogicalPlan::contains_outer_reference</a>
    */
   default boolean containsOuterReference() {
@@ -320,7 +320,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
    * Evaluates an arbitrary list of expressions (SELECT with expression list).
    *
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/plan/struct.Projection.html">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/plan/struct.Projection.html">Rust
    *     DataFusion: Projection</a>
    */
   record Projection(List<Expr> exprs, LogicalPlan input, Schema schema, LogicalPlanBridge bridge)
@@ -335,7 +335,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
    * Filters rows that do not match a predicate (WHERE clause).
    *
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/plan/struct.Filter.html">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/plan/struct.Filter.html">Rust
    *     DataFusion: Filter</a>
    */
   record Filter(Expr predicate, LogicalPlan input, Schema schema, LogicalPlanBridge bridge)
@@ -350,7 +350,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
    * Window function computation (OVER clause).
    *
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/plan/struct.Window.html">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/plan/struct.Window.html">Rust
    *     DataFusion: Window</a>
    */
   record Window(LogicalPlan input, List<Expr> windowExprs, Schema schema, LogicalPlanBridge bridge)
@@ -365,7 +365,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
    * Groups and aggregates data (GROUP BY).
    *
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/plan/struct.Aggregate.html">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/plan/struct.Aggregate.html">Rust
    *     DataFusion: Aggregate</a>
    */
   record Aggregate(
@@ -385,7 +385,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
    * Sorts input per sort expressions (ORDER BY).
    *
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/plan/struct.Sort.html">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/plan/struct.Sort.html">Rust
    *     DataFusion: Sort</a>
    */
   record Sort(
@@ -405,7 +405,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
    * Joins two relations on join conditions.
    *
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/plan/struct.Join.html">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/plan/struct.Join.html">Rust
    *     DataFusion: Join</a>
    */
   record Join(
@@ -430,7 +430,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
    * Repartitions input for parallelism.
    *
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/plan/struct.Repartition.html">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/plan/struct.Repartition.html">Rust
    *     DataFusion: Repartition</a>
    */
   record Repartition(LogicalPlan input, Schema schema, LogicalPlanBridge bridge)
@@ -445,7 +445,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
    * Unions multiple inputs with the same schema (UNION ALL).
    *
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/plan/struct.Union.html">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/plan/struct.Union.html">Rust
    *     DataFusion: Union</a>
    */
   record Union(List<LogicalPlan> unionInputs, Schema schema, LogicalPlanBridge bridge)
@@ -460,7 +460,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
    * Reads rows from a table (FROM clause).
    *
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/plan/struct.TableScan.html">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/plan/struct.TableScan.html">Rust
    *     DataFusion: TableScan</a>
    */
   record TableScan(
@@ -481,7 +481,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
    * Produces 0 or 1 placeholder rows (empty FROM clause).
    *
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/plan/struct.EmptyRelation.html">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/plan/struct.EmptyRelation.html">Rust
    *     DataFusion: EmptyRelation</a>
    */
   record EmptyRelation(boolean produceOneRow, Schema schema, LogicalPlanBridge bridge)
@@ -496,7 +496,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
    * Executes a nested query (subquery).
    *
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/plan/struct.Subquery.html">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/plan/struct.Subquery.html">Rust
    *     DataFusion: Subquery</a>
    */
   record Subquery(LogicalPlan subquery, Schema schema, LogicalPlanBridge bridge)
@@ -511,7 +511,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
    * Provides or changes the name of a relation (AS alias).
    *
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/plan/struct.SubqueryAlias.html">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/plan/struct.SubqueryAlias.html">Rust
    *     DataFusion: SubqueryAlias</a>
    */
   record SubqueryAlias(LogicalPlan input, String alias, Schema schema, LogicalPlanBridge bridge)
@@ -526,7 +526,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
    * Skips rows then fetches a limited count (LIMIT/OFFSET).
    *
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/plan/struct.Limit.html">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/plan/struct.Limit.html">Rust
    *     DataFusion: Limit</a>
    */
   record Limit(
@@ -548,7 +548,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
    * <p>This is a sealed sub-interface with variants for each statement type.
    *
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/statement/enum.Statement.html">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/statement/enum.Statement.html">Rust
    *     DataFusion: Statement</a>
    */
   sealed interface Statement extends LogicalPlan {
@@ -557,7 +557,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
      * BEGIN TRANSACTION statement.
      *
      * @see <a
-     *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/statement/struct.TransactionStart.html">Rust
+     *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/statement/struct.TransactionStart.html">Rust
      *     DataFusion: TransactionStart</a>
      */
     record TransactionStart(
@@ -576,7 +576,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
      * COMMIT or ROLLBACK statement.
      *
      * @see <a
-     *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/statement/struct.TransactionEnd.html">Rust
+     *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/statement/struct.TransactionEnd.html">Rust
      *     DataFusion: TransactionEnd</a>
      */
     record TransactionEnd(
@@ -592,7 +592,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
      * SET variable = value statement.
      *
      * @see <a
-     *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/statement/struct.SetVariable.html">Rust
+     *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/statement/struct.SetVariable.html">Rust
      *     DataFusion: SetVariable</a>
      */
     record SetVariable(String variable, String value, Schema schema, LogicalPlanBridge bridge)
@@ -607,7 +607,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
      * RESET variable statement.
      *
      * @see <a
-     *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/statement/struct.ResetVariable.html">Rust
+     *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/statement/struct.ResetVariable.html">Rust
      *     DataFusion: ResetVariable</a>
      */
     record ResetVariable(String variable, Schema schema, LogicalPlanBridge bridge)
@@ -622,7 +622,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
      * PREPARE statement.
      *
      * @see <a
-     *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/statement/struct.Prepare.html">Rust
+     *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/statement/struct.Prepare.html">Rust
      *     DataFusion: Prepare</a>
      */
     record Prepare(
@@ -638,7 +638,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
      * EXECUTE prepared statement.
      *
      * @see <a
-     *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/statement/struct.Execute.html">Rust
+     *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/statement/struct.Execute.html">Rust
      *     DataFusion: Execute</a>
      */
     record Execute(String name, List<Expr> parameters, Schema schema, LogicalPlanBridge bridge)
@@ -653,7 +653,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
      * DEALLOCATE prepared statement.
      *
      * @see <a
-     *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/statement/struct.Deallocate.html">Rust
+     *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/statement/struct.Deallocate.html">Rust
      *     DataFusion: Deallocate</a>
      */
     record Deallocate(String name, Schema schema, LogicalPlanBridge bridge) implements Statement {
@@ -668,7 +668,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
    * Literal row values (VALUES clause).
    *
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/plan/struct.Values.html">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/plan/struct.Values.html">Rust
    *     DataFusion: Values</a>
    */
   record Values(List<List<Expr>> values, Schema schema, LogicalPlanBridge bridge)
@@ -683,7 +683,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
    * Shows plan structure (EXPLAIN).
    *
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/plan/struct.Explain.html">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/plan/struct.Explain.html">Rust
    *     DataFusion: Explain</a>
    */
   record Explain(LogicalPlan plan, boolean verbose, Schema schema, LogicalPlanBridge bridge)
@@ -698,7 +698,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
    * Executes plan and prints physical plan with metrics (EXPLAIN ANALYZE).
    *
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/plan/struct.Analyze.html">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/plan/struct.Analyze.html">Rust
    *     DataFusion: Analyze</a>
    */
   record Analyze(LogicalPlan input, boolean verbose, Schema schema, LogicalPlanBridge bridge)
@@ -716,7 +716,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
    * LOGICAL_PLAN_MISSING_FEATURES.md}.
    *
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/plan/struct.Extension.html">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/plan/struct.Extension.html">Rust
    *     DataFusion: Extension</a>
    */
   record Extension(Schema schema, LogicalPlanBridge bridge) implements LogicalPlan {
@@ -733,7 +733,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
    * On} for PostgreSQL-style DISTINCT ON.
    *
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/plan/enum.Distinct.html">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/plan/enum.Distinct.html">Rust
    *     DataFusion: Distinct</a>
    */
   sealed interface Distinct extends LogicalPlan {
@@ -742,7 +742,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
      * Plain DISTINCT referencing all selection expressions.
      *
      * @see <a
-     *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/plan/enum.Distinct.html#variant.All">Rust
+     *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/plan/enum.Distinct.html#variant.All">Rust
      *     DataFusion: Distinct::All</a>
      */
     record All(LogicalPlan input, Schema schema, LogicalPlanBridge bridge) implements Distinct {
@@ -756,7 +756,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
      * PostgreSQL-style DISTINCT ON with separate control over DISTINCT'd and selected columns.
      *
      * @see <a
-     *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/plan/struct.DistinctOn.html">Rust
+     *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/plan/struct.DistinctOn.html">Rust
      *     DataFusion: DistinctOn</a>
      */
     record On(
@@ -778,7 +778,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
    * Data Manipulation Language operations (INSERT, UPDATE, DELETE).
    *
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/dml/struct.DmlStatement.html">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/dml/struct.DmlStatement.html">Rust
    *     DataFusion: DmlStatement</a>
    */
   record Dml(
@@ -800,7 +800,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
    * <p>This is a sealed sub-interface with variants for each DDL operation type.
    *
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/ddl/enum.DdlStatement.html">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/ddl/enum.DdlStatement.html">Rust
    *     DataFusion: DdlStatement</a>
    */
   sealed interface Ddl extends LogicalPlan {
@@ -809,7 +809,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
      * CREATE EXTERNAL TABLE statement.
      *
      * @see <a
-     *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/ddl/struct.CreateExternalTable.html">Rust
+     *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/ddl/struct.CreateExternalTable.html">Rust
      *     DataFusion: CreateExternalTable</a>
      */
     record CreateExternalTable(
@@ -832,7 +832,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
      * CREATE TABLE AS SELECT statement.
      *
      * @see <a
-     *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/ddl/struct.CreateMemoryTable.html">Rust
+     *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/ddl/struct.CreateMemoryTable.html">Rust
      *     DataFusion: CreateMemoryTable</a>
      */
     record CreateMemoryTable(
@@ -854,7 +854,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
      * CREATE VIEW statement.
      *
      * @see <a
-     *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/ddl/struct.CreateView.html">Rust
+     *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/ddl/struct.CreateView.html">Rust
      *     DataFusion: CreateView</a>
      */
     record CreateView(
@@ -876,7 +876,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
      * CREATE SCHEMA statement.
      *
      * @see <a
-     *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/ddl/struct.CreateCatalogSchema.html">Rust
+     *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/ddl/struct.CreateCatalogSchema.html">Rust
      *     DataFusion: CreateCatalogSchema</a>
      */
     record CreateCatalogSchema(
@@ -892,7 +892,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
      * CREATE DATABASE statement.
      *
      * @see <a
-     *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/ddl/struct.CreateCatalog.html">Rust
+     *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/ddl/struct.CreateCatalog.html">Rust
      *     DataFusion: CreateCatalog</a>
      */
     record CreateCatalog(
@@ -908,7 +908,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
      * CREATE INDEX statement.
      *
      * @see <a
-     *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/ddl/struct.CreateIndex.html">Rust
+     *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/ddl/struct.CreateIndex.html">Rust
      *     DataFusion: CreateIndex</a>
      */
     record CreateIndex(
@@ -929,7 +929,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
      * DROP TABLE statement.
      *
      * @see <a
-     *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/ddl/struct.DropTable.html">Rust
+     *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/ddl/struct.DropTable.html">Rust
      *     DataFusion: DropTable</a>
      */
     record DropTable(TableReference name, boolean ifExists, Schema schema, LogicalPlanBridge bridge)
@@ -944,7 +944,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
      * DROP VIEW statement.
      *
      * @see <a
-     *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/ddl/struct.DropView.html">Rust
+     *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/ddl/struct.DropView.html">Rust
      *     DataFusion: DropView</a>
      */
     record DropView(TableReference name, boolean ifExists, Schema schema, LogicalPlanBridge bridge)
@@ -959,7 +959,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
      * DROP SCHEMA statement.
      *
      * @see <a
-     *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/ddl/struct.DropCatalogSchema.html">Rust
+     *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/ddl/struct.DropCatalogSchema.html">Rust
      *     DataFusion: DropCatalogSchema</a>
      */
     record DropCatalogSchema(
@@ -975,7 +975,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
      * CREATE FUNCTION statement.
      *
      * @see <a
-     *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/ddl/struct.CreateFunction.html">Rust
+     *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/ddl/struct.CreateFunction.html">Rust
      *     DataFusion: CreateFunction</a>
      */
     record CreateFunction(
@@ -991,7 +991,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
      * DROP FUNCTION statement.
      *
      * @see <a
-     *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/ddl/struct.DropFunction.html">Rust
+     *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/ddl/struct.DropFunction.html">Rust
      *     DataFusion: DropFunction</a>
      */
     record DropFunction(String name, boolean ifExists, Schema schema, LogicalPlanBridge bridge)
@@ -1007,7 +1007,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
    * COPY TO for writing plan results to files.
    *
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/dml/struct.CopyTo.html">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/dml/struct.CopyTo.html">Rust
    *     DataFusion: CopyTo</a>
    */
   record Copy(LogicalPlan input, Schema schema, LogicalPlanBridge bridge) implements LogicalPlan {
@@ -1021,7 +1021,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
    * Describes table schema (DESCRIBE command).
    *
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/plan/struct.DescribeTable.html">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/plan/struct.DescribeTable.html">Rust
    *     DataFusion: DescribeTable</a>
    */
   record DescribeTable(Schema schema, LogicalPlanBridge bridge) implements LogicalPlan {
@@ -1035,7 +1035,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
    * Unnests nested list/struct type columns (UNNEST).
    *
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/plan/struct.Unnest.html">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/plan/struct.Unnest.html">Rust
    *     DataFusion: Unnest</a>
    */
   record Unnest(LogicalPlan input, Schema schema, LogicalPlanBridge bridge) implements LogicalPlan {
@@ -1049,7 +1049,7 @@ public sealed interface LogicalPlan extends AutoCloseable {
    * Recursive CTEs (Common Table Expressions).
    *
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/plan/struct.RecursiveQuery.html">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/plan/struct.RecursiveQuery.html">Rust
    *     DataFusion: RecursiveQuery</a>
    */
   record RecursiveQuery(

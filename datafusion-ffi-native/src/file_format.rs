@@ -142,12 +142,12 @@ impl<T: crate::bridge::ffi::DfFileFormatTrait + 'static> DataFusionFileFormat
         let projected_schema = conf.projected_schema()?;
         let projected_statistics =
             datafusion::common::Statistics::new_unknown(&projected_schema);
-        let properties = PlanProperties::new(
+        let properties = Arc::new(PlanProperties::new(
             datafusion::physical_expr::EquivalenceProperties::new(projected_schema),
             Partitioning::UnknownPartitioning(conf.file_groups.len()),
             EmissionType::Incremental,
             Boundedness::Bounded,
-        );
+        ));
         Ok(Arc::new(ForeignDfFileExec {
             base_config: conf,
             file_source,
@@ -314,7 +314,7 @@ struct ForeignDfFileExec {
     base_config: FileScanConfig,
     file_source: Arc<dyn DataFusionFileSource>,
     metrics: ExecutionPlanMetricsSet,
-    properties: PlanProperties,
+    properties: Arc<PlanProperties>,
     projected_statistics: datafusion::common::Statistics,
 }
 
@@ -342,7 +342,7 @@ impl ExecutionPlan for ForeignDfFileExec {
         self
     }
 
-    fn properties(&self) -> &PlanProperties {
+    fn properties(&self) -> &Arc<PlanProperties> {
         &self.properties
     }
 
@@ -376,7 +376,10 @@ impl ExecutionPlan for ForeignDfFileExec {
         Ok(Box::pin(stream) as SendableRecordBatchStream)
     }
 
-    fn statistics(&self) -> DFResult<datafusion::common::Statistics> {
+    fn partition_statistics(
+        &self,
+        _partition: Option<usize>,
+    ) -> DFResult<datafusion::common::Statistics> {
         Ok(self.projected_statistics.clone())
     }
 

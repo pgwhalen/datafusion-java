@@ -26,7 +26,7 @@ import org.apache.arrow.vector.types.pojo.Schema;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion-datasource/52.1.0/datafusion_datasource/file/trait.FileSource.html">Rust
+ *     href="https://docs.rs/datafusion-datasource/53.1.0/datafusion_datasource/file/trait.FileSource.html">Rust
  *     DataFusion: FileSource</a>
  */
 public interface FileSource {
@@ -51,7 +51,7 @@ public interface FileSource {
    * @param scanConfig scan configuration with projection, limit, batch size, and partition info
    * @return a FileOpener that can parse file content into record batches
    * @see <a
-   *     href="https://docs.rs/datafusion-datasource/52.1.0/datafusion_datasource/file/trait.FileSource.html#method.create_file_opener">Rust
+   *     href="https://docs.rs/datafusion-datasource/53.1.0/datafusion_datasource/file/trait.FileSource.html#method.create_file_opener">Rust
    *     DataFusion: FileSource::create_file_opener</a>
    */
   FileOpener createFileOpener(Schema schema, BufferAllocator allocator, FileScanConfig scanConfig);
@@ -72,7 +72,7 @@ public interface FileSource {
    *
    * @return the file type identifier
    * @see <a
-   *     href="https://docs.rs/datafusion-datasource/52.1.0/datafusion_datasource/file/trait.FileSource.html#method.file_type">Rust
+   *     href="https://docs.rs/datafusion-datasource/53.1.0/datafusion_datasource/file/trait.FileSource.html#method.file_type">Rust
    *     DataFusion: FileSource::file_type</a>
    */
   String fileType();

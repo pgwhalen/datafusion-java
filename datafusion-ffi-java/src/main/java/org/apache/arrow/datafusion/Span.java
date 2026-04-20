@@ -14,7 +14,7 @@ package org.apache.arrow.datafusion;
  * @param start the start location
  * @param end the end location
  * @see <a
- *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/spans/struct.Span.html">Rust
+ *     href="https://docs.rs/datafusion-common/53.1.0/datafusion_common/spans/struct.Span.html">Rust
  *     DataFusion: Span</a>
  */
 public record Span(Location start, Location end) {
@@ -24,7 +24,7 @@ public record Span(Location start, Location end) {
    *
    * @return the start location
    * @see <a
-   *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/spans/struct.Span.html#structfield.start">Rust
+   *     href="https://docs.rs/datafusion-common/53.1.0/datafusion_common/spans/struct.Span.html#structfield.start">Rust
    *     DataFusion: Span::start</a>
    */
   public Location start() {
@@ -36,7 +36,7 @@ public record Span(Location start, Location end) {
    *
    * @return the end location
    * @see <a
-   *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/spans/struct.Span.html#structfield.end">Rust
+   *     href="https://docs.rs/datafusion-common/53.1.0/datafusion_common/spans/struct.Span.html#structfield.end">Rust
    *     DataFusion: Span::end</a>
    */
   public Location end() {

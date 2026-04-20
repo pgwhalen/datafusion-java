@@ -28,7 +28,7 @@ import org.apache.arrow.datafusion.physical_plan.PhysicalExpr;
  * @param guarantee the type of guarantee (IN or NOT_IN)
  * @param literals the set of literal values in the guarantee
  * @see <a
- *     href="https://docs.rs/datafusion-physical-expr/52.1.0/datafusion_physical_expr/utils/struct.LiteralGuarantee.html">Rust
+ *     href="https://docs.rs/datafusion-physical-expr/53.1.0/datafusion_physical_expr/utils/struct.LiteralGuarantee.html">Rust
  *     DataFusion: LiteralGuarantee</a>
  */
 public record LiteralGuarantee(Column column, Guarantee guarantee, Set<ScalarValue> literals) {
@@ -42,7 +42,7 @@ public record LiteralGuarantee(Column column, Guarantee guarantee, Set<ScalarVal
    *
    * @return the column
    * @see <a
-   *     href="https://docs.rs/datafusion-physical-expr/52.1.0/datafusion_physical_expr/utils/struct.LiteralGuarantee.html#structfield.column">Rust
+   *     href="https://docs.rs/datafusion-physical-expr/53.1.0/datafusion_physical_expr/utils/struct.LiteralGuarantee.html#structfield.column">Rust
    *     DataFusion: LiteralGuarantee::column</a>
    */
   public Column column() {
@@ -54,7 +54,7 @@ public record LiteralGuarantee(Column column, Guarantee guarantee, Set<ScalarVal
    *
    * @return the guarantee type
    * @see <a
-   *     href="https://docs.rs/datafusion-physical-expr/52.1.0/datafusion_physical_expr/utils/struct.LiteralGuarantee.html#structfield.guarantee">Rust
+   *     href="https://docs.rs/datafusion-physical-expr/53.1.0/datafusion_physical_expr/utils/struct.LiteralGuarantee.html#structfield.guarantee">Rust
    *     DataFusion: LiteralGuarantee::guarantee</a>
    */
   public Guarantee guarantee() {
@@ -66,7 +66,7 @@ public record LiteralGuarantee(Column column, Guarantee guarantee, Set<ScalarVal
    *
    * @return the literal values
    * @see <a
-   *     href="https://docs.rs/datafusion-physical-expr/52.1.0/datafusion_physical_expr/utils/struct.LiteralGuarantee.html#structfield.literals">Rust
+   *     href="https://docs.rs/datafusion-physical-expr/53.1.0/datafusion_physical_expr/utils/struct.LiteralGuarantee.html#structfield.literals">Rust
    *     DataFusion: LiteralGuarantee::literals</a>
    */
   public Set<ScalarValue> literals() {
@@ -91,7 +91,7 @@ public record LiteralGuarantee(Column column, Guarantee guarantee, Set<ScalarVal
    * @return the list of literal guarantees extracted from the expression
    * @throws DataFusionError if analysis fails
    * @see <a
-   *     href="https://docs.rs/datafusion-physical-expr/52.1.0/datafusion_physical_expr/utils/struct.LiteralGuarantee.html#method.analyze">Rust
+   *     href="https://docs.rs/datafusion-physical-expr/53.1.0/datafusion_physical_expr/utils/struct.LiteralGuarantee.html#method.analyze">Rust
    *     DataFusion: LiteralGuarantee::analyze</a>
    */
   public static List<LiteralGuarantee> analyze(PhysicalExpr expr) {

@@ -22,7 +22,7 @@ package org.apache.arrow.datafusion.logical_expr;
  * @param replace optional REPLACE expressions (stub, always null)
  * @param rename optional RENAME column aliases (stub, always null)
  * @see <a
- *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/expr/struct.WildcardOptions.html">Rust
+ *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/expr/struct.WildcardOptions.html">Rust
  *     DataFusion: WildcardOptions</a>
  */
 public record WildcardOptions(
@@ -35,7 +35,7 @@ public record WildcardOptions(
    * {@inheritDoc}
    *
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/expr/struct.WildcardOptions.html#structfield.ilike">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/expr/struct.WildcardOptions.html#structfield.ilike">Rust
    *     DataFusion: WildcardOptions::ilike</a>
    */
   @Override
@@ -47,7 +47,7 @@ public record WildcardOptions(
    * {@inheritDoc}
    *
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/expr/struct.WildcardOptions.html#structfield.exclude">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/expr/struct.WildcardOptions.html#structfield.exclude">Rust
    *     DataFusion: WildcardOptions::exclude</a>
    */
   @Override
@@ -59,7 +59,7 @@ public record WildcardOptions(
    * {@inheritDoc}
    *
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/expr/struct.WildcardOptions.html#structfield.except">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/expr/struct.WildcardOptions.html#structfield.except">Rust
    *     DataFusion: WildcardOptions::except</a>
    */
   @Override
@@ -71,7 +71,7 @@ public record WildcardOptions(
    * {@inheritDoc}
    *
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/expr/struct.WildcardOptions.html#structfield.replace">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/expr/struct.WildcardOptions.html#structfield.replace">Rust
    *     DataFusion: WildcardOptions::replace</a>
    */
   @Override
@@ -83,7 +83,7 @@ public record WildcardOptions(
    * {@inheritDoc}
    *
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/expr/struct.WildcardOptions.html#structfield.rename">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/expr/struct.WildcardOptions.html#structfield.rename">Rust
    *     DataFusion: WildcardOptions::rename</a>
    */
   @Override

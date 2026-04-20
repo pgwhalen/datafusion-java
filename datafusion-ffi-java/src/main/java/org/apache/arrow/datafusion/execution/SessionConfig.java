@@ -20,7 +20,7 @@ import org.apache.arrow.datafusion.config.ConfigOptions;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion/52.1.0/datafusion/prelude/struct.SessionConfig.html">Rust
+ *     href="https://docs.rs/datafusion/53.1.0/datafusion/prelude/struct.SessionConfig.html">Rust
  *     DataFusion: SessionConfig</a>
  */
 public class SessionConfig implements AutoCloseable {
@@ -45,7 +45,7 @@ public class SessionConfig implements AutoCloseable {
    * @param options the source config
    * @return a new SessionConfig
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/prelude/struct.SessionConfig.html#method.from_string_hash_map">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/prelude/struct.SessionConfig.html#method.from_string_hash_map">Rust
    *     DataFusion: SessionConfig::from_string_hash_map</a>
    */
   public static SessionConfig fromConfigOptions(ConfigOptions options) {
@@ -63,7 +63,7 @@ public class SessionConfig implements AutoCloseable {
    *
    * @return the options map
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/prelude/struct.SessionConfig.html#method.options">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/prelude/struct.SessionConfig.html#method.options">Rust
    *     DataFusion: SessionConfig::options</a>
    */
   public Map<String, String> options() {

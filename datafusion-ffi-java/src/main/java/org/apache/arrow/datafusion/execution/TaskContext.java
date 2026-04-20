@@ -32,7 +32,7 @@ import java.util.Optional;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/struct.TaskContext.html">Rust
+ *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/struct.TaskContext.html">Rust
  *     DataFusion: TaskContext</a>
  */
 public class TaskContext implements AutoCloseable {
@@ -61,7 +61,7 @@ public class TaskContext implements AutoCloseable {
    *
    * @return the session id
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/struct.TaskContext.html#method.session_id">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/struct.TaskContext.html#method.session_id">Rust
    *     DataFusion: TaskContext::session_id</a>
    */
   public String sessionId() {
@@ -80,7 +80,7 @@ public class TaskContext implements AutoCloseable {
    *
    * @return the task id, or {@link Optional#empty()} if none
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/struct.TaskContext.html#method.task_id">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/struct.TaskContext.html#method.task_id">Rust
    *     DataFusion: TaskContext::task_id</a>
    */
   public Optional<String> taskId() {
@@ -100,7 +100,7 @@ public class TaskContext implements AutoCloseable {
    *
    * @return a new SessionConfig (must be closed)
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/struct.TaskContext.html#method.session_config">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/struct.TaskContext.html#method.session_config">Rust
    *     DataFusion: TaskContext::session_config</a>
    */
   public SessionConfig sessionConfig() {
@@ -120,7 +120,7 @@ public class TaskContext implements AutoCloseable {
    *
    * @return a new RuntimeEnv handle (must be closed)
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/struct.TaskContext.html#method.runtime_env">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/struct.TaskContext.html#method.runtime_env">Rust
    *     DataFusion: TaskContext::runtime_env</a>
    */
   public RuntimeEnv runtimeEnv() {
@@ -140,7 +140,7 @@ public class TaskContext implements AutoCloseable {
    *
    * @return a new MemoryPool handle (must be closed)
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/struct.TaskContext.html#method.memory_pool">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/struct.TaskContext.html#method.memory_pool">Rust
    *     DataFusion: TaskContext::memory_pool</a>
    */
   public MemoryPool memoryPool() {
@@ -161,7 +161,7 @@ public class TaskContext implements AutoCloseable {
    *
    * @return map of scalar function names to placeholder handles
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/struct.TaskContext.html#method.scalar_functions">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/struct.TaskContext.html#method.scalar_functions">Rust
    *     DataFusion: TaskContext::scalar_functions</a>
    */
   public Map<String, ScalarFunctionHandle> scalarFunctions() {
@@ -182,7 +182,7 @@ public class TaskContext implements AutoCloseable {
    *
    * @return map of aggregate function names to placeholder handles
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/struct.TaskContext.html#method.aggregate_functions">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/struct.TaskContext.html#method.aggregate_functions">Rust
    *     DataFusion: TaskContext::aggregate_functions</a>
    */
   public Map<String, AggregateFunctionHandle> aggregateFunctions() {
@@ -206,7 +206,7 @@ public class TaskContext implements AutoCloseable {
    * @param config the new session config
    * @return a new TaskContext (must be closed)
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/struct.TaskContext.html#method.with_session_config">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/struct.TaskContext.html#method.with_session_config">Rust
    *     DataFusion: TaskContext::with_session_config</a>
    */
   public TaskContext withSessionConfig(SessionConfig config) {
@@ -230,7 +230,7 @@ public class TaskContext implements AutoCloseable {
    * @param runtime the new runtime environment
    * @return a new TaskContext (must be closed)
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/struct.TaskContext.html#method.with_runtime">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/struct.TaskContext.html#method.with_runtime">Rust
    *     DataFusion: TaskContext::with_runtime</a>
    */
   public TaskContext withRuntime(RuntimeEnv runtime) {

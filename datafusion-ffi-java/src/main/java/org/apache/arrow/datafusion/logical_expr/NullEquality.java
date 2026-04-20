@@ -13,7 +13,7 @@ package org.apache.arrow.datafusion.logical_expr;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/null_equality/enum.NullEquality.html">Rust
+ *     href="https://docs.rs/datafusion-common/53.1.0/datafusion_common/null_equality/enum.NullEquality.html">Rust
  *     DataFusion: NullEquality</a>
  */
 public enum NullEquality {

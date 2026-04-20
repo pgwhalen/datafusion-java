@@ -10,7 +10,7 @@ package org.apache.arrow.datafusion.logical_expr;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/statement/enum.TransactionConclusion.html">Rust
+ *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/statement/enum.TransactionConclusion.html">Rust
  *     DataFusion: TransactionConclusion</a>
  */
 public enum TransactionConclusion {

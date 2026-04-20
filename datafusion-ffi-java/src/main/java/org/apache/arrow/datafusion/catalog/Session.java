@@ -29,7 +29,7 @@ import org.apache.arrow.vector.types.pojo.Schema;
  * }
  * }
  *
- * @see <a href="https://docs.rs/datafusion/52.1.0/datafusion/catalog/trait.Session.html">Rust
+ * @see <a href="https://docs.rs/datafusion/53.1.0/datafusion/catalog/trait.Session.html">Rust
  *     DataFusion: Session</a>
  */
 public class Session {
@@ -60,7 +60,7 @@ public class Session {
    * @return a physical expression representing the conjunction of all filters
    * @throws DataFusionError if the physical expression cannot be created
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/catalog/trait.Session.html#tymethod.create_physical_expr">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/catalog/trait.Session.html#tymethod.create_physical_expr">Rust
    *     DataFusion: Session::create_physical_expr</a>
    */
   public PhysicalExpr createPhysicalExpr(Schema tableSchema, List<Expr> filters) {

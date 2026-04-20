@@ -27,7 +27,7 @@ import org.apache.arrow.datafusion.logical_expr.Expr;
  *     An empty list means zero columns are explicitly requested (e.g., for {@code count(*)}).
  * @param limit maximum number of rows to return, or {@code null} for no limit
  * @see <a
- *     href="https://docs.rs/datafusion-catalog/52.1.0/datafusion_catalog/struct.ScanArgs.html">Rust
+ *     href="https://docs.rs/datafusion-catalog/53.1.0/datafusion_catalog/struct.ScanArgs.html">Rust
  *     DataFusion: ScanArgs</a>
  */
 public record ScanArgs(List<Expr> filters, List<Integer> projection, Long limit) {
@@ -43,7 +43,7 @@ public record ScanArgs(List<Expr> filters, List<Integer> projection, Long limit)
    *
    * @return the filter expressions, or {@code null}
    * @see <a
-   *     href="https://docs.rs/datafusion-catalog/52.1.0/datafusion_catalog/struct.ScanArgs.html#structfield.filters">Rust
+   *     href="https://docs.rs/datafusion-catalog/53.1.0/datafusion_catalog/struct.ScanArgs.html#structfield.filters">Rust
    *     DataFusion: ScanArgs::filters</a>
    */
   @Override
@@ -56,7 +56,7 @@ public record ScanArgs(List<Expr> filters, List<Integer> projection, Long limit)
    *
    * @return the projection indices, or {@code null}
    * @see <a
-   *     href="https://docs.rs/datafusion-catalog/52.1.0/datafusion_catalog/struct.ScanArgs.html#structfield.projection">Rust
+   *     href="https://docs.rs/datafusion-catalog/53.1.0/datafusion_catalog/struct.ScanArgs.html#structfield.projection">Rust
    *     DataFusion: ScanArgs::projection</a>
    */
   @Override
@@ -69,7 +69,7 @@ public record ScanArgs(List<Expr> filters, List<Integer> projection, Long limit)
    *
    * @return the row limit, or {@code null}
    * @see <a
-   *     href="https://docs.rs/datafusion-catalog/52.1.0/datafusion_catalog/struct.ScanArgs.html#structfield.limit">Rust
+   *     href="https://docs.rs/datafusion-catalog/53.1.0/datafusion_catalog/struct.ScanArgs.html#structfield.limit">Rust
    *     DataFusion: ScanArgs::limit</a>
    */
   @Override

@@ -39,7 +39,7 @@ import org.apache.arrow.vector.PeriodDuration;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/scalar/enum.ScalarValue.html">Rust
+ *     href="https://docs.rs/datafusion-common/53.1.0/datafusion_common/scalar/enum.ScalarValue.html">Rust
  *     DataFusion: ScalarValue</a>
  */
 public sealed interface ScalarValue {

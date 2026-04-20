@@ -16,7 +16,7 @@ package org.apache.arrow.datafusion.execution;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/var_provider/enum.VarType.html">Rust
+ *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/var_provider/enum.VarType.html">Rust
  *     DataFusion: VarType</a>
  */
 public enum VarType {
@@ -24,7 +24,7 @@ public enum VarType {
    * System variable, referenced with {@code @@} prefix in SQL (e.g., {@code SELECT @@version}).
    *
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/var_provider/enum.VarType.html#variant.System">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/var_provider/enum.VarType.html#variant.System">Rust
    *     DataFusion: VarType::System</a>
    */
   SYSTEM,
@@ -33,7 +33,7 @@ public enum VarType {
    * User-defined variable, referenced with {@code @} prefix in SQL (e.g., {@code SELECT @name}).
    *
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/var_provider/enum.VarType.html#variant.UserDefined">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/var_provider/enum.VarType.html#variant.UserDefined">Rust
    *     DataFusion: VarType::UserDefined</a>
    */
   USER_DEFINED

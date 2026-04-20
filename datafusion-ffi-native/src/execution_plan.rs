@@ -58,7 +58,7 @@ use std::sync::Arc;
 pub struct ForeignDfPlan<T: DfExecutionPlanTrait> {
     inner: T,
     /// Cached properties
-    properties: PlanProperties,
+    properties: Arc<PlanProperties>,
 }
 
 impl<T: DfExecutionPlanTrait> ForeignDfPlan<T> {
@@ -81,12 +81,12 @@ impl<T: DfExecutionPlanTrait> ForeignDfPlan<T> {
 
         let eq_props =
             datafusion::physical_expr::EquivalenceProperties::new(Arc::clone(&schema));
-        let properties = PlanProperties::new(
+        let properties = Arc::new(PlanProperties::new(
             eq_props,
             Partitioning::UnknownPartitioning(partitions as usize),
             emission,
             bounded,
-        );
+        ));
 
         Self {
             inner,
@@ -121,7 +121,7 @@ impl<T: DfExecutionPlanTrait + 'static> ExecutionPlan for ForeignDfPlan<T> {
         self
     }
 
-    fn properties(&self) -> &PlanProperties {
+    fn properties(&self) -> &Arc<PlanProperties> {
         &self.properties
     }
 

@@ -17,7 +17,7 @@ package org.apache.arrow.datafusion.logical_expr;
  * @param startBound the start boundary of the window frame
  * @param endBound the end boundary of the window frame
  * @see <a
- *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/window_frame/struct.WindowFrame.html">Rust
+ *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/window_frame/struct.WindowFrame.html">Rust
  *     DataFusion: WindowFrame</a>
  */
 public record WindowFrame(
@@ -28,7 +28,7 @@ public record WindowFrame(
    *
    * @return the frame type
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/window_frame/struct.WindowFrame.html#structfield.units">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/window_frame/struct.WindowFrame.html#structfield.units">Rust
    *     DataFusion: WindowFrame::units</a>
    */
   public WindowFrameUnits frameType() {
@@ -40,7 +40,7 @@ public record WindowFrame(
    *
    * @return the start bound
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/window_frame/struct.WindowFrame.html#structfield.start_bound">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/window_frame/struct.WindowFrame.html#structfield.start_bound">Rust
    *     DataFusion: WindowFrame::start_bound</a>
    */
   public WindowFrameBound startBound() {
@@ -52,7 +52,7 @@ public record WindowFrame(
    *
    * @return the end bound
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/window_frame/struct.WindowFrame.html#structfield.end_bound">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/window_frame/struct.WindowFrame.html#structfield.end_bound">Rust
    *     DataFusion: WindowFrame::end_bound</a>
    */
   public WindowFrameBound endBound() {

@@ -17,7 +17,7 @@ import org.apache.arrow.vector.types.pojo.Schema;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/file_format/options/struct.ArrowReadOptions.html">Rust
+ *     href="https://docs.rs/datafusion/53.1.0/datafusion/datasource/file_format/options/struct.ArrowReadOptions.html">Rust
  *     DataFusion: ArrowReadOptions</a>
  */
 public final class ArrowReadOptions {
@@ -45,7 +45,7 @@ public final class ArrowReadOptions {
    * }
    *
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/file_format/options/struct.ArrowReadOptions.html#method.schema">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/datasource/file_format/options/struct.ArrowReadOptions.html#method.schema">Rust
    *     DataFusion: ArrowReadOptions::schema</a>
    */
   public Schema schema() {

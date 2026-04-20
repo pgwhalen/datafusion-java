@@ -21,7 +21,7 @@ import org.apache.arrow.datafusion.logical_expr.InsertOp;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrameWriteOptions.html">Rust
+ *     href="https://docs.rs/datafusion/53.1.0/datafusion/dataframe/struct.DataFrameWriteOptions.html">Rust
  *     DataFusion: DataFrameWriteOptions</a>
  */
 public final class DataFrameWriteOptions {

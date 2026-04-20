@@ -16,7 +16,7 @@ package org.apache.arrow.datafusion.config;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion/52.1.0/datafusion/config/enum.SpillCompression.html">Rust
+ *     href="https://docs.rs/datafusion/53.1.0/datafusion/config/enum.SpillCompression.html">Rust
  *     DataFusion: SpillCompression</a>
  */
 public enum SpillCompression {

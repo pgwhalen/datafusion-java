@@ -124,14 +124,59 @@ For detailed instructions on which files to update and how, see [config-options.
 ./gradlew :datafusion-ffi-java:test
 ```
 
-## Step 9: Update docs.rs Links
+## Step 9: Update All Version References
 
-1. Update the version in `.claude/rules/documentation.md` to the new DataFusion version.
-2. Search all Java files for the old version in docs.rs URLs and replace with the new version:
-   ```bash
-   grep -rn "docs.rs/datafusion.*OLD_VERSION" datafusion-ffi-java/src/main/java/
-   ```
-3. Spot-check 2-3 links to verify types haven't moved between crates/modules in the new version. If a type moved, update the full URL path.
+Version strings of the old DataFusion release live in many places. Search the **whole repo** — not just `datafusion-ffi-java/src/main/java/` — and update every hit. A single missed reference means stale docs links, confusing comments, or ArchUnit failures.
+
+### 9a. Find every remaining occurrence
+
+Run this exact search and fix every line it prints:
+
+```bash
+grep -rn "OLD_MAJOR\.OLD_MINOR\(\.OLD_PATCH\)\?" \
+  --include="*.java" --include="*.md" --include="*.toml" --include="*.rs" \
+  --include="*.gradle" --include="*.proto" --include="*.yml" --include="*.yaml" \
+  --include="*.kt" --include="*.kts" --include="*.properties" \
+  . | grep -v "/build/" | grep -v "/target/"
+```
+
+The search MUST cover:
+
+- **Rust sources** (`*.rs`) — prose comments sometimes name the version (e.g. `"TaskContext does not impl Clone in DataFusion 52.1"`). If the statement is still true after the upgrade, bump the version in the comment; if the statement is now false (e.g. a field was missing before but exists now), act on it instead of just bumping the number.
+- **All Java files** including **test** files (`src/test/...`) — test cases frequently contain comments like `"// field X is not available in DataFusion 52.1"` that were deferred to a future upgrade. After the upgrade, either add the deferred field coverage to the test or remove the comment; never leave a version-stamped "not yet available" note pointing at the new version.
+- **Markdown under `.claude/`** — `rules/documentation.md` (URL tables, prose), `rules/*.md` (prose references), and `skills/*.md` (other skills may reference versions).
+- **Cargo.toml and Gradle files** — usually handled in Step 3, but double-check for commented-out version strings or fallback pins.
+- **Proto files** — the vendored protos have a `// Vendored from apache/datafusion vX.Y.Z` header (handled in Step 5, but verify the grep result agrees).
+
+### 9b. Update `.claude/rules/documentation.md` fully
+
+This file contains the version in **multiple places**, not just one:
+
+- The `DataFusion version: **X.Y.Z**` line at the top of the Version section
+- A 6-row **Crate Base URLs** table (`datafusion`, `datafusion-expr`, `datafusion-catalog`, `datafusion-datasource`, `datafusion-common`, `datafusion-physical-expr`) — every row has the version embedded in the URL
+- At least one sample URL in the Class-Level / Method-Level examples
+
+Update every occurrence. A `sed -i '' 's/OLD_VERSION/NEW_VERSION/g' .claude/rules/documentation.md` is safe here.
+
+### 9c. Bulk-update `@see` URLs in Java
+
+```bash
+find datafusion-ffi-java/src -name "*.java" \
+  -exec sed -i '' 's|docs\.rs/datafusion\(-[a-z-]*\)\{0,1\}/OLD_VERSION|docs.rs/datafusion\1/NEW_VERSION|g' {} \;
+```
+
+Then re-run the grep from 9a to confirm no URLs still reference the old version.
+
+### 9d. Spot-check 2–3 moved types
+
+Pick 2–3 links from different crates (e.g. `datafusion`, `datafusion-catalog`, `datafusion-common`) and open them in a browser. If a type moved between modules in the new version, fix the full URL path — a simple version bump leaves a broken link.
+
+### 9e. Re-verify docs
+
+```bash
+./gradlew :datafusion-ffi-java:verifyDocs          # offline, runs with tests
+./gradlew :datafusion-ffi-java:verifyDocsHttp      # online, checks each URL returns 200
+```
 
 ## Step 10: Summary
 

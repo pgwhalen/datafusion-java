@@ -37,7 +37,7 @@ import org.apache.arrow.vector.types.pojo.Field;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/struct.ScalarUDF.html">Rust
+ *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/struct.ScalarUDF.html">Rust
  *     DataFusion: ScalarUDF</a>
  */
 public interface ScalarUDF {
@@ -55,7 +55,7 @@ public interface ScalarUDF {
    * }
    *
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/struct.ScalarUDF.html#method.name">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/struct.ScalarUDF.html#method.name">Rust
    *     DataFusion: ScalarUDF::name</a>
    */
   String name();
@@ -73,7 +73,7 @@ public interface ScalarUDF {
    * }
    *
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/struct.ScalarUDF.html#method.signature">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/struct.ScalarUDF.html#method.signature">Rust
    *     DataFusion: ScalarUDF::signature</a>
    */
   Signature signature();
@@ -93,7 +93,7 @@ public interface ScalarUDF {
    * @param argFields the fields of the input arguments
    * @return the field describing the return type
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/struct.ScalarUDF.html#method.return_field_from_args">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/struct.ScalarUDF.html#method.return_field_from_args">Rust
    *     DataFusion: ScalarUDF::return_field_from_args</a>
    */
   Field returnField(List<Field> argFields);
@@ -125,7 +125,7 @@ public interface ScalarUDF {
    * @param allocator the buffer allocator for creating the result vector
    * @return the result vector
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/struct.ScalarUDF.html#method.invoke_with_args">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/struct.ScalarUDF.html#method.invoke_with_args">Rust
    *     DataFusion: ScalarUDF::invoke_with_args</a>
    */
   FieldVector invoke(
@@ -151,7 +151,7 @@ public interface ScalarUDF {
    * @param argFields the fields of the input arguments
    * @return the coerced fields
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/struct.ScalarUDF.html#method.coerce_types">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/struct.ScalarUDF.html#method.coerce_types">Rust
    *     DataFusion: ScalarUDF::coerce_types</a>
    */
   default List<Field> coerceTypes(List<Field> argFields) {

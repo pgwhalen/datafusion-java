@@ -19,7 +19,7 @@ import org.apache.arrow.datafusion.logical_expr.Expr;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion/52.1.0/datafusion/physical_plan/trait.PhysicalExpr.html">Rust
+ *     href="https://docs.rs/datafusion/53.1.0/datafusion/physical_plan/trait.PhysicalExpr.html">Rust
  *     DataFusion: PhysicalExpr</a>
  */
 public class PhysicalExpr implements AutoCloseable {

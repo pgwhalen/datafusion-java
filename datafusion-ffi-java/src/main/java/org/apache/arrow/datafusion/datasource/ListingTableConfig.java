@@ -24,7 +24,7 @@ import org.apache.arrow.vector.types.pojo.Schema;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingTableConfig.html">Rust
+ *     href="https://docs.rs/datafusion/53.1.0/datafusion/datasource/listing/struct.ListingTableConfig.html">Rust
  *     DataFusion: ListingTableConfig</a>
  */
 public class ListingTableConfig {
@@ -37,7 +37,7 @@ public class ListingTableConfig {
    *
    * @param tablePath the directory URL
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingTableConfig.html#method.new">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/datasource/listing/struct.ListingTableConfig.html#method.new">Rust
    *     DataFusion: ListingTableConfig::new</a>
    */
   public ListingTableConfig(ListingTableUrl tablePath) {
@@ -49,7 +49,7 @@ public class ListingTableConfig {
    *
    * @param tablePaths the directory URLs
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingTableConfig.html#method.new_with_multi_paths">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/datasource/listing/struct.ListingTableConfig.html#method.new_with_multi_paths">Rust
    *     DataFusion: ListingTableConfig::new_with_multi_paths</a>
    */
   public ListingTableConfig(List<ListingTableUrl> tablePaths) {
@@ -75,7 +75,7 @@ public class ListingTableConfig {
    * @param options the listing options
    * @return this config
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingTableConfig.html#method.with_listing_options">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/datasource/listing/struct.ListingTableConfig.html#method.with_listing_options">Rust
    *     DataFusion: ListingTableConfig::with_listing_options</a>
    */
   public ListingTableConfig withListingOptions(ListingOptions options) {
@@ -99,7 +99,7 @@ public class ListingTableConfig {
    * @param schema the Arrow schema
    * @return this config
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingTableConfig.html#method.with_schema">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/datasource/listing/struct.ListingTableConfig.html#method.with_schema">Rust
    *     DataFusion: ListingTableConfig::with_schema</a>
    */
   public ListingTableConfig withSchema(Schema schema) {
@@ -121,7 +121,7 @@ public class ListingTableConfig {
    * }
    *
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingTableConfig.html#structfield.table_paths">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/datasource/listing/struct.ListingTableConfig.html#structfield.table_paths">Rust
    *     DataFusion: ListingTableConfig::table_paths</a>
    */
   public List<ListingTableUrl> tablePaths() {
@@ -141,7 +141,7 @@ public class ListingTableConfig {
    * }
    *
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingTableConfig.html#structfield.options">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/datasource/listing/struct.ListingTableConfig.html#structfield.options">Rust
    *     DataFusion: ListingTableConfig::options</a>
    */
   public ListingOptions listingOptions() {
@@ -161,7 +161,7 @@ public class ListingTableConfig {
    * }
    *
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingTableConfig.html#structfield.file_schema">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/datasource/listing/struct.ListingTableConfig.html#structfield.file_schema">Rust
    *     DataFusion: ListingTableConfig::file_schema</a>
    */
   public Schema schema() {

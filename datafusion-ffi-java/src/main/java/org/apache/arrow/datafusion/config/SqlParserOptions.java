@@ -31,7 +31,7 @@ import java.util.Map;
  * @param recursionLimit Maximum recursion depth for the SQL parser
  * @param defaultNullOrdering Default null ordering (e.g., "nulls_first", "nulls_last")
  * @see <a
- *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/config/struct.SqlParserOptions.html">Rust
+ *     href="https://docs.rs/datafusion-common/53.1.0/datafusion_common/config/struct.SqlParserOptions.html">Rust
  *     DataFusion: SqlParserOptions</a>
  */
 public record SqlParserOptions(

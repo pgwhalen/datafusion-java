@@ -22,7 +22,7 @@ package org.apache.arrow.datafusion.datasource;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion-datasource/52.1.0/datafusion_datasource/file_format/trait.FileFormat.html">Rust
+ *     href="https://docs.rs/datafusion-datasource/53.1.0/datafusion_datasource/file_format/trait.FileFormat.html">Rust
  *     DataFusion: FileFormat</a>
  */
 public interface FileFormat {
@@ -40,7 +40,7 @@ public interface FileFormat {
    *
    * @return the file extension
    * @see <a
-   *     href="https://docs.rs/datafusion-datasource/52.1.0/datafusion_datasource/file_format/trait.FileFormat.html#tymethod.get_ext">Rust
+   *     href="https://docs.rs/datafusion-datasource/53.1.0/datafusion_datasource/file_format/trait.FileFormat.html#tymethod.get_ext">Rust
    *     DataFusion: FileFormat::get_ext</a>
    */
   String getExtension();
@@ -59,7 +59,7 @@ public interface FileFormat {
    *
    * @return a FileSource for this format
    * @see <a
-   *     href="https://docs.rs/datafusion-datasource/52.1.0/datafusion_datasource/file_format/trait.FileFormat.html#method.file_source">Rust
+   *     href="https://docs.rs/datafusion-datasource/53.1.0/datafusion_datasource/file_format/trait.FileFormat.html#method.file_source">Rust
    *     DataFusion: FileFormat::file_source</a>
    */
   FileSource fileSource();

@@ -13,7 +13,7 @@ package org.apache.arrow.datafusion.physical_expr;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion-physical-expr/52.1.0/datafusion_physical_expr/utils/enum.Guarantee.html">Rust
+ *     href="https://docs.rs/datafusion-physical-expr/53.1.0/datafusion_physical_expr/utils/enum.Guarantee.html">Rust
  *     DataFusion: Guarantee</a>
  */
 public enum Guarantee {

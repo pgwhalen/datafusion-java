@@ -18,7 +18,7 @@ import org.apache.arrow.vector.types.pojo.Schema;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/file_format/options/struct.ParquetReadOptions.html">Rust
+ *     href="https://docs.rs/datafusion/53.1.0/datafusion/datasource/file_format/options/struct.ParquetReadOptions.html">Rust
  *     DataFusion: ParquetReadOptions</a>
  */
 public final class ParquetReadOptions {
@@ -51,7 +51,7 @@ public final class ParquetReadOptions {
    * }
    *
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/file_format/options/struct.ParquetReadOptions.html#method.schema">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/datasource/file_format/options/struct.ParquetReadOptions.html#method.schema">Rust
    *     DataFusion: ParquetReadOptions::schema</a>
    */
   public Schema schema() {

@@ -16,7 +16,7 @@ package org.apache.arrow.datafusion.execution;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/memory_pool/trait.MemoryPool.html">Rust
+ *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/memory_pool/trait.MemoryPool.html">Rust
  *     DataFusion: MemoryPool</a>
  */
 public class MemoryPool implements AutoCloseable {
@@ -34,7 +34,7 @@ public class MemoryPool implements AutoCloseable {
    *
    * @return reserved bytes
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/memory_pool/trait.MemoryPool.html#tymethod.reserved">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/memory_pool/trait.MemoryPool.html#tymethod.reserved">Rust
    *     DataFusion: MemoryPool::reserved</a>
    */
   public long reserved() {

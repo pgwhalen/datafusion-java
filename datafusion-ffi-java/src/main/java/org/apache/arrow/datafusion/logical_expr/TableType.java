@@ -12,7 +12,7 @@ package org.apache.arrow.datafusion.logical_expr;
  * }
  * }
  *
- * @see <a href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/enum.TableType.html">Rust
+ * @see <a href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/enum.TableType.html">Rust
  *     DataFusion: TableType</a>
  */
 public enum TableType {

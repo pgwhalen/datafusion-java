@@ -11,7 +11,7 @@ package org.apache.arrow.datafusion.logical_expr;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/logical_plan/dml/enum.WriteOp.html">Rust
+ *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/logical_plan/dml/enum.WriteOp.html">Rust
  *     DataFusion: WriteOp</a>
  */
 public enum WriteOp {

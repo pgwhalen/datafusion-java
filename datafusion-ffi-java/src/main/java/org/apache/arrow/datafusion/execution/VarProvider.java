@@ -43,7 +43,7 @@ import org.apache.arrow.vector.types.pojo.ArrowType;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/var_provider/trait.VarProvider.html">Rust
+ *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/var_provider/trait.VarProvider.html">Rust
  *     DataFusion: VarProvider</a>
  */
 public interface VarProvider {
@@ -66,7 +66,7 @@ public interface VarProvider {
    * @return the scalar value for this variable
    * @throws RuntimeException if the variable is unknown or cannot be resolved
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/var_provider/trait.VarProvider.html#tymethod.get_value">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/var_provider/trait.VarProvider.html#tymethod.get_value">Rust
    *     DataFusion: VarProvider::get_value</a>
    */
   ScalarValue getValue(List<String> varNames);
@@ -87,7 +87,7 @@ public interface VarProvider {
    * @param varNames the variable name components
    * @return the Arrow type of the variable, or empty if unknown
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/var_provider/trait.VarProvider.html#tymethod.get_type">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/var_provider/trait.VarProvider.html#tymethod.get_type">Rust
    *     DataFusion: VarProvider::get_type</a>
    */
   Optional<ArrowType> getType(List<String> varNames);

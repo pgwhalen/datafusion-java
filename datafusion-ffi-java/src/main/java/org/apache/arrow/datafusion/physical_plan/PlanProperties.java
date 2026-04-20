@@ -15,7 +15,7 @@ package org.apache.arrow.datafusion.physical_plan;
  * @param emissionType How the plan produces output
  * @param boundedness Whether the plan's input data is finite or infinite
  * @see <a
- *     href="https://docs.rs/datafusion/52.1.0/datafusion/physical_plan/struct.PlanProperties.html">Rust
+ *     href="https://docs.rs/datafusion/53.1.0/datafusion/physical_plan/struct.PlanProperties.html">Rust
  *     DataFusion: PlanProperties</a>
  */
 public record PlanProperties(
@@ -26,7 +26,7 @@ public record PlanProperties(
    *
    * @return the output partitioning count
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/physical_plan/struct.PlanProperties.html#method.output_partitioning">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/physical_plan/struct.PlanProperties.html#method.output_partitioning">Rust
    *     DataFusion: PlanProperties::output_partitioning</a>
    */
   public int outputPartitioning() {
@@ -38,7 +38,7 @@ public record PlanProperties(
    *
    * @return the emission type
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/physical_plan/struct.PlanProperties.html#structfield.emission_type">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/physical_plan/struct.PlanProperties.html#structfield.emission_type">Rust
    *     DataFusion: PlanProperties::emission_type</a>
    */
   public EmissionType emissionType() {
@@ -50,7 +50,7 @@ public record PlanProperties(
    *
    * @return the boundedness
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/physical_plan/struct.PlanProperties.html#structfield.boundedness">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/physical_plan/struct.PlanProperties.html#structfield.boundedness">Rust
    *     DataFusion: PlanProperties::boundedness</a>
    */
   public Boundedness boundedness() {

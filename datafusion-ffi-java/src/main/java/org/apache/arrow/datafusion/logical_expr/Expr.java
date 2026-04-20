@@ -26,7 +26,7 @@ import org.apache.arrow.vector.types.pojo.ArrowType;
  * <p>Variants that cannot be represented via protobuf (e.g., subquery expressions) are captured by
  * {@link UnresolvedExpr}, which stores the raw proto bytes for lossless round-trip serialization.
  *
- * @see <a href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html">Rust
+ * @see <a href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/enum.Expr.html">Rust
  *     DataFusion: Expr</a>
  */
 public sealed interface Expr {
@@ -42,7 +42,7 @@ public sealed interface Expr {
    *
    * @param other the expression to compare
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.eq">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/enum.Expr.html#method.eq">Rust
    *     DataFusion: Expr::eq</a>
    */
   default Expr eq(Expr other) {
@@ -58,7 +58,7 @@ public sealed interface Expr {
    *
    * @param other the expression to compare
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.not_eq">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/enum.Expr.html#method.not_eq">Rust
    *     DataFusion: Expr::not_eq</a>
    */
   default Expr notEq(Expr other) {
@@ -74,7 +74,7 @@ public sealed interface Expr {
    *
    * @param other the expression to compare
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.lt">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/enum.Expr.html#method.lt">Rust
    *     DataFusion: Expr::lt</a>
    */
   default Expr lt(Expr other) {
@@ -90,7 +90,7 @@ public sealed interface Expr {
    *
    * @param other the expression to compare
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.lt_eq">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/enum.Expr.html#method.lt_eq">Rust
    *     DataFusion: Expr::lt_eq</a>
    */
   default Expr ltEq(Expr other) {
@@ -106,7 +106,7 @@ public sealed interface Expr {
    *
    * @param other the expression to compare
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.gt">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/enum.Expr.html#method.gt">Rust
    *     DataFusion: Expr::gt</a>
    */
   default Expr gt(Expr other) {
@@ -122,7 +122,7 @@ public sealed interface Expr {
    *
    * @param other the expression to compare
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.gt_eq">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/enum.Expr.html#method.gt_eq">Rust
    *     DataFusion: Expr::gt_eq</a>
    */
   default Expr gtEq(Expr other) {
@@ -140,7 +140,7 @@ public sealed interface Expr {
    *
    * @param other the expression to combine
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.and">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/enum.Expr.html#method.and">Rust
    *     DataFusion: Expr::and</a>
    */
   default Expr and(Expr other) {
@@ -156,7 +156,7 @@ public sealed interface Expr {
    *
    * @param other the expression to combine
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.or">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/enum.Expr.html#method.or">Rust
    *     DataFusion: Expr::or</a>
    */
   default Expr or(Expr other) {
@@ -171,7 +171,7 @@ public sealed interface Expr {
    * }
    *
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.not">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/enum.Expr.html#method.not">Rust
    *     DataFusion: Expr::not</a>
    */
   default Expr not() {
@@ -189,7 +189,7 @@ public sealed interface Expr {
    *
    * @param other the expression to add
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.add">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/enum.Expr.html#method.add">Rust
    *     DataFusion: Expr::add</a>
    */
   default Expr add(Expr other) {
@@ -205,7 +205,7 @@ public sealed interface Expr {
    *
    * @param other the expression to subtract
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.sub">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/enum.Expr.html#method.sub">Rust
    *     DataFusion: Expr::sub</a>
    */
   default Expr sub(Expr other) {
@@ -221,7 +221,7 @@ public sealed interface Expr {
    *
    * @param other the expression to multiply by
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.mul">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/enum.Expr.html#method.mul">Rust
    *     DataFusion: Expr::mul</a>
    */
   default Expr mul(Expr other) {
@@ -237,7 +237,7 @@ public sealed interface Expr {
    *
    * @param other the expression to divide by
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.div">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/enum.Expr.html#method.div">Rust
    *     DataFusion: Expr::div</a>
    */
   default Expr div(Expr other) {
@@ -253,7 +253,7 @@ public sealed interface Expr {
    *
    * @param other the expression to divide by
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.rem">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/enum.Expr.html#method.rem">Rust
    *     DataFusion: Expr::rem</a>
    */
   default Expr rem(Expr other) {
@@ -268,7 +268,7 @@ public sealed interface Expr {
    * }
    *
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.neg">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/enum.Expr.html#method.neg">Rust
    *     DataFusion: Expr::neg</a>
    */
   default Expr neg() {
@@ -286,7 +286,7 @@ public sealed interface Expr {
    *
    * @param pattern the pattern expression
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.like">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/enum.Expr.html#method.like">Rust
    *     DataFusion: Expr::like</a>
    */
   default Expr like(Expr pattern) {
@@ -302,7 +302,7 @@ public sealed interface Expr {
    *
    * @param pattern the pattern expression
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.not_like">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/enum.Expr.html#method.not_like">Rust
    *     DataFusion: Expr::not_like</a>
    */
   default Expr notLike(Expr pattern) {
@@ -318,7 +318,7 @@ public sealed interface Expr {
    *
    * @param pattern the pattern expression
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.ilike">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/enum.Expr.html#method.ilike">Rust
    *     DataFusion: Expr::ilike</a>
    */
   default Expr ilike(Expr pattern) {
@@ -335,7 +335,7 @@ public sealed interface Expr {
    * }
    *
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.is_null">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/enum.Expr.html#method.is_null">Rust
    *     DataFusion: Expr::is_null</a>
    */
   default Expr isNull() {
@@ -350,7 +350,7 @@ public sealed interface Expr {
    * }
    *
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.is_not_null">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/enum.Expr.html#method.is_not_null">Rust
    *     DataFusion: Expr::is_not_null</a>
    */
   default Expr isNotNull() {
@@ -365,7 +365,7 @@ public sealed interface Expr {
    * }
    *
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.is_true">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/enum.Expr.html#method.is_true">Rust
    *     DataFusion: Expr::is_true</a>
    */
   default Expr isTrue() {
@@ -380,7 +380,7 @@ public sealed interface Expr {
    * }
    *
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.is_false">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/enum.Expr.html#method.is_false">Rust
    *     DataFusion: Expr::is_false</a>
    */
   default Expr isFalse() {
@@ -398,7 +398,7 @@ public sealed interface Expr {
    *
    * @param values the list of values
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.in_list">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/enum.Expr.html#method.in_list">Rust
    *     DataFusion: Expr::in_list</a>
    */
   default Expr inList(List<Expr> values) {
@@ -414,7 +414,7 @@ public sealed interface Expr {
    *
    * @param values the list of values
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.in_list">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/enum.Expr.html#method.in_list">Rust
    *     DataFusion: Expr::in_list</a>
    */
   default Expr notInList(List<Expr> values) {
@@ -433,7 +433,7 @@ public sealed interface Expr {
    * @param low the lower bound
    * @param high the upper bound
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.between">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/enum.Expr.html#method.between">Rust
    *     DataFusion: Expr::between</a>
    */
   default Expr between(Expr low, Expr high) {
@@ -450,7 +450,7 @@ public sealed interface Expr {
    * @param low the lower bound
    * @param high the upper bound
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.not_between">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/enum.Expr.html#method.not_between">Rust
    *     DataFusion: Expr::not_between</a>
    */
   default Expr notBetween(Expr low, Expr high) {
@@ -468,7 +468,7 @@ public sealed interface Expr {
    *
    * @param name the alias name
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.alias">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/enum.Expr.html#method.alias">Rust
    *     DataFusion: Expr::alias</a>
    */
   default Expr alias(String name) {
@@ -485,7 +485,7 @@ public sealed interface Expr {
    * }
    *
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.sort">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/enum.Expr.html#method.sort">Rust
    *     DataFusion: Expr::sort</a>
    */
   default SortExpr sortAsc() {
@@ -500,7 +500,7 @@ public sealed interface Expr {
    * }
    *
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.sort">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/enum.Expr.html#method.sort">Rust
    *     DataFusion: Expr::sort</a>
    */
   default SortExpr sortDesc() {
@@ -517,7 +517,7 @@ public sealed interface Expr {
    * @param asc true for ascending, false for descending
    * @param nullsFirst true to sort nulls first
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Expr.html#method.sort">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/enum.Expr.html#method.sort">Rust
    *     DataFusion: Expr::sort</a>
    */
   default SortExpr sort(boolean asc, boolean nullsFirst) {
