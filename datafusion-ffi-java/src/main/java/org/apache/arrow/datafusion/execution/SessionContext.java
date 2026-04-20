@@ -18,6 +18,7 @@ import org.apache.arrow.datafusion.datasource.ParquetReadOptions;
 import org.apache.arrow.datafusion.logical_expr.Expr;
 import org.apache.arrow.datafusion.logical_expr.LogicalPlan;
 import org.apache.arrow.datafusion.logical_expr.ScalarUDF;
+import org.apache.arrow.datafusion.providers.RustCatalogProvider;
 import org.apache.arrow.datafusion.providers.RustTableProvider;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
@@ -363,6 +364,37 @@ public class SessionContext implements AutoCloseable {
   public void registerCatalog(String name, CatalogProvider catalog, BufferAllocator allocator) {
     checkNotClosed();
     bridge.registerCatalog(name, catalog, allocator);
+  }
+
+  /**
+   * Registers a Rust-side catalog provider (for example one produced by {@link
+   * org.apache.arrow.datafusion.providers.flight.FlightSqlFederatedCatalog#builder()}).
+   *
+   * <p>The catalog handle remains owned by the caller — registering it does not transfer
+   * ownership, and callers must still {@link RustCatalogProvider#close() close} the handle when
+   * done.
+   *
+   * {@snippet :
+   * try (FlightSqlFederatedCatalog remote = FlightSqlFederatedCatalog.builder()
+   *         .endpoint("http://localhost:32010")
+   *         .computeContext("remote1")
+   *         .table("users")
+   *         .build()) {
+   *     ctx.registerCatalog("remote1", remote);
+   *     ctx.sql("SELECT * FROM remote1.public.users").show();
+   * }
+   * }
+   *
+   * @param name the catalog name used in SQL
+   * @param catalog a Rust-backed catalog provider
+   * @throws DataFusionError if registration fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/context/struct.SessionContext.html#method.register_catalog">Rust
+   *     DataFusion: SessionContext::register_catalog</a>
+   */
+  public void registerCatalog(String name, RustCatalogProvider catalog) {
+    checkNotClosed();
+    bridge.registerRustCatalog(name, catalog);
   }
 
   /**

@@ -40,6 +40,7 @@ import org.apache.arrow.datafusion.generated.DfStringArray;
 import org.apache.arrow.datafusion.generated.DfVarType;
 import org.apache.arrow.datafusion.logical_expr.Expr;
 import org.apache.arrow.datafusion.logical_expr.ScalarUDF;
+import org.apache.arrow.datafusion.providers.RustCatalogProvider;
 import org.apache.arrow.datafusion.providers.RustTableProvider;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
@@ -287,6 +288,17 @@ public final class SessionContextBridge implements AutoCloseable {
       throw new NativeDataFusionError(e);
     } catch (Exception e) {
       throw new DataFusionError("Failed to register catalog", e);
+    }
+  }
+
+  void registerRustCatalog(String name, RustCatalogProvider catalog) {
+    try {
+      dfCtx.registerRustCatalog(name, catalog.handle());
+      logger.debug("Registered Rust catalog '{}'", name);
+    } catch (DfError e) {
+      throw new NativeDataFusionError(e);
+    } catch (Exception e) {
+      throw new DataFusionError("Failed to register Rust catalog", e);
     }
   }
 

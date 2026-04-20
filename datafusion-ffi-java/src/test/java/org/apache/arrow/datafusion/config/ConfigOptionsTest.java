@@ -184,8 +184,7 @@ public class ConfigOptionsTest {
       assertShow(ctx, allocator, "datafusion.execution.enable_ansi_mode", "true");
       assertShow(
           ctx, allocator, "datafusion.execution.perfect_hash_join_small_build_threshold", "2048");
-      assertShow(
-          ctx, allocator, "datafusion.execution.perfect_hash_join_min_key_density", "0.25");
+      assertShow(ctx, allocator, "datafusion.execution.perfect_hash_join_min_key_density", "0.25");
     }
   }
 

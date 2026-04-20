@@ -481,8 +481,8 @@ pub mod ffi {
 
     #[diplomat::opaque]
     pub struct DfArrowBatch {
-        pub(super) schema: Arc<ArrowSchema>,
-        pub(super) batch: RecordBatch,
+        pub(crate) schema: Arc<ArrowSchema>,
+        pub(crate) batch: RecordBatch,
     }
 
     impl DfArrowBatch {
@@ -2074,7 +2074,24 @@ pub mod ffi {
         ) -> Result<Box<DfSessionContext>, Box<DfError>> {
             let config = build_session_config(keys, values)?;
             let rt = Runtime::new()?;
-            let rules = datafusion_federation::default_optimizer_rules();
+            // datafusion_federation::default_optimizer_rules() inserts the federation rule
+            // immediately after scalar_subquery_to_join — before PushDownFilter runs. That's
+            // fine for plans with no filters above a single-provider TableScan, but it means
+            // filters only get pushed into the remote SQL if they're already directly above a
+            // TableScan by the time federation runs.
+            //
+            // To reliably push filters (including post-join filters that PushDownFilter moves
+            // past a join) into the remote SQL, move the federation rule to the END of the
+            // optimizer pipeline so every filter/projection pushdown has already run.
+            let mut rules = datafusion_federation::default_optimizer_rules();
+            let fed_pos = rules
+                .iter()
+                .position(|r| r.name() == "federation_optimizer_rule")
+                .ok_or_else(|| -> Box<DfError> {
+                    "federation rule missing from default_optimizer_rules()".into()
+                })?;
+            let fed_rule = rules.remove(fed_pos);
+            rules.push(fed_rule);
             let state = datafusion::execution::SessionStateBuilder::new()
                 .with_config(config)
                 .with_optimizer_rules(rules)
