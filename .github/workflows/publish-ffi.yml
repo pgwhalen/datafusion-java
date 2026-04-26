@@ -161,8 +161,11 @@ jobs:
             ${{ runner.os }}-${{ runner.arch }}-cargo-optfeat-
             ${{ runner.os }}-${{ runner.arch }}-cargo-
 
-      - name: Run tests with duckdb feature enabled
-        run: ./gradlew :datafusion-ffi-java:test -Pfeatures=duckdb
+      - name: Run DuckDB tests with the duckdb feature enabled
+        # Scope to the DuckDB tests only: the rest of the suite already runs in the default-features
+        # job above, and stacking testcontainers (postgres + mysql) on top of the DuckDB native lib
+        # has caused JVM SIGSEGVs on the 2 GB GHA runner.
+        run: ./gradlew :datafusion-ffi-java:test -Pfeatures=duckdb --tests 'org.apache.arrow.datafusion.providers.duckdb.*'
 
   # Build native libraries on all platforms
   build-native:
