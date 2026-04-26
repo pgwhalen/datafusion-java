@@ -133,6 +133,37 @@ jobs:
       - name: Run GraalVM JVM mode test
         run: ./gradlew :datafusion-ffi-graal-test:run
 
+  # Exercise opt-in cargo features on a single platform so they don't bit-rot. Uses the
+  # `-Pfeatures=duckdb` property to enable the DuckDB provider (bundled C library, no system deps).
+  optional-features-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 22
+        uses: actions/setup-java@v4
+        with:
+          java-version: '22'
+          distribution: 'temurin'
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            datafusion-ffi-native/target
+          key: ${{ runner.os }}-${{ runner.arch }}-cargo-optfeat-${{ hashFiles('**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-cargo-optfeat-
+            ${{ runner.os }}-${{ runner.arch }}-cargo-
+
+      - name: Run tests with duckdb feature enabled
+        run: ./gradlew :datafusion-ffi-java:test -Pfeatures=duckdb
+
   # Build native libraries on all platforms
   build-native:
     strategy:

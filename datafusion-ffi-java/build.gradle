@@ -36,7 +36,6 @@ dependencies {
     runtimeOnly 'org.apache.arrow:arrow-memory-unsafe:18.0.0'
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
     testImplementation 'com.tngtech.archunit:archunit-junit5:1.3.0'
-    testImplementation 'org.xerial:sqlite-jdbc:3.46.1.0'
     testRuntimeOnly 'ch.qos.logback:logback-classic:1.5.12'
 }
 
@@ -97,16 +96,110 @@ ext.getCurrentPlatformDir = {
     return result
 }
 
+// Cargo features are mostly always-on (`flight`, `sqlite`, `postgres`, `mysql`, `test-server`)
+// via Cargo.toml's `[features.default]`. Extra opt-in features (e.g. `duckdb`) are enabled via
+// `-Pfeatures=duckdb[,mongodb,...]`. Set `-PnoDefaultFeatures` to pass `--no-default-features` and
+// build only what's listed in `-Pfeatures`.
+ext.cargoExtraFeatures = (project.findProperty('features') ?: '').toString().trim()
+ext.cargoNoDefaultFeatures = project.hasProperty('noDefaultFeatures')
+
+// Default Cargo features that contribute Java source — must match
+// datafusion-ffi-native/Cargo.toml's `[features.default]` (minus `test-server`, which is purely
+// Rust-side).
+def defaultJavaFeatures = ['flight', 'sqlite', 'postgres', 'mysql'].toSet()
+
 tasks.register('cargoDevBuild', Exec) {
     workingDir "$rootDir/datafusion-ffi-native"
     executable cargoBinary
     args 'build'
+    if (cargoNoDefaultFeatures) {
+        args '--no-default-features'
+    }
+    if (!cargoExtraFeatures.isEmpty()) {
+        args '--features', cargoExtraFeatures
+    }
 }
 
 tasks.register('cargoReleaseBuild', Exec) {
     workingDir "$rootDir/datafusion-ffi-native"
     executable cargoBinary
     args 'build', '--release'
+    if (cargoNoDefaultFeatures) {
+        args '--no-default-features'
+    }
+    if (!cargoExtraFeatures.isEmpty()) {
+        args '--features', cargoExtraFeatures
+    }
+}
+
+// Per-feature Java code lives in named source sets following the standard Gradle layout:
+//   src/<feature>/java        — main code, compiled into the published jar
+//   src/<feature>Test/java    — tests, run as part of the `test` task
+// Disabled features are NOT registered: their classes reference Diplomat-generated bindings
+// that only exist when the matching cargo feature is built.
+def extraFeatureSet = cargoExtraFeatures
+    .split(',')
+    .collect { it.trim() }
+    .findAll { !it.isEmpty() }
+    .toSet()
+def enabledFeatureSet = (cargoNoDefaultFeatures ? [] : defaultJavaFeatures) + extraFeatureSet
+
+// Per-feature test-only dependencies, declared as <feature>TestImplementation entries below.
+// Anything common (junit, archunit, logback) is inherited via configuration extension.
+def featureTestDeps = [
+    flight  : [],
+    sqlite  : ['org.xerial:sqlite-jdbc:3.46.1.0'],
+    postgres: [
+        'org.testcontainers:postgresql',
+        'org.postgresql:postgresql:42.7.4',
+    ],
+    mysql   : [
+        'org.testcontainers:mysql',
+        'com.mysql:mysql-connector-j:9.1.0',
+    ],
+    duckdb  : ['org.duckdb:duckdb_jdbc:1.4.1.0'],
+]
+def needsTestcontainers = enabledFeatureSet.any { it in ['postgres', 'mysql'] }
+
+enabledFeatureSet.each { feature ->
+    def featureSrc = sourceSets.create(feature) {
+        java.srcDirs = ["src/$feature/java"]
+    }
+    def featureTest = sourceSets.create("${feature}Test") {
+        java.srcDirs = ["src/${feature}Test/java"]
+    }
+
+    // Auto-created configurations: <name>Implementation, <name>RuntimeOnly,
+    // <name>CompileClasspath, <name>RuntimeClasspath. Wire them so feature code inherits
+    // main deps and feature tests inherit main test deps.
+    configurations.named("${feature}Implementation") { extendsFrom(configurations.implementation) }
+    configurations.named("${feature}RuntimeOnly") { extendsFrom(configurations.runtimeOnly) }
+    configurations.named("${feature}TestImplementation") {
+        extendsFrom(configurations.testImplementation, configurations.getByName("${feature}Implementation"))
+    }
+    configurations.named("${feature}TestRuntimeOnly") { extendsFrom(configurations.testRuntimeOnly) }
+
+    featureSrc.compileClasspath = featureSrc.compileClasspath + sourceSets.main.output
+    featureTest.compileClasspath = featureTest.compileClasspath +
+            sourceSets.main.output + featureSrc.output + sourceSets.test.output
+    featureTest.runtimeClasspath = featureTest.runtimeClasspath +
+            sourceSets.main.output + featureSrc.output + sourceSets.test.output
+
+    // Make feature classes visible on the main test classpath too (some non-feature tests
+    // may cross-reference provider helpers).
+    dependencies.add('testImplementation', featureSrc.output)
+
+    featureTestDeps[feature].each { dep ->
+        dependencies.add("${feature}TestImplementation", dep)
+    }
+}
+
+if (needsTestcontainers) {
+    dependencies {
+        testImplementation platform('org.testcontainers:testcontainers-bom:1.20.4')
+        testImplementation 'org.testcontainers:testcontainers'
+        testImplementation 'org.testcontainers:junit-jupiter'
+    }
 }
 
 tasks.register('copyDevLibrary', Sync) {
@@ -125,10 +218,20 @@ test {
         '--add-opens=java.base/java.nio=ALL-UNNAMED'
     ]
     useJUnitPlatform()
+    // Run feature tests within the main `test` task so a single invocation covers everything.
+    enabledFeatureSet.each { feature ->
+        def ts = sourceSets["${feature}Test"]
+        testClassesDirs += ts.output.classesDirs
+        classpath += ts.runtimeClasspath
+    }
 }
 
 jacocoTestReport {
     dependsOn test
+    enabledFeatureSet.each { feature ->
+        sourceDirectories.from(sourceSets[feature].allJava.srcDirs)
+        classDirectories.from(sourceSets[feature].output.classesDirs)
+    }
     afterEvaluate {
         classDirectories.setFrom(files(classDirectories.files.collect {
             fileTree(dir: it, excludes: [
@@ -149,6 +252,10 @@ tasks.register('verifyDocs', Javadoc) {
     dependsOn testClasses
     source = sourceSets.main.allJava
     classpath = sourceSets.main.compileClasspath
+    enabledFeatureSet.each { feature ->
+        source += sourceSets[feature].allJava
+        classpath += sourceSets[feature].compileClasspath
+    }
     destinationDir = layout.buildDirectory.dir("tmp/docsLinkValidation").get().asFile
     options {
         doclet = 'org.apache.arrow.datafusion.DocsValidationDoclet'
@@ -161,6 +268,10 @@ tasks.register('verifyDocsHttp', Javadoc) {
     dependsOn testClasses
     source = sourceSets.main.allJava
     classpath = sourceSets.main.compileClasspath
+    enabledFeatureSet.each { feature ->
+        source += sourceSets[feature].allJava
+        classpath += sourceSets[feature].compileClasspath
+    }
     destinationDir = layout.buildDirectory.dir("tmp/docsLinkValidationHttp").get().asFile
     options {
         doclet = 'org.apache.arrow.datafusion.DocsValidationDoclet'
@@ -199,6 +310,17 @@ tasks.register('copyAllNativeLibraries', Copy) {
 jar {
     dependsOn copyAllNativeLibraries
     mustRunAfter copyReleaseLibraryForJar
+    // Bundle each enabled feature's classes into the main jar.
+    enabledFeatureSet.each { feature ->
+        from sourceSets[feature].output
+    }
+}
+
+// Include feature sources in the published sources jar.
+tasks.named('sourcesJar', Jar) {
+    enabledFeatureSet.each { feature ->
+        from sourceSets[feature].allSource
+    }
 }
 
 // compileTestJava and javadoc share build/resources/main with native library copy tasks.
@@ -210,7 +332,12 @@ javadoc {
     mustRunAfter copyReleaseLibraryForJar
     // Exclude generated protobuf and diplomat sources — they have no javadoc comments
     exclude '**/proto/**'
-    source = sourceSets.main.allJava.matching { exclude { it.file.path.contains('diplomat-generated') } }
+    def baseSource = sourceSets.main.allJava.matching { exclude { it.file.path.contains('diplomat-generated') } }
+    source = baseSource
+    enabledFeatureSet.each { feature ->
+        source += sourceSets[feature].allJava
+        classpath += sourceSets[feature].compileClasspath
+    }
 }
 
 // JAR with only the local platform's native library (for development)
@@ -219,6 +346,9 @@ tasks.register('jarWithLocalLib', Jar) {
     archiveClassifier = 'local'
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     from sourceSets.main.output
+    enabledFeatureSet.each { feature ->
+        from sourceSets[feature].output
+    }
     from(layout.buildDirectory.dir("resources/main")) {
         include "natives/**"
     }

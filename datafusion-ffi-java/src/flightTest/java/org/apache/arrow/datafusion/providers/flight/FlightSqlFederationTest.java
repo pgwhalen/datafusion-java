@@ -1,5 +1,6 @@
 package org.apache.arrow.datafusion.providers.flight;
 
+import static org.apache.arrow.datafusion.providers.ProviderTestSupport.readPhysicalPlan;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -201,21 +202,11 @@ class FlightSqlFederationTest {
   }
 
   private static String explainPhysical(SessionContext ctx, String sql, BufferAllocator allocator) {
-    StringBuilder out = new StringBuilder();
     try (DataFrame df = ctx.sql("EXPLAIN " + sql);
         SendableRecordBatchStream stream = df.executeStream(allocator)) {
-      while (stream.loadNextBatch()) {
-        VectorSchemaRoot r = stream.getVectorSchemaRoot();
-        VarCharVector planType = (VarCharVector) r.getVector("plan_type");
-        VarCharVector plan = (VarCharVector) r.getVector("plan");
-        for (int i = 0; i < r.getRowCount(); i++) {
-          if ("physical_plan".equals(planType.getObject(i).toString())) {
-            out.append(plan.getObject(i).toString());
-          }
-        }
-      }
+      String physical = readPhysicalPlan(stream);
+      return physical == null ? "" : physical;
     }
-    return out.toString();
   }
 
   private static List<String[]> collectNameAmount(

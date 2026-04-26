@@ -1,17 +1,15 @@
 package org.apache.arrow.datafusion.providers.sqlite;
 
+import static org.apache.arrow.datafusion.providers.ProviderTestSupport.deleteQuietly;
+import static org.apache.arrow.datafusion.providers.ProviderTestSupport.readPhysicalPlan;
+import static org.apache.arrow.datafusion.providers.ProviderTestSupport.readVarCharColumn;
+import static org.apache.arrow.datafusion.providers.ProviderTestSupport.seedUsersTable;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.Statement;
-import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
-import java.util.stream.Stream;
 import org.apache.arrow.datafusion.common.DataFusionError;
 import org.apache.arrow.datafusion.config.ConfigOptions;
 import org.apache.arrow.datafusion.dataframe.DataFrame;
@@ -21,8 +19,6 @@ import org.apache.arrow.datafusion.providers.RustCatalogProvider;
 import org.apache.arrow.datafusion.providers.RustTableProvider;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
-import org.apache.arrow.vector.VarCharVector;
-import org.apache.arrow.vector.VectorSchemaRoot;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -37,7 +33,7 @@ class SqliteProviderTest {
     Path tempDir = Files.createTempDirectory("sqlite-test-");
     Path dbPath = tempDir.resolve("users.db");
     try {
-      seedUsersTable(dbPath);
+      seedUsersTable("jdbc:sqlite:" + dbPath.toAbsolutePath(), null, null);
 
       try (BufferAllocator allocator = new RootAllocator();
           SqliteConnectionPool pool = SqliteConnectionPool.file(dbPath.toString());
@@ -47,15 +43,7 @@ class SqliteProviderTest {
 
         try (DataFrame df = ctx.sql("SELECT name FROM users WHERE id > 1 ORDER BY name");
             SendableRecordBatchStream stream = df.executeStream(allocator)) {
-          List<String> names = new ArrayList<>();
-          while (stream.loadNextBatch()) {
-            VectorSchemaRoot r = stream.getVectorSchemaRoot();
-            VarCharVector name = (VarCharVector) r.getVector("name");
-            for (int i = 0; i < r.getRowCount(); i++) {
-              names.add(name.getObject(i).toString());
-            }
-          }
-          assertEquals(List.of("Bob", "Carol"), names);
+          assertEquals(List.of("Bob", "Carol"), readVarCharColumn(stream, "name"));
         }
       }
     } finally {
@@ -68,7 +56,7 @@ class SqliteProviderTest {
     Path tempDir = Files.createTempDirectory("sqlite-test-");
     Path dbPath = tempDir.resolve("catalog.db");
     try {
-      seedUsersTable(dbPath);
+      seedUsersTable("jdbc:sqlite:" + dbPath.toAbsolutePath(), null, null);
 
       try (BufferAllocator allocator = new RootAllocator();
           SqliteConnectionPool pool = SqliteConnectionPool.file(dbPath.toString());
@@ -82,17 +70,7 @@ class SqliteProviderTest {
         // predicate would not be pushed.
         try (DataFrame df = ctx.sql("EXPLAIN SELECT name FROM sqlite.main.users WHERE id > 1");
             SendableRecordBatchStream stream = df.executeStream(allocator)) {
-          String physical = null;
-          while (stream.loadNextBatch()) {
-            VectorSchemaRoot r = stream.getVectorSchemaRoot();
-            VarCharVector planType = (VarCharVector) r.getVector("plan_type");
-            VarCharVector plan = (VarCharVector) r.getVector("plan");
-            for (int i = 0; i < r.getRowCount(); i++) {
-              if ("physical_plan".equals(planType.getObject(i).toString())) {
-                physical = plan.getObject(i).toString();
-              }
-            }
-          }
+          String physical = readPhysicalPlan(stream);
           assertTrue(
               physical != null && physical.contains("SqlExec"),
               "expected a SqlExec in the physical plan: " + physical);
@@ -105,15 +83,7 @@ class SqliteProviderTest {
         try (DataFrame df =
                 ctx.sql("SELECT name FROM sqlite.main.users WHERE id > 1 ORDER BY name");
             SendableRecordBatchStream stream = df.executeStream(allocator)) {
-          List<String> names = new ArrayList<>();
-          while (stream.loadNextBatch()) {
-            VectorSchemaRoot r = stream.getVectorSchemaRoot();
-            VarCharVector name = (VarCharVector) r.getVector("name");
-            for (int i = 0; i < r.getRowCount(); i++) {
-              names.add(name.getObject(i).toString());
-            }
-          }
-          assertEquals(List.of("Bob", "Carol"), names);
+          assertEquals(List.of("Bob", "Carol"), readVarCharColumn(stream, "name"));
         }
       }
     } finally {
@@ -132,38 +102,6 @@ class SqliteProviderTest {
       } catch (DataFusionError e) {
         // expected
       }
-    }
-  }
-
-  private static void seedUsersTable(Path dbPath) throws Exception {
-    Files.deleteIfExists(dbPath.toAbsolutePath());
-    String url = "jdbc:sqlite:" + dbPath.toAbsolutePath();
-    try (Connection conn = DriverManager.getConnection(url);
-        Statement st = conn.createStatement()) {
-      st.execute("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)");
-      st.execute("INSERT INTO users VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Carol')");
-    }
-  }
-
-  // SQLite's async connection pool can hold -wal / -shm sidecar files open briefly after the
-  // Rust Arc drops. Using @TempDir is brittle in that window; a manual cleanup that tolerates
-  // residual files is more reliable.
-  private static void deleteQuietly(Path root) {
-    if (root == null || !Files.exists(root)) {
-      return;
-    }
-    try (Stream<Path> walk = Files.walk(root)) {
-      walk.sorted(Comparator.reverseOrder())
-          .forEach(
-              p -> {
-                try {
-                  Files.deleteIfExists(p);
-                } catch (Exception ignored) {
-                  // Best-effort; OS-level temp cleanup handles the rest.
-                }
-              });
-    } catch (Exception ignored) {
-      // Best-effort.
     }
   }
 }
