@@ -325,7 +325,14 @@ tasks.named('sourcesJar', Jar) {
 
 // compileTestJava and javadoc share build/resources/main with native library copy tasks.
 // dependsOn satisfies Gradle's implicit-dependency validation (mustRunAfter alone is not enough).
+// Per-feature compile<Feature>Java + compile<Feature>TestJava tasks read the same directory via
+// sourceSets.main.output, so they need the same wiring.
 compileTestJava.dependsOn copyAllNativeLibraries
+enabledFeatureSet.each { feature ->
+    def cap = feature.capitalize()
+    tasks.named("compile${cap}Java").configure { dependsOn copyAllNativeLibraries }
+    tasks.named("compile${cap}TestJava").configure { dependsOn copyAllNativeLibraries }
+}
 
 javadoc {
     dependsOn copyAllNativeLibraries
