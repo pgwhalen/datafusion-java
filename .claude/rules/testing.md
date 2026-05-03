@@ -47,18 +47,23 @@ try (RecordBatchStream stream = df.execute(allocator)) {
 }
 ```
 
-### Good: Verify actual data
+### Good: Verify actual data with `VectorSchemaRootAssert`
 
 ```java
-// DO this - verify column values
-try (RecordBatchStream stream = df.execute(allocator)) {
-    VectorSchemaRoot root = stream.next();
-    assertEquals(3, root.getRowCount());
-    IntVector col = (IntVector) root.getVector("id");
-    assertEquals(1, col.get(0));
-    assertEquals(2, col.get(1));
-    assertEquals(3, col.get(2));
+import static org.apache.arrow.datafusion.testutil.VectorSchemaRootAssert.expect;
+
+try (DataFrame df = ctx.sql("SELECT id, name FROM t");
+    SendableRecordBatchStream stream = df.executeStream(allocator)) {
+  expect("id", "name")
+      .row(1L, "Alice")
+      .row(2L, "Bob")
+      .row(3L, "Carol")
+      .assertMatches(stream);
 }
 ```
 
 Row count checks are fine as an **additional** assertion alongside data verification, but never as the sole assertion.
+
+### Use `VectorSchemaRootAssert` instead of hand-rolled cell extraction
+
+For any test that asserts on `VectorSchemaRoot` cell contents, prefer `VectorSchemaRootAssert` over hand-rolled `(Vector) root.getVector(...) + .get(i) + assertEquals(...)`. The DSL handles schema strictness, row counts, multi-batch draining, dictionary auto-decode, and float tolerance, and renders a tabular diff on failure. The class lives at `datafusion-ffi-java/src/test/java/org/apache/arrow/datafusion/testutil/VectorSchemaRootAssert.java` — read its javadoc for the full API (`.withDelta`, `.unordered`, `.allowExtraColumns`, `.batch`, `.compareDictionaryIndices`, plus overloads for `VectorSchemaRoot`, `SendableRecordBatchStream`, `ArrowReader`, and a generic `BooleanSupplier` overload for the legacy `datafusion-java` async stream).
