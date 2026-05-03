@@ -9,21 +9,6 @@ use datafusion::logical_expr::Volatility;
 use prost::Message;
 use std::sync::Arc;
 
-/// Read a function name via a `name_to(buf_addr, buf_cap) -> bytes_written` callback.
-pub(crate) fn read_name_via_upcall<F>(callback: F, fallback: &str) -> String
-where
-    F: FnOnce(usize, usize) -> i64,
-{
-    let cap: usize = 1024;
-    let mut buf = vec![0u8; cap];
-    let written = callback(buf.as_mut_ptr() as usize, cap);
-    if written > 0 {
-        String::from_utf8_lossy(&buf[..written as usize]).to_string()
-    } else {
-        fallback.to_string()
-    }
-}
-
 /// Map integer volatility (0=Immutable, 1=Stable, 2=Volatile) to `Volatility`.
 pub(crate) fn volatility_from_i32(v: i32) -> Volatility {
     match v {

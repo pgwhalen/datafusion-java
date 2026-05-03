@@ -1,7 +1,7 @@
-use crate::bridge::ffi::DfScalarUdfTrait;
+use crate::bridge::ffi::{DfScalarUdfTrait, DfStringArray};
 use crate::udf_common::{
-    export_field_as_ffi_schema, export_field_refs_as_ffi_schemas, read_name_via_upcall,
-    upcall_coerce_types, upcall_return_field, volatility_from_i32,
+    export_field_as_ffi_schema, export_field_refs_as_ffi_schemas, upcall_coerce_types,
+    upcall_return_field, volatility_from_i32,
 };
 use crate::upcall_utils::{do_upcall, ErrorBuffer};
 use arrow::array::StructArray;
@@ -24,7 +24,10 @@ pub struct ForeignDfUdf<T: DfScalarUdfTrait> {
 
 impl<T: DfScalarUdfTrait> ForeignDfUdf<T> {
     pub fn new(inner: T) -> Self {
-        let name = read_name_via_upcall(|addr, cap| inner.name_to(addr, cap), "unknown_udf");
+        let name = DfStringArray::take_from_raw(inner.name_raw())
+            .into_iter()
+            .next()
+            .unwrap_or_else(|| "unknown_udf".to_string());
         let volatility = volatility_from_i32(inner.volatility());
         let signature = Signature::variadic_any(volatility);
 

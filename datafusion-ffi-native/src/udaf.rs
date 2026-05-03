@@ -1,7 +1,7 @@
-use crate::bridge::ffi::{DfAggregateUdfTrait, DfExprBytes};
+use crate::bridge::ffi::{DfAggregateUdfTrait, DfExprBytes, DfStringArray};
 use crate::udf_common::{
     decode_scalar_value, export_arrays_as_ffi, export_field_as_ffi_schema, import_field_from_ffi_schema,
-    read_name_via_upcall, upcall_coerce_types, upcall_return_field, volatility_from_i32,
+    upcall_coerce_types, upcall_return_field, volatility_from_i32,
 };
 use crate::upcall_utils::{do_counted_upcall, do_returning_upcall, do_upcall, ErrorBuffer};
 use arrow::datatypes::{DataType, FieldRef};
@@ -24,7 +24,10 @@ pub struct ForeignDfUdaf<T: DfAggregateUdfTrait> {
 
 impl<T: DfAggregateUdfTrait> ForeignDfUdaf<T> {
     pub fn new(inner: T) -> Self {
-        let name = read_name_via_upcall(|addr, cap| inner.name_to(addr, cap), "unknown_udaf");
+        let name = DfStringArray::take_from_raw(inner.name_raw())
+            .into_iter()
+            .next()
+            .unwrap_or_else(|| "unknown_udaf".to_string());
         let volatility = volatility_from_i32(inner.volatility());
         let signature = Signature::variadic_any(volatility);
 

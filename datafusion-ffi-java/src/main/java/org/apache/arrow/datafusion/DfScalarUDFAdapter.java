@@ -2,7 +2,6 @@ package org.apache.arrow.datafusion;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import org.apache.arrow.c.ArrowArray;
@@ -37,17 +36,8 @@ public final class DfScalarUDFAdapter implements DfScalarUdfTrait {
   }
 
   @Override
-  public long nameTo(long bufAddr, long bufCap) {
-    try {
-      byte[] bytes = udf.name().getBytes(StandardCharsets.UTF_8);
-      int len = (int) Math.min(bytes.length, bufCap);
-      MemorySegment.ofAddress(bufAddr)
-          .reinterpret(bufCap)
-          .copyFrom(MemorySegment.ofArray(bytes).asSlice(0, len));
-      return len;
-    } catch (Exception e) {
-      return -1;
-    }
+  public long nameRaw() {
+    return NativeUtil.toRawStringArray(List.of(udf.name()));
   }
 
   @Override

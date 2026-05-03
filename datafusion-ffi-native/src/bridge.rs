@@ -238,8 +238,9 @@ pub mod ffi {
 
     /// Scalar UDF trait: user-defined function callbacks.
     pub trait DfScalarUdfTrait {
-        /// Write function name to buf at buf_addr (cap buf_cap). Returns bytes written.
-        fn name_to(&self, buf_addr: usize, buf_cap: usize) -> i64;
+        /// Returns a raw pointer to a `DfStringArray` containing a single element: the function
+        /// name. Rust takes ownership and reclaims it via `DfStringArray::take_from_raw`.
+        fn name_raw(&self) -> usize;
         /// Returns volatility: 0=Immutable, 1=Stable, 2=Volatile.
         fn volatility(&self) -> i32;
         /// Compute return field from arg types. Writes FFI_ArrowSchema to out_schema_addr.
@@ -282,8 +283,9 @@ pub mod ffi {
     /// A single trait handles both UDAF metadata and accumulator operations.
     /// Accumulator instances are tracked by ID on the Java side.
     pub trait DfAggregateUdfTrait {
-        /// Write function name to buf at buf_addr (cap buf_cap). Returns bytes written.
-        fn name_to(&self, buf_addr: usize, buf_cap: usize) -> i64;
+        /// Returns a raw pointer to a `DfStringArray` containing a single element: the function
+        /// name. Rust takes ownership and reclaims it via `DfStringArray::take_from_raw`.
+        fn name_raw(&self) -> usize;
         /// Returns volatility: 0=Immutable, 1=Stable, 2=Volatile.
         fn volatility(&self) -> i32;
         /// Compute return field from arg types. Writes FFI_ArrowSchema to out_schema_addr.

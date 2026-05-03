@@ -2,7 +2,6 @@ package org.apache.arrow.datafusion;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -49,17 +48,8 @@ public final class DfAggregateUDFAdapter implements DfAggregateUdfTrait {
   // ======== UDAF metadata callbacks ========
 
   @Override
-  public long nameTo(long bufAddr, long bufCap) {
-    try {
-      byte[] bytes = udaf.name().getBytes(StandardCharsets.UTF_8);
-      int len = (int) Math.min(bytes.length, bufCap);
-      MemorySegment.ofAddress(bufAddr)
-          .reinterpret(bufCap)
-          .copyFrom(MemorySegment.ofArray(bytes).asSlice(0, len));
-      return len;
-    } catch (Exception e) {
-      return -1;
-    }
+  public long nameRaw() {
+    return NativeUtil.toRawStringArray(List.of(udaf.name()));
   }
 
   @Override

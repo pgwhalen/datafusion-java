@@ -144,6 +144,14 @@ Adapter methods write error strings to Rust-provided buffers using `Errors.write
 }
 ```
 
+### No Fixed-Capacity Buffers
+
+**NEVER bake an arbitrary fixed capacity into an FFI signature** (e.g. `(buf_addr, buf_cap) -> bytes_written`). The cap is an internal binding detail that silently truncates user data, and no value is defensible.
+
+For Java→Rust strings via a trait callback, return a `DfStringArray` raw pointer (`NativeUtil.toRawStringArray` on the Java side, `DfStringArray::take_from_raw` on the Rust side). The container owns its own allocation, so there is no cap to pick.
+
+`ErrorBuffer` (32 KiB) is the one exception: it is a diagnostic channel, and truncated stack traces are tolerable. Anything carrying user-visible payload must size itself dynamically.
+
 ### No Custom Byte Encoding
 
 **NEVER invent ad-hoc binary wire formats** (length-prefixed lists, hand-rolled tag/value layouts, custom struct packing) to move data across the FFI boundary. This produces fragile parsers on both sides, bypasses Diplomat's type system, and the meaning of the bytes is only conveyed by comments.
