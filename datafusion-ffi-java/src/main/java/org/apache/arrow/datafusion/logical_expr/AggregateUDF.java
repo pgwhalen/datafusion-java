@@ -27,7 +27,7 @@ import org.apache.arrow.vector.types.pojo.Field;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/struct.AggregateUDF.html">Rust
+ *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/struct.AggregateUDF.html">Rust
  *     DataFusion: AggregateUDF</a>
  */
 public interface AggregateUDF {
@@ -45,7 +45,7 @@ public interface AggregateUDF {
    * }
    *
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/struct.AggregateUDF.html#method.name">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/struct.AggregateUDF.html#method.name">Rust
    *     DataFusion: AggregateUDF::name</a>
    */
   String name();
@@ -63,7 +63,7 @@ public interface AggregateUDF {
    * }
    *
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/struct.AggregateUDF.html#method.signature">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/struct.AggregateUDF.html#method.signature">Rust
    *     DataFusion: AggregateUDF::signature</a>
    */
   Signature signature();
@@ -83,7 +83,7 @@ public interface AggregateUDF {
    * @param argFields the fields of the input arguments
    * @return the field describing the return type
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/struct.AggregateUDF.html#method.return_field">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/struct.AggregateUDF.html#method.return_field">Rust
    *     DataFusion: AggregateUDF::return_field</a>
    */
   Field returnField(List<Field> argFields);
@@ -106,7 +106,7 @@ public interface AggregateUDF {
    *
    * @return a new accumulator instance
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/udaf/trait.AggregateUDFImpl.html#tymethod.accumulator">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/trait.AggregateUDFImpl.html#tymethod.accumulator">Rust
    *     DataFusion: AggregateUDFImpl::accumulator</a>
    */
   Accumulator createAccumulator();
@@ -132,7 +132,7 @@ public interface AggregateUDF {
    * @param returnField the return field of the aggregate function
    * @return the fields describing the intermediate state
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/udaf/trait.AggregateUDFImpl.html#method.state_fields">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/trait.AggregateUDFImpl.html#method.state_fields">Rust
    *     DataFusion: AggregateUDFImpl::state_fields</a>
    */
   default List<Field> stateFields(Field returnField) {
@@ -155,7 +155,7 @@ public interface AggregateUDF {
    * @param argFields the fields of the input arguments
    * @return the coerced fields
    * @see <a
-   *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/udaf/trait.AggregateUDFImpl.html#method.coerce_types">Rust
+   *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/trait.AggregateUDFImpl.html#method.coerce_types">Rust
    *     DataFusion: AggregateUDFImpl::coerce_types</a>
    */
   default List<Field> coerceTypes(List<Field> argFields) {

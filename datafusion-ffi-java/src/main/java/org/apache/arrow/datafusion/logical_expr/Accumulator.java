@@ -41,7 +41,7 @@ import org.apache.arrow.vector.FieldVector;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion-expr-common/52.1.0/datafusion_expr_common/accumulator/trait.Accumulator.html">Rust
+ *     href="https://docs.rs/datafusion-expr-common/53.1.0/datafusion_expr_common/accumulator/trait.Accumulator.html">Rust
  *     DataFusion: Accumulator</a>
  */
 public interface Accumulator {
@@ -56,7 +56,7 @@ public interface Accumulator {
    *
    * @param values the input column vectors, one per argument
    * @see <a
-   *     href="https://docs.rs/datafusion-expr-common/52.1.0/datafusion_expr_common/accumulator/trait.Accumulator.html#tymethod.update_batch">Rust
+   *     href="https://docs.rs/datafusion-expr-common/53.1.0/datafusion_expr_common/accumulator/trait.Accumulator.html#tymethod.update_batch">Rust
    *     DataFusion: Accumulator::update_batch</a>
    */
   void updateBatch(List<FieldVector> values);
@@ -68,7 +68,7 @@ public interface Accumulator {
    *
    * @return the final aggregate result
    * @see <a
-   *     href="https://docs.rs/datafusion-expr-common/52.1.0/datafusion_expr_common/accumulator/trait.Accumulator.html#tymethod.evaluate">Rust
+   *     href="https://docs.rs/datafusion-expr-common/53.1.0/datafusion_expr_common/accumulator/trait.Accumulator.html#tymethod.evaluate">Rust
    *     DataFusion: Accumulator::evaluate</a>
    */
   ScalarValue evaluate();
@@ -84,7 +84,7 @@ public interface Accumulator {
    *
    * @return the intermediate state values
    * @see <a
-   *     href="https://docs.rs/datafusion-expr-common/52.1.0/datafusion_expr_common/accumulator/trait.Accumulator.html#tymethod.state">Rust
+   *     href="https://docs.rs/datafusion-expr-common/53.1.0/datafusion_expr_common/accumulator/trait.Accumulator.html#tymethod.state">Rust
    *     DataFusion: Accumulator::state</a>
    */
   List<ScalarValue> state();
@@ -100,7 +100,7 @@ public interface Accumulator {
    *
    * @param states the partial state column vectors to merge
    * @see <a
-   *     href="https://docs.rs/datafusion-expr-common/52.1.0/datafusion_expr_common/accumulator/trait.Accumulator.html#tymethod.merge_batch">Rust
+   *     href="https://docs.rs/datafusion-expr-common/53.1.0/datafusion_expr_common/accumulator/trait.Accumulator.html#tymethod.merge_batch">Rust
    *     DataFusion: Accumulator::merge_batch</a>
    */
   void mergeBatch(List<FieldVector> states);
@@ -114,7 +114,7 @@ public interface Accumulator {
    *
    * @return the estimated memory size in bytes
    * @see <a
-   *     href="https://docs.rs/datafusion-expr-common/52.1.0/datafusion_expr_common/accumulator/trait.Accumulator.html#tymethod.size">Rust
+   *     href="https://docs.rs/datafusion-expr-common/53.1.0/datafusion_expr_common/accumulator/trait.Accumulator.html#tymethod.size">Rust
    *     DataFusion: Accumulator::size</a>
    */
   long size();

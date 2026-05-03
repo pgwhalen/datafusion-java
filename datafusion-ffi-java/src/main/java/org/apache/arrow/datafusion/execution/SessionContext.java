@@ -481,7 +481,7 @@ public class SessionContext implements AutoCloseable {
    * @param allocator The buffer allocator to use for Arrow data transfers
    * @throws DataFusionError if registration fails
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.register_udaf">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/context/struct.SessionContext.html#method.register_udaf">Rust
    *     DataFusion: SessionContext::register_udaf</a>
    */
   public void registerUdaf(AggregateUDF udaf, BufferAllocator allocator) {
