@@ -24,7 +24,7 @@ import org.apache.arrow.vector.dictionary.DictionaryProvider;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion/52.1.0/datafusion/physical_plan/type.SendableRecordBatchStream.html">Rust
+ *     href="https://docs.rs/datafusion/53.1.0/datafusion/physical_plan/type.SendableRecordBatchStream.html">Rust
  *     DataFusion: SendableRecordBatchStream</a>
  */
 public class SendableRecordBatchStream implements RecordBatchReader, DictionaryProvider {

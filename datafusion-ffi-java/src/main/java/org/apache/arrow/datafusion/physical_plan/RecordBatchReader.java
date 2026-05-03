@@ -21,7 +21,7 @@ import org.apache.arrow.vector.VectorSchemaRoot;
  * <p>Example:
  *
  * {@snippet :
- * try (RecordBatchReader reader = plan.execute(0, allocator)) {
+ * try (RecordBatchReader reader = plan.execute(0, taskContext, allocator)) {
  *     VectorSchemaRoot root = reader.getVectorSchemaRoot();
  *     while (reader.loadNextBatch()) {
  *         int rowCount = root.getRowCount();

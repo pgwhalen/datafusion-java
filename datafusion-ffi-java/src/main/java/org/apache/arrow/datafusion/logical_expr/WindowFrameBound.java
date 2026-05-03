@@ -17,7 +17,7 @@ import org.apache.arrow.datafusion.common.ScalarValue;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/window_frame/enum.WindowFrameBound.html">Rust
+ *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/window_frame/enum.WindowFrameBound.html">Rust
  *     DataFusion: WindowFrameBound</a>
  */
 public sealed interface WindowFrameBound {

@@ -29,7 +29,7 @@ import java.util.Map;
  * @param treeMaximumRenderWidth Maximum render width for tree-style EXPLAIN output
  * @param analyzeLevel Detail level for EXPLAIN ANALYZE output
  * @see <a
- *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/config/struct.ExplainOptions.html">Rust
+ *     href="https://docs.rs/datafusion-common/53.1.0/datafusion_common/config/struct.ExplainOptions.html">Rust
  *     DataFusion: ExplainOptions</a>
  */
 public record ExplainOptions(

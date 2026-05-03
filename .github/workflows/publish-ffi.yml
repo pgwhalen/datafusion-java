@@ -47,6 +47,12 @@ jobs:
           RELEASE="${SNAPSHOT%-SNAPSHOT}"
           echo "Release version: $RELEASE"
 
+          # Fail fast if this version has already been released (tag exists on origin)
+          if git ls-remote --tags origin "v$RELEASE" | grep -q "refs/tags/v$RELEASE$"; then
+            echo "::error::Version $RELEASE has already been released (tag v$RELEASE exists on origin). Bump the version in datafusion-ffi-java/build.gradle before re-running."
+            exit 1
+          fi
+
           # Compute next SNAPSHOT (increment patch)
           MAJOR=$(echo "$RELEASE" | cut -d. -f1)
           MINOR=$(echo "$RELEASE" | cut -d. -f2)
@@ -126,6 +132,40 @@ jobs:
 
       - name: Run GraalVM JVM mode test
         run: ./gradlew :datafusion-ffi-graal-test:run
+
+  # Exercise opt-in cargo features on a single platform so they don't bit-rot. Uses the
+  # `-Pfeatures=duckdb` property to enable the DuckDB provider (bundled C library, no system deps).
+  optional-features-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 22
+        uses: actions/setup-java@v4
+        with:
+          java-version: '22'
+          distribution: 'temurin'
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            datafusion-ffi-native/target
+          key: ${{ runner.os }}-${{ runner.arch }}-cargo-optfeat-${{ hashFiles('**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-cargo-optfeat-
+            ${{ runner.os }}-${{ runner.arch }}-cargo-
+
+      - name: Run DuckDB tests with the duckdb feature enabled
+        # Scope to the DuckDB tests only: the rest of the suite already runs in the default-features
+        # job above, and stacking testcontainers (postgres + mysql) on top of the DuckDB native lib
+        # has caused JVM SIGSEGVs on the 2 GB GHA runner.
+        run: ./gradlew :datafusion-ffi-java:test -Pfeatures=duckdb --tests 'org.apache.arrow.datafusion.providers.duckdb.*'
 
   # Build native libraries on all platforms
   build-native:

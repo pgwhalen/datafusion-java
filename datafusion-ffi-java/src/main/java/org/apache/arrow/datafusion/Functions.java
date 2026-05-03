@@ -27,7 +27,7 @@ import org.apache.arrow.vector.types.pojo.ArrowType;
  *
  * <p>This parallels Rust DataFusion's {@code prelude} module and Spark's {@code functions} class.
  *
- * @see <a href="https://docs.rs/datafusion/52.1.0/datafusion/prelude/index.html">Rust DataFusion:
+ * @see <a href="https://docs.rs/datafusion/53.1.0/datafusion/prelude/index.html">Rust DataFusion:
  *     datafusion::prelude</a>
  */
 public final class Functions {
@@ -43,7 +43,7 @@ public final class Functions {
    * }
    *
    * @param name the column name
-   * @see <a href="https://docs.rs/datafusion/52.1.0/datafusion/prelude/fn.col.html">Rust
+   * @see <a href="https://docs.rs/datafusion/53.1.0/datafusion/prelude/fn.col.html">Rust
    *     DataFusion: col</a>
    */
   public static Expr col(String name) {
@@ -59,7 +59,7 @@ public final class Functions {
    *
    * @param relation the table name
    * @param name the column name
-   * @see <a href="https://docs.rs/datafusion/52.1.0/datafusion/prelude/fn.col.html">Rust
+   * @see <a href="https://docs.rs/datafusion/53.1.0/datafusion/prelude/fn.col.html">Rust
    *     DataFusion: col</a>
    */
   public static Expr col(String relation, String name) {
@@ -76,7 +76,7 @@ public final class Functions {
    * }
    *
    * @param value the int value
-   * @see <a href="https://docs.rs/datafusion/52.1.0/datafusion/prelude/fn.lit.html">Rust
+   * @see <a href="https://docs.rs/datafusion/53.1.0/datafusion/prelude/fn.lit.html">Rust
    *     DataFusion: lit</a>
    */
   public static Expr lit(int value) {
@@ -87,7 +87,7 @@ public final class Functions {
    * Wrap a long value as a literal expression. See {@link #lit(int)} for an example.
    *
    * @param value the long value
-   * @see <a href="https://docs.rs/datafusion/52.1.0/datafusion/prelude/fn.lit.html">Rust
+   * @see <a href="https://docs.rs/datafusion/53.1.0/datafusion/prelude/fn.lit.html">Rust
    *     DataFusion: lit</a>
    */
   public static Expr lit(long value) {
@@ -98,7 +98,7 @@ public final class Functions {
    * Wrap a float value as a literal expression. See {@link #lit(int)} for an example.
    *
    * @param value the float value
-   * @see <a href="https://docs.rs/datafusion/52.1.0/datafusion/prelude/fn.lit.html">Rust
+   * @see <a href="https://docs.rs/datafusion/53.1.0/datafusion/prelude/fn.lit.html">Rust
    *     DataFusion: lit</a>
    */
   public static Expr lit(float value) {
@@ -109,7 +109,7 @@ public final class Functions {
    * Wrap a double value as a literal expression. See {@link #lit(int)} for an example.
    *
    * @param value the double value
-   * @see <a href="https://docs.rs/datafusion/52.1.0/datafusion/prelude/fn.lit.html">Rust
+   * @see <a href="https://docs.rs/datafusion/53.1.0/datafusion/prelude/fn.lit.html">Rust
    *     DataFusion: lit</a>
    */
   public static Expr lit(double value) {
@@ -120,7 +120,7 @@ public final class Functions {
    * Wrap a String value as a literal expression. See {@link #lit(int)} for an example.
    *
    * @param value the string value
-   * @see <a href="https://docs.rs/datafusion/52.1.0/datafusion/prelude/fn.lit.html">Rust
+   * @see <a href="https://docs.rs/datafusion/53.1.0/datafusion/prelude/fn.lit.html">Rust
    *     DataFusion: lit</a>
    */
   public static Expr lit(String value) {
@@ -131,7 +131,7 @@ public final class Functions {
    * Wrap a boolean value as a literal expression. See {@link #lit(int)} for an example.
    *
    * @param value the boolean value
-   * @see <a href="https://docs.rs/datafusion/52.1.0/datafusion/prelude/fn.lit.html">Rust
+   * @see <a href="https://docs.rs/datafusion/53.1.0/datafusion/prelude/fn.lit.html">Rust
    *     DataFusion: lit</a>
    */
   public static Expr lit(boolean value) {
@@ -145,7 +145,7 @@ public final class Functions {
    * Expr nullExpr = litNull();
    * }
    *
-   * @see <a href="https://docs.rs/datafusion/52.1.0/datafusion/prelude/fn.lit.html">Rust
+   * @see <a href="https://docs.rs/datafusion/53.1.0/datafusion/prelude/fn.lit.html">Rust
    *     DataFusion: lit</a>
    */
   public static Expr litNull() {
@@ -163,7 +163,7 @@ public final class Functions {
    *
    * @param expr the expression to average
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/functions_aggregate/expr_fn/fn.avg.html">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/functions_aggregate/expr_fn/fn.avg.html">Rust
    *     DataFusion: avg</a>
    */
   public static Expr avg(Expr expr) {
@@ -179,7 +179,7 @@ public final class Functions {
    *
    * @param expr the expression to sum
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/functions_aggregate/expr_fn/fn.sum.html">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/functions_aggregate/expr_fn/fn.sum.html">Rust
    *     DataFusion: sum</a>
    */
   public static Expr sum(Expr expr) {
@@ -195,7 +195,7 @@ public final class Functions {
    *
    * @param expr the expression to count
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/functions_aggregate/expr_fn/fn.count.html">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/functions_aggregate/expr_fn/fn.count.html">Rust
    *     DataFusion: count</a>
    */
   public static Expr count(Expr expr) {
@@ -211,7 +211,7 @@ public final class Functions {
    *
    * @param expr the expression to find the minimum of
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/functions_aggregate/expr_fn/fn.min.html">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/functions_aggregate/expr_fn/fn.min.html">Rust
    *     DataFusion: min</a>
    */
   public static Expr min(Expr expr) {
@@ -227,7 +227,7 @@ public final class Functions {
    *
    * @param expr the expression to find the maximum of
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/functions_aggregate/expr_fn/fn.max.html">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/functions_aggregate/expr_fn/fn.max.html">Rust
    *     DataFusion: max</a>
    */
   public static Expr max(Expr expr) {
@@ -243,7 +243,7 @@ public final class Functions {
    *
    * @param expr the expression to compute the median of
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/functions_aggregate/expr_fn/fn.median.html">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/functions_aggregate/expr_fn/fn.median.html">Rust
    *     DataFusion: median</a>
    */
   public static Expr median(Expr expr) {
@@ -259,7 +259,7 @@ public final class Functions {
    *
    * @param expr the expression to compute standard deviation of
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/functions_aggregate/expr_fn/fn.stddev.html">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/functions_aggregate/expr_fn/fn.stddev.html">Rust
    *     DataFusion: stddev</a>
    */
   public static Expr stddev(Expr expr) {
@@ -275,7 +275,7 @@ public final class Functions {
    *
    * @param expr the expression to compute variance of
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/functions_aggregate/expr_fn/fn.var_sample.html">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/functions_aggregate/expr_fn/fn.var_sample.html">Rust
    *     DataFusion: var_sample</a>
    */
   public static Expr variance(Expr expr) {
@@ -291,7 +291,7 @@ public final class Functions {
    *
    * @param expr the expression to count distinct values of
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/functions_aggregate/expr_fn/fn.count_distinct.html">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/functions_aggregate/expr_fn/fn.count_distinct.html">Rust
    *     DataFusion: count_distinct</a>
    */
   public static Expr countDistinct(Expr expr) {
@@ -306,7 +306,7 @@ public final class Functions {
    * }
    *
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/functions_aggregate/expr_fn/fn.count.html">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/functions_aggregate/expr_fn/fn.count.html">Rust
    *     DataFusion: count</a>
    */
   public static Expr countAll() {
@@ -326,7 +326,7 @@ public final class Functions {
    *
    * @param condition the WHEN condition
    * @param then the THEN expression
-   * @see <a href="https://docs.rs/datafusion/52.1.0/datafusion/prelude/fn.when.html">Rust
+   * @see <a href="https://docs.rs/datafusion/53.1.0/datafusion/prelude/fn.when.html">Rust
    *     DataFusion: when</a>
    */
   public static CaseBuilder when(Expr condition, Expr then) {
@@ -344,7 +344,7 @@ public final class Functions {
    *
    * @param expr the expression to cast
    * @param dataType the target Arrow data type
-   * @see <a href="https://docs.rs/datafusion/52.1.0/datafusion/prelude/fn.cast.html">Rust
+   * @see <a href="https://docs.rs/datafusion/53.1.0/datafusion/prelude/fn.cast.html">Rust
    *     DataFusion: cast</a>
    */
   public static Expr cast(Expr expr, ArrowType dataType) {
@@ -360,7 +360,7 @@ public final class Functions {
    *
    * @param expr the expression to cast
    * @param dataType the target Arrow data type
-   * @see <a href="https://docs.rs/datafusion/52.1.0/datafusion/prelude/fn.try_cast.html">Rust
+   * @see <a href="https://docs.rs/datafusion/53.1.0/datafusion/prelude/fn.try_cast.html">Rust
    *     DataFusion: try_cast</a>
    */
   public static Expr tryCast(Expr expr, ArrowType dataType) {
@@ -375,7 +375,7 @@ public final class Functions {
    * }
    *
    * @param expr the expression to negate
-   * @see <a href="https://docs.rs/datafusion/52.1.0/datafusion/prelude/fn.not.html">Rust
+   * @see <a href="https://docs.rs/datafusion/53.1.0/datafusion/prelude/fn.not.html">Rust
    *     DataFusion: not</a>
    */
   public static Expr not(Expr expr) {
@@ -401,7 +401,7 @@ public final class Functions {
    * @param outputType the output Arrow type
    * @param fn the function implementation
    * @return a new ScalarUDF
-   * @see <a href="https://docs.rs/datafusion/52.1.0/datafusion/prelude/fn.create_udf.html">Rust
+   * @see <a href="https://docs.rs/datafusion/53.1.0/datafusion/prelude/fn.create_udf.html">Rust
    *     DataFusion: create_udf</a>
    */
   public static ScalarUDF createUdf(

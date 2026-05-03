@@ -53,7 +53,7 @@ import java.util.Map;
  * @param maximumParallelRowGroupWriters Maximum number of parallel row group writers
  * @param maximumBufferedRecordBatchesPerStream Maximum number of buffered record batches per stream
  * @see <a
- *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/config/struct.ParquetOptions.html">Rust
+ *     href="https://docs.rs/datafusion-common/53.1.0/datafusion_common/config/struct.ParquetOptions.html">Rust
  *     DataFusion: ParquetOptions</a>
  */
 public record ParquetOptions(

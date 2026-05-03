@@ -19,6 +19,8 @@ import org.apache.arrow.datafusion.logical_expr.AggregateUDF;
 import org.apache.arrow.datafusion.logical_expr.Expr;
 import org.apache.arrow.datafusion.logical_expr.LogicalPlan;
 import org.apache.arrow.datafusion.logical_expr.ScalarUDF;
+import org.apache.arrow.datafusion.providers.RustCatalogProvider;
+import org.apache.arrow.datafusion.providers.RustTableProvider;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.dictionary.DictionaryProvider;
@@ -45,7 +47,7 @@ import org.apache.arrow.vector.types.pojo.Schema;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html">Rust
+ *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/context/struct.SessionContext.html">Rust
  *     DataFusion: SessionContext</a>
  */
 public class SessionContext implements AutoCloseable {
@@ -82,7 +84,7 @@ public class SessionContext implements AutoCloseable {
    *
    * @return a new SessionContext
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.new">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/context/struct.SessionContext.html#method.new">Rust
    *     DataFusion: SessionContext::new</a>
    */
   public static SessionContext create() {
@@ -102,7 +104,7 @@ public class SessionContext implements AutoCloseable {
    * @param config the session configuration
    * @return a new SessionContext
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.new_with_config">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/context/struct.SessionContext.html#method.new_with_config">Rust
    *     DataFusion: SessionContext::new_with_config</a>
    */
   public static SessionContext newWithConfig(ConfigOptions config) {
@@ -133,11 +135,41 @@ public class SessionContext implements AutoCloseable {
    * @return a new SessionContext
    * @throws DataFusionError if context creation fails
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.new_with_config_rt">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/context/struct.SessionContext.html#method.new_with_config_rt">Rust
    *     DataFusion: SessionContext::new_with_config_rt</a>
    */
   public static SessionContext newWithConfigRt(ConfigOptions config, RuntimeEnv runtimeEnv) {
     return new SessionContext(new SessionContextBridge(config, runtimeEnv.bridge.dfRuntimeEnv()));
+  }
+
+  /**
+   * Creates a new session context with federation support enabled.
+   *
+   * <p>Federation-aware providers (for example, {@code
+   * org.apache.arrow.datafusion.providers.flight.FlightSqlFederatedCatalog}) push filters,
+   * projections, joins, and aggregates down to their remote systems. Providers registered with
+   * this context that are <em>not</em> federation-aware behave exactly as they do in a regular
+   * session — the federation optimizer and planner only rewrite plans whose scans resolve to a
+   * {@code FederationProvider}.
+   *
+   * {@snippet :
+   * try (SessionContext ctx = SessionContext.newWithFederation(ConfigOptions.defaults())) {
+   *     // Register federated catalogs / schemas here ...
+   *     DataFrame df = ctx.sql("SELECT * FROM remote1.public.t1 JOIN remote2.public.t2 USING (id)");
+   *     df.show();
+   * }
+   * }
+   *
+   * @param config the session configuration
+   * @return a new SessionContext wired with {@code FederationOptimizerRule} and
+   *     {@code FederatedQueryPlanner}
+   * @throws DataFusionError if context creation fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/context/struct.SessionContext.html#method.new_with_state">Rust
+   *     DataFusion: SessionContext::new_with_state</a>
+   */
+  public static SessionContext newWithFederation(ConfigOptions config) {
+    return new SessionContext(SessionContextBridge.federated(config));
   }
 
   /**
@@ -159,7 +191,7 @@ public class SessionContext implements AutoCloseable {
    * @param allocator The buffer allocator
    * @throws DataFusionError if registration fails
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.register_batch">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/context/struct.SessionContext.html#method.register_batch">Rust
    *     DataFusion: SessionContext::register_batch</a>
    */
   public void registerBatch(String name, VectorSchemaRoot root, BufferAllocator allocator) {
@@ -179,7 +211,7 @@ public class SessionContext implements AutoCloseable {
    * @param allocator The buffer allocator
    * @throws DataFusionError if registration fails
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.register_batch">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/context/struct.SessionContext.html#method.register_batch">Rust
    *     DataFusion: SessionContext::register_batch</a>
    */
   public void registerBatch(
@@ -207,12 +239,42 @@ public class SessionContext implements AutoCloseable {
    * @param allocator The buffer allocator to use for Arrow data transfers
    * @throws DataFusionError if registration fails
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.register_table">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/context/struct.SessionContext.html#method.register_table">Rust
    *     DataFusion: SessionContext::register_table</a>
    */
   public void registerTable(String name, TableProvider provider, BufferAllocator allocator) {
     checkNotClosed();
     bridge.registerTableProvider(name, provider, allocator);
+  }
+
+  /**
+   * Registers a Rust-side table provider (for example one produced by {@link
+   * org.apache.arrow.datafusion.providers.flight.FlightSqlTableProvider#builder()}).
+   *
+   * <p>The provider handle remains owned by the caller — registering it does not transfer
+   * ownership, and callers must still {@link RustTableProvider#close() close} the handle when
+   * done.
+   *
+   * {@snippet :
+   * try (FlightSqlTableProvider taxi = FlightSqlTableProvider.builder()
+   *         .endpoint("http://localhost:32010")
+   *         .query("SELECT * FROM taxi")
+   *         .build()) {
+   *     ctx.registerTable("taxi", taxi);
+   *     ctx.sql("SELECT count(*) FROM taxi").show();
+   * }
+   * }
+   *
+   * @param name the table name used in SQL
+   * @param provider a Rust-backed table provider
+   * @throws DataFusionError if registration fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/context/struct.SessionContext.html#method.register_table">Rust
+   *     DataFusion: SessionContext::register_table</a>
+   */
+  public void registerTable(String name, RustTableProvider provider) {
+    checkNotClosed();
+    bridge.registerRustTable(name, provider);
   }
 
   /**
@@ -226,7 +288,7 @@ public class SessionContext implements AutoCloseable {
    * @return true if a table was previously registered with this name
    * @throws DataFusionError if deregistration fails
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.deregister_table">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/context/struct.SessionContext.html#method.deregister_table">Rust
    *     DataFusion: SessionContext::deregister_table</a>
    */
   public boolean deregisterTable(String name) {
@@ -246,7 +308,7 @@ public class SessionContext implements AutoCloseable {
    * @return A DataFrame representing the query result
    * @throws DataFusionError if query execution fails
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.sql">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/context/struct.SessionContext.html#method.sql">Rust
    *     DataFusion: SessionContext::sql</a>
    */
   public DataFrame sql(String query) {
@@ -271,7 +333,7 @@ public class SessionContext implements AutoCloseable {
    * @return a DataFrame representing the execution result
    * @throws DataFusionError if execution fails
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.execute_logical_plan">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/context/struct.SessionContext.html#method.execute_logical_plan">Rust
    *     DataFusion: SessionContext::execute_logical_plan</a>
    */
   public DataFrame executeLogicalPlan(LogicalPlan plan) {
@@ -297,12 +359,43 @@ public class SessionContext implements AutoCloseable {
    * @param allocator The buffer allocator to use for Arrow data transfers
    * @throws DataFusionError if registration fails
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.register_catalog">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/context/struct.SessionContext.html#method.register_catalog">Rust
    *     DataFusion: SessionContext::register_catalog</a>
    */
   public void registerCatalog(String name, CatalogProvider catalog, BufferAllocator allocator) {
     checkNotClosed();
     bridge.registerCatalog(name, catalog, allocator);
+  }
+
+  /**
+   * Registers a Rust-side catalog provider (for example one produced by {@link
+   * org.apache.arrow.datafusion.providers.flight.FlightSqlFederatedCatalog#builder()}).
+   *
+   * <p>The catalog handle remains owned by the caller — registering it does not transfer
+   * ownership, and callers must still {@link RustCatalogProvider#close() close} the handle when
+   * done.
+   *
+   * {@snippet :
+   * try (FlightSqlFederatedCatalog remote = FlightSqlFederatedCatalog.builder()
+   *         .endpoint("http://localhost:32010")
+   *         .computeContext("remote1")
+   *         .table("users")
+   *         .build()) {
+   *     ctx.registerCatalog("remote1", remote);
+   *     ctx.sql("SELECT * FROM remote1.public.users").show();
+   * }
+   * }
+   *
+   * @param name the catalog name used in SQL
+   * @param catalog a Rust-backed catalog provider
+   * @throws DataFusionError if registration fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/context/struct.SessionContext.html#method.register_catalog">Rust
+   *     DataFusion: SessionContext::register_catalog</a>
+   */
+  public void registerCatalog(String name, RustCatalogProvider catalog) {
+    checkNotClosed();
+    bridge.registerRustCatalog(name, catalog);
   }
 
   /**
@@ -331,7 +424,7 @@ public class SessionContext implements AutoCloseable {
    * @param allocator the buffer allocator to use for Arrow data transfers
    * @throws DataFusionError if registration fails
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.register_variable">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/context/struct.SessionContext.html#method.register_variable">Rust
    *     DataFusion: SessionContext::register_variable</a>
    */
   public void registerVariable(VarType type, VarProvider provider, BufferAllocator allocator) {
@@ -358,7 +451,7 @@ public class SessionContext implements AutoCloseable {
    * @param allocator The buffer allocator to use for Arrow data transfers
    * @throws DataFusionError if registration fails
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.register_udf">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/context/struct.SessionContext.html#method.register_udf">Rust
    *     DataFusion: SessionContext::register_udf</a>
    */
   public void registerUdf(ScalarUDF udf, BufferAllocator allocator) {
@@ -417,7 +510,7 @@ public class SessionContext implements AutoCloseable {
    * @param allocator The buffer allocator to use for Arrow data transfers
    * @throws DataFusionError if registration fails
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.register_listing_table">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/context/struct.SessionContext.html#method.register_listing_table">Rust
    *     DataFusion: SessionContext::register_listing_table</a>
    */
   public void registerListingTable(String name, ListingTable table, BufferAllocator allocator) {
@@ -439,7 +532,7 @@ public class SessionContext implements AutoCloseable {
    * @param allocator The buffer allocator
    * @throws DataFusionError if registration fails
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.register_csv">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/context/struct.SessionContext.html#method.register_csv">Rust
    *     DataFusion: SessionContext::register_csv</a>
    */
   public void registerCsv(
@@ -462,7 +555,7 @@ public class SessionContext implements AutoCloseable {
    * @param allocator The buffer allocator
    * @throws DataFusionError if registration fails
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.register_parquet">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/context/struct.SessionContext.html#method.register_parquet">Rust
    *     DataFusion: SessionContext::register_parquet</a>
    */
   public void registerParquet(
@@ -485,7 +578,7 @@ public class SessionContext implements AutoCloseable {
    * @param allocator The buffer allocator
    * @throws DataFusionError if registration fails
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.register_json">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/context/struct.SessionContext.html#method.register_json">Rust
    *     DataFusion: SessionContext::register_json</a>
    */
   public void registerJson(
@@ -508,7 +601,7 @@ public class SessionContext implements AutoCloseable {
    * @param allocator The buffer allocator
    * @throws DataFusionError if registration fails
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.register_arrow">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/context/struct.SessionContext.html#method.register_arrow">Rust
    *     DataFusion: SessionContext::register_arrow</a>
    */
   public void registerArrow(
@@ -528,7 +621,7 @@ public class SessionContext implements AutoCloseable {
    * @return true if the table exists, false otherwise
    * @throws DataFusionError if the existence check fails
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.table_exist">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/context/struct.SessionContext.html#method.table_exist">Rust
    *     DataFusion: SessionContext::table_exist</a>
    */
   public boolean tableExist(String name) {
@@ -550,7 +643,7 @@ public class SessionContext implements AutoCloseable {
    * @return An Optional containing a DataFrame for the specified table, or empty if not found
    * @throws DataFusionError if there is an error other than the table not being found
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.table">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/context/struct.SessionContext.html#method.table">Rust
    *     DataFusion: SessionContext::table</a>
    */
   public Optional<DataFrame> table(String name) {
@@ -570,7 +663,7 @@ public class SessionContext implements AutoCloseable {
    * @return A DataFrame for the Parquet data
    * @throws DataFusionError if reading fails
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.read_parquet">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/context/struct.SessionContext.html#method.read_parquet">Rust
    *     DataFusion: SessionContext::read_parquet</a>
    */
   public DataFrame readParquet(String path) {
@@ -588,7 +681,7 @@ public class SessionContext implements AutoCloseable {
    * @return A DataFrame for the Parquet data
    * @throws DataFusionError if reading fails
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.read_parquet">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/context/struct.SessionContext.html#method.read_parquet">Rust
    *     DataFusion: SessionContext::read_parquet</a>
    */
   public DataFrame readParquet(String path, ParquetReadOptions options, BufferAllocator allocator) {
@@ -608,7 +701,7 @@ public class SessionContext implements AutoCloseable {
    * @return A DataFrame for the CSV data
    * @throws DataFusionError if reading fails
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.read_csv">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/context/struct.SessionContext.html#method.read_csv">Rust
    *     DataFusion: SessionContext::read_csv</a>
    */
   public DataFrame readCsv(String path) {
@@ -626,7 +719,7 @@ public class SessionContext implements AutoCloseable {
    * @return A DataFrame for the CSV data
    * @throws DataFusionError if reading fails
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.read_csv">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/context/struct.SessionContext.html#method.read_csv">Rust
    *     DataFusion: SessionContext::read_csv</a>
    */
   public DataFrame readCsv(String path, CsvReadOptions options, BufferAllocator allocator) {
@@ -646,7 +739,7 @@ public class SessionContext implements AutoCloseable {
    * @return A DataFrame for the JSON data
    * @throws DataFusionError if reading fails
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.read_json">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/context/struct.SessionContext.html#method.read_json">Rust
    *     DataFusion: SessionContext::read_json</a>
    */
   public DataFrame readJson(String path) {
@@ -664,7 +757,7 @@ public class SessionContext implements AutoCloseable {
    * @return A DataFrame for the JSON data
    * @throws DataFusionError if reading fails
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.read_json">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/context/struct.SessionContext.html#method.read_json">Rust
    *     DataFusion: SessionContext::read_json</a>
    */
   public DataFrame readJson(String path, NdJsonReadOptions options, BufferAllocator allocator) {
@@ -684,7 +777,7 @@ public class SessionContext implements AutoCloseable {
    * @return A DataFrame for the Arrow data
    * @throws DataFusionError if reading fails
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.read_arrow">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/context/struct.SessionContext.html#method.read_arrow">Rust
    *     DataFusion: SessionContext::read_arrow</a>
    */
   public DataFrame readArrow(String path) {
@@ -702,7 +795,7 @@ public class SessionContext implements AutoCloseable {
    * @return A DataFrame for the Arrow data
    * @throws DataFusionError if reading fails
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.read_arrow">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/context/struct.SessionContext.html#method.read_arrow">Rust
    *     DataFusion: SessionContext::read_arrow</a>
    */
   public DataFrame readArrow(String path, ArrowReadOptions options, BufferAllocator allocator) {
@@ -719,7 +812,7 @@ public class SessionContext implements AutoCloseable {
    *
    * @return list of catalog names
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.catalog_names">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/context/struct.SessionContext.html#method.catalog_names">Rust
    *     DataFusion: SessionContext::catalog_names</a>
    */
   public List<String> catalogNames() {
@@ -741,7 +834,7 @@ public class SessionContext implements AutoCloseable {
    * @param name The catalog name
    * @return An Optional containing the catalog provider, or empty if not found
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.catalog">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/context/struct.SessionContext.html#method.catalog">Rust
    *     DataFusion: SessionContext::catalog</a>
    */
   public Optional<CatalogProvider> catalog(String name) {
@@ -765,7 +858,7 @@ public class SessionContext implements AutoCloseable {
    * @return a new SessionState
    * @throws DataFusionError if the state cannot be created
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.state">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/context/struct.SessionContext.html#method.state">Rust
    *     DataFusion: SessionContext::state</a>
    */
   public SessionState state() {
@@ -791,7 +884,7 @@ public class SessionContext implements AutoCloseable {
    * @return the parsed expression
    * @throws DataFusionError if the expression cannot be parsed
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.parse_sql_expr">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/context/struct.SessionContext.html#method.parse_sql_expr">Rust
    *     DataFusion: SessionContext::parse_sql_expr</a>
    */
   public Expr parseSqlExpr(String sql, Schema schema) {
@@ -809,7 +902,7 @@ public class SessionContext implements AutoCloseable {
    * @return the session ID string
    * @throws DataFusionError if the call fails
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.session_id">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/context/struct.SessionContext.html#method.session_id">Rust
    *     DataFusion: SessionContext::session_id</a>
    */
   public String sessionId() {
@@ -827,7 +920,7 @@ public class SessionContext implements AutoCloseable {
    * @return the session start time as an {@link Instant}
    * @throws DataFusionError if the call fails
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.session_start_time">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/context/struct.SessionContext.html#method.session_start_time">Rust
    *     DataFusion: SessionContext::session_start_time</a>
    */
   public Instant sessionStartTime() {

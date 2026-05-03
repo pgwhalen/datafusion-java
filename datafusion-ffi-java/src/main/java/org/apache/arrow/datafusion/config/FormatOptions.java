@@ -30,7 +30,7 @@ import java.util.Map;
  * @param durationFormat Format string for duration values
  * @param typesInfo Whether to include type information in formatted output
  * @see <a
- *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/config/struct.FormatOptions.html">Rust
+ *     href="https://docs.rs/datafusion-common/53.1.0/datafusion_common/config/struct.FormatOptions.html">Rust
  *     DataFusion: FormatOptions</a>
  */
 public record FormatOptions(

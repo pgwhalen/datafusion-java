@@ -11,6 +11,7 @@ import org.apache.arrow.datafusion.catalog.TableProvider;
 import org.apache.arrow.datafusion.config.ConfigOptions;
 import org.apache.arrow.datafusion.dataframe.DataFrame;
 import org.apache.arrow.datafusion.execution.SessionContext;
+import org.apache.arrow.datafusion.execution.TaskContext;
 import org.apache.arrow.datafusion.physical_plan.ExecutionPlan;
 import org.apache.arrow.datafusion.physical_plan.RecordBatchReader;
 import org.apache.arrow.datafusion.physical_plan.SendableRecordBatchStream;
@@ -192,7 +193,8 @@ public class ErrorPropagationTest {
             }
 
             @Override
-            public RecordBatchReader execute(int partition, BufferAllocator allocator) {
+            public RecordBatchReader execute(
+                int partition, TaskContext taskContext, BufferAllocator allocator) {
               throw new UnsupportedOperationException("Should not be called");
             }
           };
@@ -246,7 +248,8 @@ public class ErrorPropagationTest {
             }
 
             @Override
-            public RecordBatchReader execute(int partition, BufferAllocator allocator) {
+            public RecordBatchReader execute(
+                int partition, TaskContext taskContext, BufferAllocator allocator) {
               throw new RuntimeException(errorMessage);
             }
           };
@@ -300,7 +303,8 @@ public class ErrorPropagationTest {
             }
 
             @Override
-            public RecordBatchReader execute(int partition, BufferAllocator alloc) {
+            public RecordBatchReader execute(
+                int partition, TaskContext taskContext, BufferAllocator alloc) {
               return new RecordBatchReader() {
                 private final VectorSchemaRoot root = VectorSchemaRoot.create(testSchema, alloc);
 

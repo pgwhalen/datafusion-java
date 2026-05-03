@@ -110,7 +110,9 @@ public class DocsValidationDoclet implements Doclet {
           "builder",
           "of",
           "bridge",
-          "fromBridge");
+          "fromBridge",
+          "fromBridgeTableScan",
+          "fromBridgeUnsupported");
 
   /** Per-class method exclusions for methods with no Rust equivalent. */
   private static final Map<String, Set<String>> CLASS_METHOD_EXCLUSIONS =
@@ -185,7 +187,12 @@ public class DocsValidationDoclet implements Doclet {
               "SessionContext",
               Set.of(
                   // Java-only bridge accessor
-                  "bridge")));
+                  "bridge")),
+          Map.entry(
+              "TaskContext",
+              Set.of(
+                  // Internal FFI entry point — no Rust equivalent
+                  "fromNativeAddress")));
 
   /** Types whose method-level @see validation is deferred (links not yet added). */
   private static final Set<String> METHOD_VALIDATION_DEFERRED = Set.of();
@@ -241,7 +248,8 @@ public class DocsValidationDoclet implements Doclet {
           Map.entry("PhysicalExpr", Set.of("bridge")),
           Map.entry("ScalarValue", Set.of("getObject")),
           Map.entry("FileScanConfig", Set.of("projection", "partition")),
-          Map.entry("Spans", Set.of("spans")));
+          Map.entry("Spans", Set.of("spans")),
+          Map.entry("TaskContext", Set.of("fromNativeAddress")));
 
   /** Types whose snippet validation is deferred (snippets not yet added). */
   private static final Set<String> SNIPPET_VALIDATION_DEFERRED = Set.of();

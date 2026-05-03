@@ -5,20 +5,23 @@ pub mod ffi {
     use arrow::datatypes::Schema as ArrowSchema;
     use arrow::ffi::{from_ffi, to_ffi, FFI_ArrowArray, FFI_ArrowSchema};
     use arrow::record_batch::RecordBatch;
-    use datafusion::common::{DFSchema, DataFusionError, JoinConstraint, JoinType, NullEquality};
+    use datafusion::common::{DFSchema, DataFusionError, JoinType};
     use datafusion::datasource::MemTable;
     use datafusion::execution::config::SessionConfig;
     use datafusion::execution::context::SessionContext;
     use datafusion::execution::runtime_env::RuntimeEnv;
     use datafusion::execution::SessionState;
-    use datafusion::logical_expr::{Distinct, Expr, LogicalPlan, LogicalPlanBuilder, SortExpr};
+    use datafusion::logical_expr::{
+        DdlStatement, Expr, LogicalPlan, LogicalPlanBuilder, SortExpr,
+        Statement as DfStatementEnum, TransactionAccessMode, TransactionConclusion,
+        TransactionIsolationLevel,
+    };
     use datafusion_proto::logical_plan::from_proto::{parse_exprs, parse_sorts};
-    use datafusion_proto::logical_plan::to_proto::{serialize_exprs, serialize_sorts};
-    use datafusion_proto::logical_plan::DefaultLogicalExtensionCodec;
-    use datafusion_proto::protobuf::{LogicalExprList, SortExprNodeCollection};
+    use datafusion_proto::logical_plan::to_proto::serialize_exprs;
+    use datafusion_proto::logical_plan::{AsLogicalPlan, DefaultLogicalExtensionCodec};
+    use datafusion_proto::protobuf::{LogicalExprList, LogicalPlanNode, SortExprNodeCollection};
     use diplomat_runtime::{DiplomatStr, DiplomatStrSlice, DiplomatWrite};
     use prost::Message;
-    use std::collections::HashMap;
     use std::fmt::Write;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
@@ -46,21 +49,11 @@ pub mod ffi {
         Ok(parse_sorts(collection.sort_expr_nodes.iter(), ctx, &codec)?)
     }
 
-    fn diplomat_str(s: &DiplomatStr) -> Result<&str, Box<DfError>> {
-        Ok(std::str::from_utf8(s)?)
-    }
-
-    /// Convert a slice of DiplomatStrSlice to Vec<String>.
-    fn diplomat_str_slice_to_vec(slices: &[DiplomatStrSlice]) -> Result<Vec<String>, Box<DfError>> {
-        slices
-            .iter()
-            .map(|s| {
-                std::str::from_utf8(s)
-                    .map(|s| s.to_string())
-                    .map_err(|e| Box::new(DfError(e.to_string().into())))
-            })
-            .collect()
-    }
+    // String-conversion helpers live in `crate::diplomat_util` so every bridge module can reuse
+    // them. Re-imported here so existing call sites (`diplomat_str(name)?`, ...) still resolve.
+    use crate::diplomat_util::{
+        diplomat_str, diplomat_str_pairs_to_map, diplomat_str_slice_to_vec,
+    };
 
     /// Parse session config from parallel key/value string slices.
     fn build_session_config(
@@ -70,13 +63,21 @@ pub mod ffi {
         if keys.is_empty() {
             return Ok(SessionConfig::new());
         }
-        let key_strs = diplomat_str_slice_to_vec(keys)?;
-        let value_strs = diplomat_str_slice_to_vec(values)?;
-        let mut settings = HashMap::with_capacity(key_strs.len());
-        for (k, v) in key_strs.into_iter().zip(value_strs) {
-            settings.insert(k, v);
-        }
+        let settings = diplomat_str_pairs_to_map(keys, values)?;
         Ok(SessionConfig::from_string_hash_map(&settings)?)
+    }
+
+    /// Write an Arrow schema as `FFI_ArrowSchema` to a Java-provided address.
+    /// Returns an error if `out_addr` is 0.
+    fn export_schema_to(schema: &ArrowSchema, out_addr: usize) -> Result<(), Box<DfError>> {
+        if out_addr == 0 {
+            return Err("Null output address".into());
+        }
+        let ffi_schema = FFI_ArrowSchema::try_from(schema)?;
+        unsafe {
+            std::ptr::write(out_addr as *mut FFI_ArrowSchema, ffi_schema);
+        }
+        Ok(())
     }
 
     // ============================================================================
@@ -125,6 +126,53 @@ pub mod ffi {
         UserDefined,
     }
 
+    /// Discriminant for Statement sub-variants.
+    pub enum DfStatementKind {
+        TransactionStart,
+        TransactionEnd,
+        SetVariable,
+        ResetVariable,
+        Prepare,
+        Execute,
+        Deallocate,
+    }
+
+    /// Transaction access mode (READ ONLY / READ WRITE).
+    pub enum DfTransactionAccessMode {
+        ReadOnly,
+        ReadWrite,
+    }
+
+    /// Transaction isolation level.
+    pub enum DfTransactionIsolationLevel {
+        ReadUncommitted,
+        ReadCommitted,
+        RepeatableRead,
+        Serializable,
+        Snapshot,
+    }
+
+    /// Transaction conclusion (COMMIT / ROLLBACK).
+    pub enum DfTransactionConclusion {
+        Commit,
+        Rollback,
+    }
+
+    /// Discriminant for DDL sub-variants.
+    pub enum DfDdlKind {
+        CreateExternalTable,
+        CreateMemoryTable,
+        CreateView,
+        CreateCatalogSchema,
+        CreateCatalog,
+        CreateIndex,
+        DropTable,
+        DropView,
+        DropCatalogSchema,
+        CreateFunction,
+        DropFunction,
+    }
+
     /// Discriminant for LogicalPlan variants.
     pub enum DfLogicalPlanKind {
         Projection,
@@ -154,17 +202,6 @@ pub mod ffi {
         RecursiveQuery,
     }
 
-    /// Join constraint type (ON vs USING).
-    pub enum DfJoinConstraint {
-        On,
-        Using,
-    }
-
-    /// Null equality semantics for joins.
-    pub enum DfNullEquality {
-        NullEqualsNothing,
-        NullEqualsNull,
-    }
 
     /// A source-code span with start/end line and column.
     #[diplomat::attr(auto, abi_compatible)]
@@ -545,8 +582,8 @@ pub mod ffi {
 
     #[diplomat::opaque]
     pub struct DfArrowBatch {
-        pub(super) schema: Arc<ArrowSchema>,
-        pub(super) batch: RecordBatch,
+        pub(crate) schema: Arc<ArrowSchema>,
+        pub(crate) batch: RecordBatch,
     }
 
     impl DfArrowBatch {
@@ -594,14 +631,7 @@ pub mod ffi {
 
         /// Export this schema as FFI_ArrowSchema to a Java-provided address.
         pub fn export_to(&self, out_addr: usize) -> Result<(), Box<DfError>> {
-            if out_addr == 0 {
-                return Err("Null output address".into());
-            }
-            let ffi_schema = FFI_ArrowSchema::try_from(self.schema.as_ref())?;
-            unsafe {
-                std::ptr::write(out_addr as *mut FFI_ArrowSchema, ffi_schema);
-            }
-            Ok(())
+            export_schema_to(self.schema.as_ref(), out_addr)
         }
     }
 
@@ -651,16 +681,6 @@ pub mod ffi {
             let serialized = serialize_exprs(exprs, &codec)?;
             let proto_list = LogicalExprList { expr: serialized };
             Ok(DfExprBytes::from_bytes(proto_list.encode_to_vec()))
-        }
-
-        /// Construct from sort expressions, serialized as protobuf `SortExprNodeCollection`.
-        fn from_sort_exprs(sort_exprs: &[SortExpr]) -> Result<Box<DfExprBytes>, Box<DfError>> {
-            let codec = DefaultLogicalExtensionCodec {};
-            let nodes = serialize_sorts(sort_exprs, &codec)?;
-            let collection = SortExprNodeCollection {
-                sort_expr_nodes: nodes,
-            };
-            Ok(DfExprBytes::from_bytes(collection.encode_to_vec()))
         }
 
         /// Construct an empty `DfExprBytes` (no data).
@@ -767,14 +787,7 @@ pub mod ffi {
 
         /// Export the stream's schema as FFI_ArrowSchema to a Java-provided address.
         pub fn schema_to(&self, out_addr: usize) -> Result<(), Box<DfError>> {
-            if out_addr == 0 {
-                return Err("Null output address".into());
-            }
-            let ffi_schema = FFI_ArrowSchema::try_from(self.schema.as_ref())?;
-            unsafe {
-                std::ptr::write(out_addr as *mut FFI_ArrowSchema, ffi_schema);
-            }
-            Ok(())
+            export_schema_to(self.schema.as_ref(), out_addr)
         }
 
         /// Get the next batch. Writes FFI_ArrowArray and FFI_ArrowSchema to provided addresses.
@@ -815,14 +828,7 @@ pub mod ffi {
     impl DfLazyRecordBatchStream {
         /// Export the stream's schema as FFI_ArrowSchema to a Java-provided address.
         pub fn schema_to(&self, out_addr: usize) -> Result<(), Box<DfError>> {
-            if out_addr == 0 {
-                return Err("Null output address".into());
-            }
-            let ffi_schema = FFI_ArrowSchema::try_from(self.schema.as_ref())?;
-            unsafe {
-                std::ptr::write(out_addr as *mut FFI_ArrowSchema, ffi_schema);
-            }
-            Ok(())
+            export_schema_to(self.schema.as_ref(), out_addr)
         }
 
         /// Fetch the next batch from the live async stream.
@@ -944,15 +950,7 @@ pub mod ffi {
 
         /// Export the output schema as FFI_ArrowSchema to a Java-provided address.
         pub fn schema_to(&self, out_addr: usize) -> Result<(), Box<DfError>> {
-            if out_addr == 0 {
-                return Err("Null output address".into());
-            }
-            let arrow_schema = self.plan.schema().as_arrow().as_ref().clone();
-            let ffi_schema = FFI_ArrowSchema::try_from(&arrow_schema)?;
-            unsafe {
-                std::ptr::write(out_addr as *mut FFI_ArrowSchema, ffi_schema);
-            }
-            Ok(())
+            export_schema_to(self.plan.schema().as_arrow().as_ref(), out_addr)
         }
 
         /// Return the number of direct child inputs.
@@ -1014,162 +1012,30 @@ pub mod ffi {
             self.plan.contains_outer_reference()
         }
 
-        // ── Variant-specific accessors ──
-
-        // -- Filter --
-
-        /// Filter predicate as proto bytes. Errors if not a Filter.
-        pub fn filter_predicate_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
-            if let LogicalPlan::Filter(f) = &self.plan {
-                DfExprBytes::from_exprs(&[f.predicate.clone()])
-            } else {
-                Err("Not a Filter".into())
-            }
+        /// Serialize this plan node (recursively, including all children) as a
+        /// protobuf `LogicalPlanNode`. Returns an error for variants that
+        /// `datafusion-proto` cannot encode (Statement, CreateMemoryTable,
+        /// CreateIndex, DropTable, DropCatalogSchema, CreateFunction,
+        /// DropFunction, Subquery, DescribeTable, Extension) — Java falls
+        /// back to variant-specific accessors in that case.
+        ///
+        /// Uses [`crate::logical_plan::JavaSerializationCodec`], which emits
+        /// empty bytes for custom table providers (e.g. `MemTable`). The Java
+        /// side never round-trips these bytes back to Rust — it reads the
+        /// fields it cares about via variant-specific bridge accessors — so
+        /// the table-provider encoded form can safely be empty.
+        pub fn to_proto_bytes(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
+            let codec = crate::logical_plan::JavaSerializationCodec;
+            let node = LogicalPlanNode::try_from_logical_plan(&self.plan, &codec)?;
+            Ok(DfExprBytes::from_bytes(node.encode_to_vec()))
         }
 
-        // -- Sort --
-
-        /// Sort expressions as proto bytes (SortExprNodeCollection). Errors if not a Sort.
-        pub fn sort_exprs_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
-            if let LogicalPlan::Sort(s) = &self.plan {
-                DfExprBytes::from_sort_exprs(&s.expr)
-            } else {
-                Err("Not a Sort".into())
-            }
-        }
-
-        /// Sort fetch limit, or -1 if none. Errors if not a Sort.
-        pub fn sort_fetch(&self) -> i64 {
-            if let LogicalPlan::Sort(s) = &self.plan {
-                s.fetch.map_or(-1, |n| n as i64)
-            } else {
-                -1
-            }
-        }
-
-        // -- Join --
-
-        /// Join type. Errors if not a Join.
-        pub fn join_type(&self) -> Result<DfJoinType, Box<DfError>> {
-            if let LogicalPlan::Join(j) = &self.plan {
-                Ok(match j.join_type {
-                    JoinType::Inner => DfJoinType::Inner,
-                    JoinType::Left => DfJoinType::Left,
-                    JoinType::Right => DfJoinType::Right,
-                    JoinType::Full => DfJoinType::Full,
-                    JoinType::LeftSemi => DfJoinType::LeftSemi,
-                    JoinType::LeftAnti => DfJoinType::LeftAnti,
-                    JoinType::RightSemi => DfJoinType::RightSemi,
-                    JoinType::RightAnti => DfJoinType::RightAnti,
-                    // LeftMark and RightMark map to closest existing variants
-                    _ => DfJoinType::Inner,
-                })
-            } else {
-                Err("Not a Join".into())
-            }
-        }
-
-        /// Join constraint (ON or USING). Errors if not a Join.
-        pub fn join_constraint(&self) -> Result<DfJoinConstraint, Box<DfError>> {
-            if let LogicalPlan::Join(j) = &self.plan {
-                Ok(match j.join_constraint {
-                    JoinConstraint::On => DfJoinConstraint::On,
-                    JoinConstraint::Using => DfJoinConstraint::Using,
-                })
-            } else {
-                Err("Not a Join".into())
-            }
-        }
-
-        /// Left-side equijoin key expressions as proto bytes. Errors if not a Join.
-        pub fn join_on_left_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
-            if let LogicalPlan::Join(j) = &self.plan {
-                let left_exprs: Vec<Expr> = j.on.iter().map(|(l, _)| l.clone()).collect();
-                DfExprBytes::from_exprs(&left_exprs)
-            } else {
-                Err("Not a Join".into())
-            }
-        }
-
-        /// Right-side equijoin key expressions as proto bytes. Errors if not a Join.
-        pub fn join_on_right_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
-            if let LogicalPlan::Join(j) = &self.plan {
-                let right_exprs: Vec<Expr> = j.on.iter().map(|(_, r)| r.clone()).collect();
-                DfExprBytes::from_exprs(&right_exprs)
-            } else {
-                Err("Not a Join".into())
-            }
-        }
-
-        /// Join filter (non-equi condition) as proto bytes, empty if none. Errors if not a Join.
-        pub fn join_filter_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
-            if let LogicalPlan::Join(j) = &self.plan {
-                match &j.filter {
-                    Some(f) => DfExprBytes::from_exprs(&[f.clone()]),
-                    None => Ok(DfExprBytes::empty()),
-                }
-            } else {
-                Err("Not a Join".into())
-            }
-        }
-
-        /// Null equality semantics. Errors if not a Join.
-        pub fn join_null_equality(&self) -> Result<DfNullEquality, Box<DfError>> {
-            if let LogicalPlan::Join(j) = &self.plan {
-                Ok(match j.null_equality {
-                    NullEquality::NullEqualsNothing => DfNullEquality::NullEqualsNothing,
-                    NullEquality::NullEqualsNull => DfNullEquality::NullEqualsNull,
-                })
-            } else {
-                Err("Not a Join".into())
-            }
-        }
-
-        // -- Aggregate --
-
-        /// Aggregate grouping expressions as proto bytes. Errors if not an Aggregate.
-        pub fn aggregate_group_exprs_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
-            if let LogicalPlan::Aggregate(a) = &self.plan {
-                DfExprBytes::from_exprs(&a.group_expr)
-            } else {
-                Err("Not an Aggregate".into())
-            }
-        }
-
-        /// Aggregate function expressions as proto bytes. Errors if not an Aggregate.
-        pub fn aggregate_aggr_exprs_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
-            if let LogicalPlan::Aggregate(a) = &self.plan {
-                DfExprBytes::from_exprs(&a.aggr_expr)
-            } else {
-                Err("Not an Aggregate".into())
-            }
-        }
-
-        // -- Limit --
-
-        /// Limit skip expression as proto bytes, empty if none. Errors if not a Limit.
-        pub fn limit_skip_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
-            if let LogicalPlan::Limit(l) = &self.plan {
-                match &l.skip {
-                    Some(expr) => DfExprBytes::from_exprs(&[*expr.clone()]),
-                    None => Ok(DfExprBytes::empty()),
-                }
-            } else {
-                Err("Not a Limit".into())
-            }
-        }
-
-        /// Limit fetch expression as proto bytes, empty if none. Errors if not a Limit.
-        pub fn limit_fetch_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
-            if let LogicalPlan::Limit(l) = &self.plan {
-                match &l.fetch {
-                    Some(expr) => DfExprBytes::from_exprs(&[*expr.clone()]),
-                    None => Ok(DfExprBytes::empty()),
-                }
-            } else {
-                Err("Not a Limit".into())
-            }
-        }
+        // ── Variant-specific accessors (fallback paths only) ──
+        //
+        // Most LogicalPlan variants are materialized on the Java side by decoding the proto bytes
+        // returned by `to_proto_bytes`. The only accessors that remain here are the ones used by
+        // the TableScan fallback (the proto representation is lossy) and the unsupported-variant
+        // fallback (Statement and a subset of DDL variants that `datafusion-proto` cannot encode).
 
         // -- TableScan --
 
@@ -1258,144 +1124,383 @@ pub mod ffi {
             }
         }
 
-        // -- EmptyRelation --
+        // -- Statement --
 
-        /// Whether the EmptyRelation produces one row.
-        pub fn empty_relation_produce_one_row(&self) -> bool {
-            if let LogicalPlan::EmptyRelation(e) = &self.plan {
-                e.produce_one_row
+        /// Statement sub-variant kind. Errors if not a Statement.
+        pub fn statement_kind(&self) -> Result<DfStatementKind, Box<DfError>> {
+            if let LogicalPlan::Statement(s) = &self.plan {
+                Ok(match s {
+                    DfStatementEnum::TransactionStart(_) => DfStatementKind::TransactionStart,
+                    DfStatementEnum::TransactionEnd(_) => DfStatementKind::TransactionEnd,
+                    DfStatementEnum::SetVariable(_) => DfStatementKind::SetVariable,
+                    DfStatementEnum::ResetVariable(_) => DfStatementKind::ResetVariable,
+                    DfStatementEnum::Prepare(_) => DfStatementKind::Prepare,
+                    DfStatementEnum::Execute(_) => DfStatementKind::Execute,
+                    DfStatementEnum::Deallocate(_) => DfStatementKind::Deallocate,
+                })
             } else {
-                false
+                Err("Not a Statement".into())
             }
         }
 
-        // -- SubqueryAlias --
-
-        /// SubqueryAlias alias name. Writes empty if not a SubqueryAlias.
-        pub fn subquery_alias_name(&self, write: &mut DiplomatWrite) {
-            if let LogicalPlan::SubqueryAlias(sa) = &self.plan {
-                let _ = write!(write, "{}", sa.alias.table());
+        /// TransactionStart access mode.
+        pub fn statement_tx_start_access_mode(&self) -> Result<DfTransactionAccessMode, Box<DfError>> {
+            if let LogicalPlan::Statement(s) = &self.plan {
+                if let DfStatementEnum::TransactionStart(ts) = s {
+                    return Ok(match ts.access_mode {
+                        TransactionAccessMode::ReadOnly => DfTransactionAccessMode::ReadOnly,
+                        TransactionAccessMode::ReadWrite => DfTransactionAccessMode::ReadWrite,
+                    });
+                }
             }
+            Err("Not a Statement::TransactionStart".into())
         }
 
-        // -- Explain --
+        /// TransactionStart isolation level.
+        pub fn statement_tx_start_isolation_level(&self) -> Result<DfTransactionIsolationLevel, Box<DfError>> {
+            if let LogicalPlan::Statement(s) = &self.plan {
+                if let DfStatementEnum::TransactionStart(ts) = s {
+                    return Ok(match ts.isolation_level {
+                        TransactionIsolationLevel::ReadUncommitted => DfTransactionIsolationLevel::ReadUncommitted,
+                        TransactionIsolationLevel::ReadCommitted => DfTransactionIsolationLevel::ReadCommitted,
+                        TransactionIsolationLevel::RepeatableRead => DfTransactionIsolationLevel::RepeatableRead,
+                        TransactionIsolationLevel::Serializable => DfTransactionIsolationLevel::Serializable,
+                        TransactionIsolationLevel::Snapshot => DfTransactionIsolationLevel::Snapshot,
+                    });
+                }
+            }
+            Err("Not a Statement::TransactionStart".into())
+        }
 
-        /// Whether the Explain is verbose.
-        pub fn explain_verbose(&self) -> bool {
-            if let LogicalPlan::Explain(e) = &self.plan {
-                e.verbose
+        /// TransactionEnd conclusion (Commit or Rollback).
+        pub fn statement_tx_end_conclusion(&self) -> Result<DfTransactionConclusion, Box<DfError>> {
+            if let LogicalPlan::Statement(s) = &self.plan {
+                if let DfStatementEnum::TransactionEnd(te) = s {
+                    return Ok(match te.conclusion {
+                        TransactionConclusion::Commit => DfTransactionConclusion::Commit,
+                        TransactionConclusion::Rollback => DfTransactionConclusion::Rollback,
+                    });
+                }
+            }
+            Err("Not a Statement::TransactionEnd".into())
+        }
+
+        /// TransactionEnd chain flag.
+        pub fn statement_tx_end_chain(&self) -> Result<bool, Box<DfError>> {
+            if let LogicalPlan::Statement(s) = &self.plan {
+                if let DfStatementEnum::TransactionEnd(te) = s {
+                    return Ok(te.chain);
+                }
+            }
+            Err("Not a Statement::TransactionEnd".into())
+        }
+
+        /// SetVariable variable name.
+        pub fn statement_set_variable_name(&self, write: &mut DiplomatWrite) -> Result<(), Box<DfError>> {
+            if let LogicalPlan::Statement(s) = &self.plan {
+                if let DfStatementEnum::SetVariable(sv) = s {
+                    let _ = write!(write, "{}", sv.variable);
+                    return Ok(());
+                }
+            }
+            Err("Not a Statement::SetVariable".into())
+        }
+
+        /// SetVariable value.
+        pub fn statement_set_variable_value(&self, write: &mut DiplomatWrite) -> Result<(), Box<DfError>> {
+            if let LogicalPlan::Statement(s) = &self.plan {
+                if let DfStatementEnum::SetVariable(sv) = s {
+                    let _ = write!(write, "{}", sv.value);
+                    return Ok(());
+                }
+            }
+            Err("Not a Statement::SetVariable".into())
+        }
+
+        /// ResetVariable variable name.
+        pub fn statement_reset_variable_name(&self, write: &mut DiplomatWrite) -> Result<(), Box<DfError>> {
+            if let LogicalPlan::Statement(s) = &self.plan {
+                if let DfStatementEnum::ResetVariable(rv) = s {
+                    let _ = write!(write, "{}", rv.variable);
+                    return Ok(());
+                }
+            }
+            Err("Not a Statement::ResetVariable".into())
+        }
+
+        /// Prepare statement name.
+        pub fn statement_prepare_name(&self, write: &mut DiplomatWrite) -> Result<(), Box<DfError>> {
+            if let LogicalPlan::Statement(s) = &self.plan {
+                if let DfStatementEnum::Prepare(p) = s {
+                    let _ = write!(write, "{}", p.name);
+                    return Ok(());
+                }
+            }
+            Err("Not a Statement::Prepare".into())
+        }
+
+        /// Prepare statement parameter types as Arrow FFI schema.
+        pub fn statement_prepare_schema_to(&self, out_addr: usize) -> Result<(), Box<DfError>> {
+            if let LogicalPlan::Statement(s) = &self.plan {
+                if let DfStatementEnum::Prepare(p) = s {
+                    let fields: Vec<arrow::datatypes::Field> = p.fields.iter().map(|f| f.as_ref().clone()).collect();
+                    let arrow_schema = ArrowSchema::new(fields);
+                    return export_schema_to(&arrow_schema, out_addr);
+                }
+            }
+            Err("Not a Statement::Prepare".into())
+        }
+
+        /// Execute statement name.
+        pub fn statement_execute_name(&self, write: &mut DiplomatWrite) -> Result<(), Box<DfError>> {
+            if let LogicalPlan::Statement(s) = &self.plan {
+                if let DfStatementEnum::Execute(e) = s {
+                    let _ = write!(write, "{}", e.name);
+                    return Ok(());
+                }
+            }
+            Err("Not a Statement::Execute".into())
+        }
+
+        /// Execute statement parameters as proto bytes.
+        pub fn statement_execute_params_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
+            if let LogicalPlan::Statement(s) = &self.plan {
+                if let DfStatementEnum::Execute(e) = s {
+                    return DfExprBytes::from_exprs(&e.parameters);
+                }
+            }
+            Err("Not a Statement::Execute".into())
+        }
+
+        /// Deallocate statement name.
+        pub fn statement_deallocate_name(&self, write: &mut DiplomatWrite) -> Result<(), Box<DfError>> {
+            if let LogicalPlan::Statement(s) = &self.plan {
+                if let DfStatementEnum::Deallocate(d) = s {
+                    let _ = write!(write, "{}", d.name);
+                    return Ok(());
+                }
+            }
+            Err("Not a Statement::Deallocate".into())
+        }
+
+        // -- Ddl --
+
+        /// DDL sub-variant kind.
+        pub fn ddl_kind(&self) -> Result<DfDdlKind, Box<DfError>> {
+            if let LogicalPlan::Ddl(ddl) = &self.plan {
+                Ok(match ddl {
+                    DdlStatement::CreateExternalTable(_) => DfDdlKind::CreateExternalTable,
+                    DdlStatement::CreateMemoryTable(_) => DfDdlKind::CreateMemoryTable,
+                    DdlStatement::CreateView(_) => DfDdlKind::CreateView,
+                    DdlStatement::CreateCatalogSchema(_) => DfDdlKind::CreateCatalogSchema,
+                    DdlStatement::CreateCatalog(_) => DfDdlKind::CreateCatalog,
+                    DdlStatement::CreateIndex(_) => DfDdlKind::CreateIndex,
+                    DdlStatement::DropTable(_) => DfDdlKind::DropTable,
+                    DdlStatement::DropView(_) => DfDdlKind::DropView,
+                    DdlStatement::DropCatalogSchema(_) => DfDdlKind::DropCatalogSchema,
+                    DdlStatement::CreateFunction(_) => DfDdlKind::CreateFunction,
+                    DdlStatement::DropFunction(_) => DfDdlKind::DropFunction,
+                })
             } else {
-                false
+                Err("Not a Ddl".into())
             }
         }
 
-        // -- Analyze --
-
-        /// Whether the Analyze is verbose.
-        pub fn analyze_verbose(&self) -> bool {
-            if let LogicalPlan::Analyze(a) = &self.plan {
-                a.verbose
+        /// DDL table/object name (works for all variants that have a name).
+        pub fn ddl_name(&self, write: &mut DiplomatWrite) -> Result<(), Box<DfError>> {
+            if let LogicalPlan::Ddl(ddl) = &self.plan {
+                match ddl {
+                    DdlStatement::CreateExternalTable(t) => { write_table_name(&t.name, write); }
+                    DdlStatement::CreateMemoryTable(t) => { write_table_name(&t.name, write); }
+                    DdlStatement::CreateView(v) => { write_table_name(&v.name, write); }
+                    DdlStatement::CreateCatalogSchema(s) => { let _ = write!(write, "{}", s.schema_name); }
+                    DdlStatement::CreateCatalog(c) => { let _ = write!(write, "{}", c.catalog_name); }
+                    DdlStatement::CreateIndex(i) => {
+                        if let Some(n) = &i.name { let _ = write!(write, "{}", n); }
+                    }
+                    DdlStatement::DropTable(t) => { write_table_name(&t.name, write); }
+                    DdlStatement::DropView(v) => { write_table_name(&v.name, write); }
+                    DdlStatement::DropCatalogSchema(s) => { let _ = write!(write, "{}", s.name); }
+                    DdlStatement::CreateFunction(f) => { let _ = write!(write, "{}", f.name); }
+                    DdlStatement::DropFunction(f) => { let _ = write!(write, "{}", f.name); }
+                }
+                Ok(())
             } else {
-                false
+                Err("Not a Ddl".into())
             }
         }
 
-        // -- RecursiveQuery --
-
-        /// RecursiveQuery name. Writes empty if not a RecursiveQuery.
-        pub fn recursive_query_name(&self, write: &mut DiplomatWrite) {
-            if let LogicalPlan::RecursiveQuery(rq) = &self.plan {
-                let _ = write!(write, "{}", rq.name);
-            }
-        }
-
-        /// Whether the RecursiveQuery is distinct (UNION vs UNION ALL).
-        pub fn recursive_query_is_distinct(&self) -> bool {
-            if let LogicalPlan::RecursiveQuery(rq) = &self.plan {
-                rq.is_distinct
-            } else {
-                false
-            }
-        }
-
-        // -- Distinct --
-
-        /// Whether this Distinct is a Distinct::On (vs Distinct::All).
-        pub fn distinct_is_on(&self) -> bool {
-            matches!(&self.plan, LogicalPlan::Distinct(Distinct::On(_)))
-        }
-
-        /// DistinctOn ON expressions as proto bytes. Errors if not Distinct::On.
-        pub fn distinct_on_on_exprs_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
-            if let LogicalPlan::Distinct(Distinct::On(d)) = &self.plan {
-                DfExprBytes::from_exprs(&d.on_expr)
-            } else {
-                Err("Not a Distinct::On".into())
-            }
-        }
-
-        /// DistinctOn SELECT expressions as proto bytes. Errors if not Distinct::On.
-        pub fn distinct_on_select_exprs_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
-            if let LogicalPlan::Distinct(Distinct::On(d)) = &self.plan {
-                DfExprBytes::from_exprs(&d.select_expr)
-            } else {
-                Err("Not a Distinct::On".into())
-            }
-        }
-
-        /// DistinctOn sort expressions as proto bytes, empty if none.
-        pub fn distinct_on_sort_exprs_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
-            if let LogicalPlan::Distinct(Distinct::On(d)) = &self.plan {
-                match &d.sort_expr {
-                    Some(sort_exprs) => DfExprBytes::from_sort_exprs(sort_exprs),
-                    None => Ok(DfExprBytes::empty()),
+        /// DDL table reference type (for variants with TableReference name).
+        pub fn ddl_table_ref_type(&self) -> DfTableRefType {
+            if let LogicalPlan::Ddl(ddl) = &self.plan {
+                match ddl {
+                    DdlStatement::CreateExternalTable(t) => table_ref_type(&t.name),
+                    DdlStatement::CreateMemoryTable(t) => table_ref_type(&t.name),
+                    DdlStatement::CreateView(v) => table_ref_type(&v.name),
+                    DdlStatement::CreateIndex(i) => table_ref_type(&i.table),
+                    DdlStatement::DropTable(t) => table_ref_type(&t.name),
+                    DdlStatement::DropView(v) => table_ref_type(&v.name),
+                    _ => DfTableRefType::None,
                 }
             } else {
-                Err("Not a Distinct::On".into())
+                DfTableRefType::None
             }
         }
 
-        // -- Values --
-
-        /// Number of rows in the Values node.
-        pub fn values_row_count(&self) -> i64 {
-            if let LogicalPlan::Values(v) = &self.plan {
-                v.values.len() as i64
-            } else {
-                0
+        /// DDL table schema name (for variants with TableReference name).
+        pub fn ddl_table_schema_name(&self, write: &mut DiplomatWrite) {
+            if let LogicalPlan::Ddl(ddl) = &self.plan {
+                match ddl {
+                    DdlStatement::CreateExternalTable(t) => write_table_schema(&t.name, write),
+                    DdlStatement::CreateMemoryTable(t) => write_table_schema(&t.name, write),
+                    DdlStatement::CreateView(v) => write_table_schema(&v.name, write),
+                    DdlStatement::CreateIndex(i) => write_table_schema(&i.table, write),
+                    DdlStatement::DropTable(t) => write_table_schema(&t.name, write),
+                    DdlStatement::DropView(v) => write_table_schema(&v.name, write),
+                    _ => {}
+                }
             }
         }
 
-        /// Number of columns in the Values node.
-        pub fn values_col_count(&self) -> i64 {
-            if let LogicalPlan::Values(v) = &self.plan {
-                v.values.first().map_or(0, |row| row.len()) as i64
-            } else {
-                0
+        /// DDL table catalog name (for variants with TableReference name).
+        pub fn ddl_table_catalog_name(&self, write: &mut DiplomatWrite) {
+            if let LogicalPlan::Ddl(ddl) = &self.plan {
+                match ddl {
+                    DdlStatement::CreateExternalTable(t) => write_table_catalog(&t.name, write),
+                    DdlStatement::CreateMemoryTable(t) => write_table_catalog(&t.name, write),
+                    DdlStatement::CreateView(v) => write_table_catalog(&v.name, write),
+                    DdlStatement::CreateIndex(i) => write_table_catalog(&i.table, write),
+                    DdlStatement::DropTable(t) => write_table_catalog(&t.name, write),
+                    DdlStatement::DropView(v) => write_table_catalog(&v.name, write),
+                    _ => {}
+                }
             }
         }
 
-        /// All Values expressions flattened row-major as proto bytes.
-        pub fn values_all_exprs_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
-            if let LogicalPlan::Values(v) = &self.plan {
-                let flat: Vec<Expr> = v.values.iter().flatten().cloned().collect();
-                DfExprBytes::from_exprs(&flat)
+        /// DDL if_not_exists flag (for CREATE variants).
+        pub fn ddl_if_not_exists(&self) -> Result<bool, Box<DfError>> {
+            if let LogicalPlan::Ddl(ddl) = &self.plan {
+                Ok(match ddl {
+                    DdlStatement::CreateExternalTable(t) => t.if_not_exists,
+                    DdlStatement::CreateMemoryTable(t) => t.if_not_exists,
+                    DdlStatement::CreateCatalogSchema(s) => s.if_not_exists,
+                    DdlStatement::CreateCatalog(c) => c.if_not_exists,
+                    DdlStatement::CreateIndex(i) => i.if_not_exists,
+                    _ => return Err("DDL variant does not have if_not_exists".into()),
+                })
             } else {
-                Err("Not a Values".into())
+                Err("Not a Ddl".into())
             }
         }
 
-        // -- Window --
-
-        /// Window expressions as proto bytes. Errors if not a Window.
-        pub fn window_exprs_proto(&self) -> Result<Box<DfExprBytes>, Box<DfError>> {
-            if let LogicalPlan::Window(w) = &self.plan {
-                DfExprBytes::from_exprs(&w.window_expr)
+        /// DDL if_exists flag (for DROP variants).
+        pub fn ddl_if_exists(&self) -> Result<bool, Box<DfError>> {
+            if let LogicalPlan::Ddl(ddl) = &self.plan {
+                Ok(match ddl {
+                    DdlStatement::DropTable(t) => t.if_exists,
+                    DdlStatement::DropView(v) => v.if_exists,
+                    DdlStatement::DropCatalogSchema(s) => s.if_exists,
+                    DdlStatement::DropFunction(f) => f.if_exists,
+                    _ => return Err("DDL variant does not have if_exists".into()),
+                })
             } else {
-                Err("Not a Window".into())
+                Err("Not a Ddl".into())
+            }
+        }
+
+        /// DDL or_replace flag (for CREATE variants that support it).
+        pub fn ddl_or_replace(&self) -> Result<bool, Box<DfError>> {
+            if let LogicalPlan::Ddl(ddl) = &self.plan {
+                Ok(match ddl {
+                    DdlStatement::CreateExternalTable(t) => t.or_replace,
+                    DdlStatement::CreateMemoryTable(t) => t.or_replace,
+                    DdlStatement::CreateView(v) => v.or_replace,
+                    DdlStatement::CreateFunction(f) => f.or_replace,
+                    _ => return Err("DDL variant does not have or_replace".into()),
+                })
+            } else {
+                Err("Not a Ddl".into())
+            }
+        }
+
+        /// DDL temporary flag.
+        pub fn ddl_temporary(&self) -> Result<bool, Box<DfError>> {
+            if let LogicalPlan::Ddl(ddl) = &self.plan {
+                Ok(match ddl {
+                    DdlStatement::CreateExternalTable(t) => t.temporary,
+                    DdlStatement::CreateMemoryTable(t) => t.temporary,
+                    DdlStatement::CreateView(v) => v.temporary,
+                    DdlStatement::CreateFunction(f) => f.temporary,
+                    _ => return Err("DDL variant does not have temporary".into()),
+                })
+            } else {
+                Err("Not a Ddl".into())
+            }
+        }
+
+        /// DDL cascade flag (DropCatalogSchema only).
+        pub fn ddl_cascade(&self) -> Result<bool, Box<DfError>> {
+            if let LogicalPlan::Ddl(ddl) = &self.plan {
+                if let DdlStatement::DropCatalogSchema(s) = ddl {
+                    return Ok(s.cascade);
+                }
+            }
+            Err("Not a Ddl::DropCatalogSchema".into())
+        }
+
+        /// DDL CreateIndex has name flag.
+        pub fn ddl_index_has_name(&self) -> bool {
+            if let LogicalPlan::Ddl(DdlStatement::CreateIndex(i)) = &self.plan {
+                i.name.is_some()
+            } else {
+                false
+            }
+        }
+
+        /// DDL CreateIndex unique flag.
+        pub fn ddl_index_unique(&self) -> Result<bool, Box<DfError>> {
+            if let LogicalPlan::Ddl(DdlStatement::CreateIndex(i)) = &self.plan {
+                Ok(i.unique)
+            } else {
+                Err("Not a Ddl::CreateIndex".into())
+            }
+        }
+
+        /// DDL CreateIndex table reference type.
+        pub fn ddl_index_table_ref_type(&self) -> DfTableRefType {
+            if let LogicalPlan::Ddl(DdlStatement::CreateIndex(i)) = &self.plan {
+                table_ref_type(&i.table)
+            } else {
+                DfTableRefType::None
+            }
+        }
+
+        /// DDL CreateIndex table name.
+        pub fn ddl_index_table_name(&self, write: &mut DiplomatWrite) {
+            if let LogicalPlan::Ddl(DdlStatement::CreateIndex(i)) = &self.plan {
+                write_table_name(&i.table, write);
+            }
+        }
+
+        /// DDL CreateIndex table schema name.
+        pub fn ddl_index_table_schema_name(&self, write: &mut DiplomatWrite) {
+            if let LogicalPlan::Ddl(DdlStatement::CreateIndex(i)) = &self.plan {
+                write_table_schema(&i.table, write);
+            }
+        }
+
+        /// DDL CreateIndex table catalog name.
+        pub fn ddl_index_table_catalog_name(&self, write: &mut DiplomatWrite) {
+            if let LogicalPlan::Ddl(DdlStatement::CreateIndex(i)) = &self.plan {
+                write_table_catalog(&i.table, write);
             }
         }
     }
+
+    // TableReference helpers live in `crate::logical_plan`.
+    use crate::logical_plan::{
+        table_ref_type, write_table_catalog, write_table_name, write_table_schema,
+    };
 
     // ============================================================================
     // DfLogicalPlanBuilder
@@ -1845,6 +1950,163 @@ pub mod ffi {
     }
 
     // ============================================================================
+    // DfSessionConfig
+    // ============================================================================
+
+    /// Opaque wrapper for a SessionConfig.
+    #[diplomat::opaque]
+    pub struct DfSessionConfig {
+        pub(crate) cfg: SessionConfig,
+    }
+
+    impl DfSessionConfig {
+        /// Create a SessionConfig from parallel key/value string slices.
+        pub fn new_from_options(
+            keys: &[DiplomatStrSlice],
+            values: &[DiplomatStrSlice],
+        ) -> Result<Box<DfSessionConfig>, Box<DfError>> {
+            let cfg = build_session_config(keys, values)?;
+            Ok(Box::new(DfSessionConfig { cfg }))
+        }
+
+        /// Keys of all configured options (parallel with options_values).
+        pub fn options_keys(&self) -> Box<DfStringArray> {
+            let strings: Vec<String> = self
+                .cfg
+                .options()
+                .entries()
+                .into_iter()
+                .map(|e| e.key)
+                .collect();
+            Box::new(DfStringArray { strings })
+        }
+
+        /// Values of all configured options (parallel with options_keys).
+        /// Unset Option<String> values become the empty string.
+        pub fn options_values(&self) -> Box<DfStringArray> {
+            let strings: Vec<String> = self
+                .cfg
+                .options()
+                .entries()
+                .into_iter()
+                .map(|e| e.value.unwrap_or_default())
+                .collect();
+            Box::new(DfStringArray { strings })
+        }
+    }
+
+    // ============================================================================
+    // DfMemoryPool
+    // ============================================================================
+
+    /// Opaque wrapper for a MemoryPool. Currently exposes no methods; the type
+    /// exists so Java code can obtain a handle from TaskContext for future
+    /// expansion (reserved(), pool_size(), etc.).
+    #[diplomat::opaque]
+    pub struct DfMemoryPool {
+        pub(crate) pool: Arc<dyn datafusion::execution::memory_pool::MemoryPool>,
+    }
+
+    impl DfMemoryPool {
+        /// Placeholder accessor so Diplomat generates the opaque with at least one
+        /// method. Returns the total reserved bytes across the pool.
+        pub fn reserved(&self) -> u64 {
+            self.pool.reserved() as u64
+        }
+    }
+
+    // ============================================================================
+    // DfTaskContext
+    // ============================================================================
+
+    /// Opaque wrapper for a TaskContext handed to a Java ExecutionPlan during
+    /// execute(). Java owns the Box and must close it.
+    #[diplomat::opaque]
+    pub struct DfTaskContext {
+        pub(crate) ctx: Arc<datafusion::execution::TaskContext>,
+    }
+
+    impl DfTaskContext {
+        /// Take ownership of a raw pointer previously produced by leaking a
+        /// `Box<DfTaskContext>` across the FFI boundary (as done by the
+        /// ExecutionPlan::execute upcall). The caller transfers ownership and
+        /// must close the returned handle.
+        pub fn take_from_raw(addr: usize) -> Box<DfTaskContext> {
+            unsafe { Box::from_raw(addr as *mut DfTaskContext) }
+        }
+
+        /// Session ID.
+        pub fn session_id(&self, write: &mut DiplomatWrite) {
+            let _ = write!(write, "{}", self.ctx.session_id());
+        }
+
+        /// True if this TaskContext has a task_id.
+        pub fn has_task_id(&self) -> bool {
+            self.ctx.task_id().is_some()
+        }
+
+        /// Task ID (writes the empty string if none; pair with has_task_id).
+        pub fn task_id(&self, write: &mut DiplomatWrite) {
+            if let Some(id) = self.ctx.task_id() {
+                let _ = write!(write, "{}", id);
+            }
+        }
+
+        /// Snapshot of the session config.
+        pub fn session_config(&self) -> Box<DfSessionConfig> {
+            Box::new(DfSessionConfig {
+                cfg: self.ctx.session_config().clone(),
+            })
+        }
+
+        /// Runtime environment.
+        pub fn runtime_env(&self) -> Box<DfRuntimeEnv> {
+            Box::new(DfRuntimeEnv {
+                rt_env: Arc::clone(&self.ctx.runtime_env()),
+            })
+        }
+
+        /// Memory pool (cloned from the runtime env).
+        pub fn memory_pool(&self) -> Box<DfMemoryPool> {
+            Box::new(DfMemoryPool {
+                pool: Arc::clone(&self.ctx.runtime_env().memory_pool),
+            })
+        }
+
+        /// Registered scalar function names.
+        pub fn scalar_function_names(&self) -> Box<DfStringArray> {
+            let strings: Vec<String> = self.ctx.scalar_functions().keys().cloned().collect();
+            Box::new(DfStringArray { strings })
+        }
+
+        /// Registered aggregate function names.
+        pub fn aggregate_function_names(&self) -> Box<DfStringArray> {
+            let strings: Vec<String> = self.ctx.aggregate_functions().keys().cloned().collect();
+            Box::new(DfStringArray { strings })
+        }
+
+        /// Returns a new TaskContext with the given SessionConfig. Does not
+        /// consume self; a fresh TaskContext is constructed from this one's
+        /// fields (TaskContext does not impl Clone in DataFusion 53.1).
+        pub fn with_session_config(&self, cfg: &DfSessionConfig) -> Box<DfTaskContext> {
+            let new_ctx = super::clone_task_context(&self.ctx).with_session_config(cfg.cfg.clone());
+            Box::new(DfTaskContext {
+                ctx: Arc::new(new_ctx),
+            })
+        }
+
+        /// Returns a new TaskContext with the given RuntimeEnv. Does not
+        /// consume self; a fresh TaskContext is constructed from this one's
+        /// fields.
+        pub fn with_runtime(&self, rt: &DfRuntimeEnv) -> Box<DfTaskContext> {
+            let new_ctx = super::clone_task_context(&self.ctx).with_runtime(Arc::clone(&rt.rt_env));
+            Box::new(DfTaskContext {
+                ctx: Arc::new(new_ctx),
+            })
+        }
+    }
+
+    // ============================================================================
     // DfSessionContext
     // ============================================================================
 
@@ -1891,6 +2153,55 @@ pub mod ffi {
             let rt = Runtime::new()?;
             let ctx =
                 SessionContext::new_with_config_rt(config, Arc::clone(&rt_env.rt_env));
+            Ok(Box::new(DfSessionContext {
+                ctx,
+                rt: Arc::new(rt),
+            }))
+        }
+
+        /// Create a SessionContext with federation support enabled.
+        ///
+        /// Wires the `FederationOptimizerRule` and `FederatedQueryPlanner` from
+        /// `datafusion_federation` into a fresh `SessionState`. Once any registered
+        /// table or schema is backed by a federation-aware provider (e.g. `SQLSchemaProvider`
+        /// from a Flight SQL executor), DataFusion will push filters, projections, joins,
+        /// and aggregates down to the remote system transparently.
+        ///
+        /// keys and values are parallel string slices of config key-value pairs that are
+        /// applied on top of the federated default state via `SessionStateBuilder::with_config`.
+        pub fn new_with_federation(
+            keys: &[DiplomatStrSlice],
+            values: &[DiplomatStrSlice],
+        ) -> Result<Box<DfSessionContext>, Box<DfError>> {
+            let config = build_session_config(keys, values)?;
+            let rt = Runtime::new()?;
+            // datafusion_federation::default_optimizer_rules() inserts the federation rule
+            // immediately after scalar_subquery_to_join — before PushDownFilter runs. That's
+            // fine for plans with no filters above a single-provider TableScan, but it means
+            // filters only get pushed into the remote SQL if they're already directly above a
+            // TableScan by the time federation runs.
+            //
+            // To reliably push filters (including post-join filters that PushDownFilter moves
+            // past a join) into the remote SQL, move the federation rule to the END of the
+            // optimizer pipeline so every filter/projection pushdown has already run.
+            let mut rules = datafusion_federation::default_optimizer_rules();
+            let fed_pos = rules
+                .iter()
+                .position(|r| r.name() == "federation_optimizer_rule")
+                .ok_or_else(|| -> Box<DfError> {
+                    "federation rule missing from default_optimizer_rules()".into()
+                })?;
+            let fed_rule = rules.remove(fed_pos);
+            rules.push(fed_rule);
+            let state = datafusion::execution::SessionStateBuilder::new()
+                .with_config(config)
+                .with_optimizer_rules(rules)
+                .with_query_planner(Arc::new(
+                    datafusion_federation::FederatedQueryPlanner::new(),
+                ))
+                .with_default_features()
+                .build();
+            let ctx = SessionContext::new_with_state(state);
             Ok(Box::new(DfSessionContext {
                 ctx,
                 rt: Arc::new(rt),
@@ -1950,6 +2261,47 @@ pub mod ffi {
             let name_str = diplomat_str(name)?;
             let foreign = crate::table::ForeignDfTable::new(table);
             self.ctx.register_table(name_str, Arc::new(foreign))?;
+            Ok(())
+        }
+
+        /// Register an `Arc<dyn TableProvider>` constructed on the Rust side
+        /// (e.g. by a Flight SQL / Postgres / MySQL factory opaque).
+        pub fn register_rust_table_provider(
+            &self,
+            name: &DiplomatStr,
+            provider: &crate::rust_table_provider::ffi::DfRustTableProvider,
+        ) -> Result<(), Box<DfError>> {
+            let name_str = diplomat_str(name)?;
+            self.ctx.register_table(name_str, Arc::clone(&provider.0))?;
+            Ok(())
+        }
+
+        /// Register an `Arc<dyn CatalogProvider>` constructed on the Rust side.
+        pub fn register_rust_catalog(
+            &self,
+            name: &DiplomatStr,
+            catalog: &crate::rust_table_provider::ffi::DfRustCatalogProvider,
+        ) -> Result<(), Box<DfError>> {
+            let name_str = diplomat_str(name)?;
+            self.ctx.register_catalog(name_str, Arc::clone(&catalog.0));
+            Ok(())
+        }
+
+        /// Register an `Arc<dyn SchemaProvider>` as a schema under an existing catalog.
+        pub fn register_rust_schema(
+            &self,
+            catalog_name: &DiplomatStr,
+            schema_name: &DiplomatStr,
+            schema: &crate::rust_table_provider::ffi::DfRustSchemaProvider,
+        ) -> Result<(), Box<DfError>> {
+            let catalog_str = diplomat_str(catalog_name)?;
+            let schema_str = diplomat_str(schema_name)?;
+            let catalog = self.ctx.catalog(catalog_str).ok_or_else(|| {
+                Box::new(DfError(
+                    format!("Catalog '{}' is not registered", catalog_str).into(),
+                ))
+            })?;
+            catalog.register_schema(schema_str, Arc::clone(&schema.0))?;
             Ok(())
         }
 
@@ -2421,15 +2773,7 @@ pub mod ffi {
 
         /// Export the schema as FFI_ArrowSchema to a Java-provided address.
         pub fn schema_to(&self, out_addr: usize) -> Result<(), Box<DfError>> {
-            if out_addr == 0 {
-                return Err("Null output address".into());
-            }
-            let arrow_schema = self.df.schema().as_arrow().as_ref().clone();
-            let ffi_schema = FFI_ArrowSchema::try_from(&arrow_schema)?;
-            unsafe {
-                std::ptr::write(out_addr as *mut FFI_ArrowSchema, ffi_schema);
-            }
-            Ok(())
+            export_schema_to(self.df.schema().as_arrow().as_ref(), out_addr)
         }
 
         // ── Transformation methods ──
@@ -2695,6 +3039,23 @@ pub mod ffi {
             Ok(())
         }
     }
+}
+
+/// Clone a TaskContext by re-constructing it from its field accessors.
+/// `TaskContext` does not impl `Clone` in DataFusion 53.1 so we build a new
+/// one. Used by `DfTaskContext::with_session_config` / `with_runtime`.
+fn clone_task_context(
+    ctx: &datafusion::execution::TaskContext,
+) -> datafusion::execution::TaskContext {
+    datafusion::execution::TaskContext::new(
+        ctx.task_id().map(|s| s.to_string()),
+        ctx.session_id().to_string(),
+        ctx.session_config().clone(),
+        ctx.scalar_functions().clone(),
+        ctx.aggregate_functions().clone(),
+        ctx.window_functions().clone(),
+        std::sync::Arc::clone(&ctx.runtime_env()),
+    )
 }
 
 impl ffi::DfExprBytes {
@@ -2992,8 +3353,8 @@ fn parse_parquet_options<'a>(
 fn parse_json_options<'a>(
     options: &[u8],
     schema_addr: usize,
-) -> Result<datafusion::prelude::NdJsonReadOptions<'a>, Box<ffi::DfError>> {
-    let mut opts = datafusion::prelude::NdJsonReadOptions::default();
+) -> Result<datafusion::prelude::JsonReadOptions<'a>, Box<ffi::DfError>> {
+    let mut opts = datafusion::prelude::JsonReadOptions::default();
 
     if !options.is_empty() {
         let proto = datafusion_proto::protobuf::JsonOptions::decode(options).map_err(|e| {

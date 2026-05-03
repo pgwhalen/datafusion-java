@@ -14,7 +14,7 @@ package org.apache.arrow.datafusion;
  * @param line the line number
  * @param column the column number
  * @see <a
- *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/spans/struct.Location.html">Rust
+ *     href="https://docs.rs/datafusion-common/53.1.0/datafusion_common/spans/struct.Location.html">Rust
  *     DataFusion: Location</a>
  */
 public record Location(long line, long column) {
@@ -24,7 +24,7 @@ public record Location(long line, long column) {
    *
    * @return the line number
    * @see <a
-   *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/spans/struct.Location.html#structfield.line">Rust
+   *     href="https://docs.rs/datafusion-common/53.1.0/datafusion_common/spans/struct.Location.html#structfield.line">Rust
    *     DataFusion: Location::line</a>
    */
   public long line() {
@@ -36,7 +36,7 @@ public record Location(long line, long column) {
    *
    * @return the column number
    * @see <a
-   *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/spans/struct.Location.html#structfield.column">Rust
+   *     href="https://docs.rs/datafusion-common/53.1.0/datafusion_common/spans/struct.Location.html#structfield.column">Rust
    *     DataFusion: Location::column</a>
    */
   public long column() {

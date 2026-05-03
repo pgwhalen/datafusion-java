@@ -56,8 +56,10 @@ import java.util.Map;
  * @param preferExistingUnion Whether to prefer existing union ordering
  * @param expandViewsAtOutput Whether to expand views at the output level
  * @param enableSortPushdown Whether to enable sort pushdown optimization
+ * @param enableLeafExpressionPushdown Whether to extract leaf expressions (e.g. {@code get_field})
+ *     into projections closer to leaf table scans and push them down toward the leaves
  * @see <a
- *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/config/struct.OptimizerOptions.html">Rust
+ *     href="https://docs.rs/datafusion-common/53.1.0/datafusion_common/config/struct.OptimizerOptions.html">Rust
  *     DataFusion: OptimizerOptions</a>
  */
 public record OptimizerOptions(
@@ -92,7 +94,8 @@ public record OptimizerOptions(
     Integer defaultFilterSelectivity,
     Boolean preferExistingUnion,
     Boolean expandViewsAtOutput,
-    Boolean enableSortPushdown) {
+    Boolean enableSortPushdown,
+    Boolean enableLeafExpressionPushdown) {
 
   private static final String PREFIX = "datafusion.optimizer.";
 
@@ -149,6 +152,7 @@ public record OptimizerOptions(
     putIfPresent(map, PREFIX + "prefer_existing_union", preferExistingUnion);
     putIfPresent(map, PREFIX + "expand_views_at_output", expandViewsAtOutput);
     putIfPresent(map, PREFIX + "enable_sort_pushdown", enableSortPushdown);
+    putIfPresent(map, PREFIX + "enable_leaf_expression_pushdown", enableLeafExpressionPushdown);
   }
 
   private static void putIfPresent(Map<String, String> map, String key, Object value) {
@@ -191,6 +195,7 @@ public record OptimizerOptions(
     private Boolean preferExistingUnion;
     private Boolean expandViewsAtOutput;
     private Boolean enableSortPushdown;
+    private Boolean enableLeafExpressionPushdown;
 
     private Builder() {}
 
@@ -386,6 +391,16 @@ public record OptimizerOptions(
       return this;
     }
 
+    /**
+     * When set to true, the optimizer extracts leaf expressions (such as {@code get_field}) from
+     * filter/sort/join nodes into projections closer to the leaf table scans, and pushes those
+     * projections down toward the leaf nodes.
+     */
+    public Builder enableLeafExpressionPushdown(boolean value) {
+      this.enableLeafExpressionPushdown = value;
+      return this;
+    }
+
     /** Builds the {@link OptimizerOptions}. */
     public OptimizerOptions build() {
       return new OptimizerOptions(
@@ -420,7 +435,8 @@ public record OptimizerOptions(
           defaultFilterSelectivity,
           preferExistingUnion,
           expandViewsAtOutput,
-          enableSortPushdown);
+          enableSortPushdown,
+          enableLeafExpressionPushdown);
     }
   }
 }

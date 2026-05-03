@@ -10,7 +10,7 @@ package org.apache.arrow.datafusion.logical_expr;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/join_type/enum.JoinConstraint.html">Rust
+ *     href="https://docs.rs/datafusion-common/53.1.0/datafusion_common/join_type/enum.JoinConstraint.html">Rust
  *     DataFusion: JoinConstraint</a>
  */
 public enum JoinConstraint {

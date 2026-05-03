@@ -15,7 +15,7 @@ package org.apache.arrow.datafusion;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/config/struct.JsonOptions.html">Rust
+ *     href="https://docs.rs/datafusion-common/53.1.0/datafusion_common/config/struct.JsonOptions.html">Rust
  *     DataFusion: JsonOptions</a>
  */
 public final class JsonOptions {

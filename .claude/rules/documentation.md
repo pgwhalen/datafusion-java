@@ -12,7 +12,7 @@ Every public Java class, interface, enum, or record in `datafusion-ffi-java` tha
 
 ### Version
 
-DataFusion version: **52.1.0**
+DataFusion version: **53.1.0**
 
 When upgrading DataFusion, update all docs.rs URLs to the new version.
 
@@ -31,12 +31,12 @@ When upgrading DataFusion, update all docs.rs URLs to the new version.
 
 | Crate | Base URL |
 |---|---|
-| `datafusion` | `https://docs.rs/datafusion/52.1.0/datafusion` |
-| `datafusion-expr` | `https://docs.rs/datafusion-expr/52.1.0/datafusion_expr` |
-| `datafusion-catalog` | `https://docs.rs/datafusion-catalog/52.1.0/datafusion_catalog` |
-| `datafusion-datasource` | `https://docs.rs/datafusion-datasource/52.1.0/datafusion_datasource` |
-| `datafusion-common` | `https://docs.rs/datafusion-common/52.1.0/datafusion_common` |
-| `datafusion-physical-expr` | `https://docs.rs/datafusion-physical-expr/52.1.0/datafusion_physical_expr` |
+| `datafusion` | `https://docs.rs/datafusion/53.1.0/datafusion` |
+| `datafusion-expr` | `https://docs.rs/datafusion-expr/53.1.0/datafusion_expr` |
+| `datafusion-catalog` | `https://docs.rs/datafusion-catalog/53.1.0/datafusion_catalog` |
+| `datafusion-datasource` | `https://docs.rs/datafusion-datasource/53.1.0/datafusion_datasource` |
+| `datafusion-common` | `https://docs.rs/datafusion-common/53.1.0/datafusion_common` |
+| `datafusion-physical-expr` | `https://docs.rs/datafusion-physical-expr/53.1.0/datafusion_physical_expr` |
 
 ### Class-Level Format
 
@@ -58,7 +58,7 @@ Every public method that maps to a Rust method MUST have a `@see` link using the
  *
  * @param foo param description
  * @see <a
- *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.select">Rust
+ *     href="https://docs.rs/datafusion/53.1.0/datafusion/dataframe/struct.DataFrame.html#method.select">Rust
  *     DataFusion: DataFrame::select</a>
  */
 ```

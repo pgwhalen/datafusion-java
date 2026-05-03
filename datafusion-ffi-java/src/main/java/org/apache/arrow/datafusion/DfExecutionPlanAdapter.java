@@ -2,6 +2,7 @@ package org.apache.arrow.datafusion;
 
 import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
+import org.apache.arrow.datafusion.execution.TaskContext;
 import org.apache.arrow.datafusion.generated.DfExecutionPlanTrait;
 import org.apache.arrow.datafusion.generated.DfRecordBatchReader;
 import org.apache.arrow.datafusion.physical_plan.ExecutionPlan;
@@ -69,9 +70,9 @@ final class DfExecutionPlanAdapter implements DfExecutionPlanTrait {
   }
 
   @Override
-  public long execute(int partition, long errorAddr, long errorCap) {
-    try {
-      RecordBatchReader reader = plan.execute(partition, allocator);
+  public long execute(int partition, long taskCtxAddr, long errorAddr, long errorCap) {
+    try (TaskContext taskCtx = TaskContext.fromNativeAddress(taskCtxAddr)) {
+      RecordBatchReader reader = plan.execute(partition, taskCtx, allocator);
       DfRecordBatchReaderAdapter adapter =
           new DfRecordBatchReaderAdapter(reader, allocator, fullStackTrace);
       long ptr = DfRecordBatchReader.createRaw(adapter);

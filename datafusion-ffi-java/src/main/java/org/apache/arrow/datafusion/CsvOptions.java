@@ -19,7 +19,7 @@ import com.google.protobuf.ByteString;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/config/struct.CsvOptions.html">Rust
+ *     href="https://docs.rs/datafusion-common/53.1.0/datafusion_common/config/struct.CsvOptions.html">Rust
  *     DataFusion: CsvOptions</a>
  */
 public final class CsvOptions {

@@ -12,7 +12,7 @@ package org.apache.arrow.datafusion.logical_expr;
  * // Used in binary expression construction
  * }
  *
- * @see <a href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/enum.Operator.html">Rust
+ * @see <a href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/enum.Operator.html">Rust
  *     DataFusion: Operator</a>
  */
 public enum Operator {

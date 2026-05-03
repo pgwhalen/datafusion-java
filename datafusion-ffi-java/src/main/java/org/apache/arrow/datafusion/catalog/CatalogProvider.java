@@ -28,7 +28,7 @@ import java.util.Optional;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion-catalog/52.1.0/datafusion_catalog/trait.CatalogProvider.html">Rust
+ *     href="https://docs.rs/datafusion-catalog/53.1.0/datafusion_catalog/trait.CatalogProvider.html">Rust
  *     DataFusion: CatalogProvider</a>
  */
 public interface CatalogProvider {
@@ -46,7 +46,7 @@ public interface CatalogProvider {
    *
    * @return List of schema names
    * @see <a
-   *     href="https://docs.rs/datafusion-catalog/52.1.0/datafusion_catalog/trait.CatalogProvider.html#method.schema_names">Rust
+   *     href="https://docs.rs/datafusion-catalog/53.1.0/datafusion_catalog/trait.CatalogProvider.html#method.schema_names">Rust
    *     DataFusion: CatalogProvider::schema_names</a>
    */
   List<String> schemaNames();
@@ -66,7 +66,7 @@ public interface CatalogProvider {
    * @param name The schema name
    * @return The schema provider, or null if the schema doesn't exist
    * @see <a
-   *     href="https://docs.rs/datafusion-catalog/52.1.0/datafusion_catalog/trait.CatalogProvider.html#method.schema">Rust
+   *     href="https://docs.rs/datafusion-catalog/53.1.0/datafusion_catalog/trait.CatalogProvider.html#method.schema">Rust
    *     DataFusion: CatalogProvider::schema</a>
    */
   Optional<SchemaProvider> schema(String name);

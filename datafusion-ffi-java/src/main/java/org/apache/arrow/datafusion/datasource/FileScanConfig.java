@@ -22,7 +22,7 @@ import java.util.List;
  * @param partitionedByFileGroup whether the scan is partitioned by file group
  * @param partition the partition index being scanned
  * @see <a
- *     href="https://docs.rs/datafusion-datasource/52.1.0/datafusion_datasource/file_scan_config/struct.FileScanConfig.html">Rust
+ *     href="https://docs.rs/datafusion-datasource/53.1.0/datafusion_datasource/file_scan_config/struct.FileScanConfig.html">Rust
  *     DataFusion: FileScanConfig</a>
  */
 public record FileScanConfig(
@@ -37,7 +37,7 @@ public record FileScanConfig(
    *
    * @return the row limit, or null
    * @see <a
-   *     href="https://docs.rs/datafusion-datasource/52.1.0/datafusion_datasource/file_scan_config/struct.FileScanConfig.html#structfield.limit">Rust
+   *     href="https://docs.rs/datafusion-datasource/53.1.0/datafusion_datasource/file_scan_config/struct.FileScanConfig.html#structfield.limit">Rust
    *     DataFusion: FileScanConfig::limit</a>
    */
   public Long limit() {
@@ -49,7 +49,7 @@ public record FileScanConfig(
    *
    * @return the batch size, or null
    * @see <a
-   *     href="https://docs.rs/datafusion-datasource/52.1.0/datafusion_datasource/file_scan_config/struct.FileScanConfig.html#structfield.batch_size">Rust
+   *     href="https://docs.rs/datafusion-datasource/53.1.0/datafusion_datasource/file_scan_config/struct.FileScanConfig.html#structfield.batch_size">Rust
    *     DataFusion: FileScanConfig::batch_size</a>
    */
   public Long batchSize() {
@@ -61,7 +61,7 @@ public record FileScanConfig(
    *
    * @return true if partitioned by file group
    * @see <a
-   *     href="https://docs.rs/datafusion-datasource/52.1.0/datafusion_datasource/file_scan_config/struct.FileScanConfig.html#structfield.partitioned_by_file_group">Rust
+   *     href="https://docs.rs/datafusion-datasource/53.1.0/datafusion_datasource/file_scan_config/struct.FileScanConfig.html#structfield.partitioned_by_file_group">Rust
    *     DataFusion: FileScanConfig::partitioned_by_file_group</a>
    */
   public boolean partitionedByFileGroup() {

@@ -16,7 +16,7 @@ package org.apache.arrow.datafusion.common;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/error/enum.DataFusionError.html">Rust
+ *     href="https://docs.rs/datafusion-common/53.1.0/datafusion_common/error/enum.DataFusionError.html">Rust
  *     DataFusion: DataFusionError</a>
  */
 public class DataFusionError extends RuntimeException {

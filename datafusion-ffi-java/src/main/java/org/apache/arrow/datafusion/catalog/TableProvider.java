@@ -39,7 +39,7 @@ import org.apache.arrow.vector.types.pojo.Schema;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion-catalog/52.1.0/datafusion_catalog/trait.TableProvider.html">Rust
+ *     href="https://docs.rs/datafusion-catalog/53.1.0/datafusion_catalog/trait.TableProvider.html">Rust
  *     DataFusion: TableProvider</a>
  */
 public interface TableProvider {
@@ -57,7 +57,7 @@ public interface TableProvider {
    *
    * @return The Arrow schema describing the table's columns
    * @see <a
-   *     href="https://docs.rs/datafusion-catalog/52.1.0/datafusion_catalog/trait.TableProvider.html#method.schema">Rust
+   *     href="https://docs.rs/datafusion-catalog/53.1.0/datafusion_catalog/trait.TableProvider.html#method.schema">Rust
    *     DataFusion: TableProvider::schema</a>
    */
   Schema schema();
@@ -78,7 +78,7 @@ public interface TableProvider {
    *
    * @return The table type
    * @see <a
-   *     href="https://docs.rs/datafusion-catalog/52.1.0/datafusion_catalog/trait.TableProvider.html#method.table_type">Rust
+   *     href="https://docs.rs/datafusion-catalog/53.1.0/datafusion_catalog/trait.TableProvider.html#method.table_type">Rust
    *     DataFusion: TableProvider::table_type</a>
    */
   default TableType tableType() {
@@ -111,7 +111,7 @@ public interface TableProvider {
    * @return An execution plan that produces the requested data
    * @throws DataFusionError if creating the scan fails
    * @see <a
-   *     href="https://docs.rs/datafusion-catalog/52.1.0/datafusion_catalog/trait.TableProvider.html#method.scan_with_args">Rust
+   *     href="https://docs.rs/datafusion-catalog/53.1.0/datafusion_catalog/trait.TableProvider.html#method.scan_with_args">Rust
    *     DataFusion: TableProvider::scan_with_args</a>
    */
   ExecutionPlan scanWithArgs(Session session, ScanArgs args);
@@ -141,7 +141,7 @@ public interface TableProvider {
    * @param filters the filter expressions to evaluate (borrowed, valid only during this call)
    * @return a list of pushdown support values, one per filter
    * @see <a
-   *     href="https://docs.rs/datafusion-catalog/52.1.0/datafusion_catalog/trait.TableProvider.html#method.supports_filters_pushdown">Rust
+   *     href="https://docs.rs/datafusion-catalog/53.1.0/datafusion_catalog/trait.TableProvider.html#method.supports_filters_pushdown">Rust
    *     DataFusion: TableProvider::supports_filters_pushdown</a>
    */
   default List<TableProviderFilterPushDown> supportsFiltersPushdown(List<Expr> filters) {
@@ -179,7 +179,7 @@ public interface TableProvider {
    * @return an execution plan producing the insert count
    * @throws UnsupportedOperationException if this table does not support inserts
    * @see <a
-   *     href="https://docs.rs/datafusion-catalog/52.1.0/datafusion_catalog/trait.TableProvider.html#method.insert_into">Rust
+   *     href="https://docs.rs/datafusion-catalog/53.1.0/datafusion_catalog/trait.TableProvider.html#method.insert_into">Rust
    *     DataFusion: TableProvider::insert_into</a>
    */
   default ExecutionPlan insertInto(Session session, RecordBatchReader input, InsertOp insertOp) {
@@ -209,7 +209,7 @@ public interface TableProvider {
    * @return an execution plan producing the delete count
    * @throws UnsupportedOperationException if this table does not support deletes
    * @see <a
-   *     href="https://docs.rs/datafusion-catalog/52.1.0/datafusion_catalog/trait.TableProvider.html#method.delete_from">Rust
+   *     href="https://docs.rs/datafusion-catalog/53.1.0/datafusion_catalog/trait.TableProvider.html#method.delete_from">Rust
    *     DataFusion: TableProvider::delete_from</a>
    */
   default ExecutionPlan deleteFrom(Session session, List<Expr> filters) {
@@ -241,7 +241,7 @@ public interface TableProvider {
    * @return an execution plan producing the update count
    * @throws UnsupportedOperationException if this table does not support updates
    * @see <a
-   *     href="https://docs.rs/datafusion-catalog/52.1.0/datafusion_catalog/trait.TableProvider.html#method.update">Rust
+   *     href="https://docs.rs/datafusion-catalog/53.1.0/datafusion_catalog/trait.TableProvider.html#method.update">Rust
    *     DataFusion: TableProvider::update</a>
    */
   default ExecutionPlan update(

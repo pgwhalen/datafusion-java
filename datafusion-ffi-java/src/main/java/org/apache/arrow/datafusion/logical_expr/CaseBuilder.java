@@ -17,7 +17,7 @@ import java.util.List;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/conditional_expressions/struct.CaseBuilder.html">Rust
+ *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/conditional_expressions/struct.CaseBuilder.html">Rust
  *     DataFusion: CaseBuilder</a>
  */
 public final class CaseBuilder {
@@ -44,7 +44,7 @@ public final class CaseBuilder {
    * @param then the result expression when condition is true
    * @return this builder for chaining
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/conditional_expressions/struct.CaseBuilder.html#method.when">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/conditional_expressions/struct.CaseBuilder.html#method.when">Rust
    *     DataFusion: CaseBuilder::when</a>
    */
   public CaseBuilder when(Expr condition, Expr then) {
@@ -66,7 +66,7 @@ public final class CaseBuilder {
    * @param elseExpr the else expression
    * @return the built CASE expression
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/conditional_expressions/struct.CaseBuilder.html#method.otherwise">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/conditional_expressions/struct.CaseBuilder.html#method.otherwise">Rust
    *     DataFusion: CaseBuilder::otherwise</a>
    */
   public Expr otherwise(Expr elseExpr) {
@@ -86,7 +86,7 @@ public final class CaseBuilder {
    *
    * @return the built CASE expression
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/conditional_expressions/struct.CaseBuilder.html#method.end">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/conditional_expressions/struct.CaseBuilder.html#method.end">Rust
    *     DataFusion: CaseBuilder::end</a>
    */
   public Expr end() {

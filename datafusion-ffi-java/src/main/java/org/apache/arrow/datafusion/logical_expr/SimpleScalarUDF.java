@@ -34,7 +34,7 @@ import org.apache.arrow.vector.types.pojo.Field;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/struct.SimpleScalarUDF.html">Rust
+ *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/struct.SimpleScalarUDF.html">Rust
  *     DataFusion: SimpleScalarUDF</a>
  */
 public final class SimpleScalarUDF implements ScalarUDF {
@@ -53,7 +53,7 @@ public final class SimpleScalarUDF implements ScalarUDF {
    * @param outputType the output Arrow type
    * @param fn the function implementation
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/struct.SimpleScalarUDF.html#method.new">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/struct.SimpleScalarUDF.html#method.new">Rust
    *     DataFusion: SimpleScalarUDF::new</a>
    */
   public SimpleScalarUDF(

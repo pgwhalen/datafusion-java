@@ -22,7 +22,7 @@ import org.apache.arrow.datafusion.logical_expr.LogicalPlan;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/session_state/struct.SessionState.html">Rust
+ *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/session_state/struct.SessionState.html">Rust
  *     DataFusion: SessionState</a>
  */
 public class SessionState implements AutoCloseable {
@@ -49,7 +49,7 @@ public class SessionState implements AutoCloseable {
    * @return a LogicalPlan representing the parsed query
    * @throws DataFusionError if the SQL is invalid or planning fails
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/session_state/struct.SessionState.html#method.create_logical_plan">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/execution/session_state/struct.SessionState.html#method.create_logical_plan">Rust
    *     DataFusion: SessionState::create_logical_plan</a>
    */
   public LogicalPlan createLogicalPlan(String sql) {

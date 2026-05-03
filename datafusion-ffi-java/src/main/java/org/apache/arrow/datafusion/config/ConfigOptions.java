@@ -42,7 +42,7 @@ import java.util.Map;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion-common/52.1.0/datafusion_common/config/struct.ConfigOptions.html">Rust
+ *     href="https://docs.rs/datafusion-common/53.1.0/datafusion_common/config/struct.ConfigOptions.html">Rust
  *     DataFusion: ConfigOptions</a>
  */
 public final class ConfigOptions {

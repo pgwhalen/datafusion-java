@@ -9,7 +9,7 @@ package org.apache.arrow.datafusion.logical_expr;
  * @param column the name of the column to update
  * @param value the expression providing the new value
  * @see <a
- *     href="https://docs.rs/datafusion-catalog/52.1.0/datafusion_catalog/trait.TableProvider.html#method.update">Rust
+ *     href="https://docs.rs/datafusion-catalog/53.1.0/datafusion_catalog/trait.TableProvider.html#method.update">Rust
  *     DataFusion: TableProvider::update</a>
  */
 public record ColumnAssignment(String column, Expr value) {}

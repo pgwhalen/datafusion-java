@@ -14,7 +14,7 @@ package org.apache.arrow.datafusion.datasource;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingTableUrl.html">Rust
+ *     href="https://docs.rs/datafusion/53.1.0/datafusion/datasource/listing/struct.ListingTableUrl.html">Rust
  *     DataFusion: ListingTableUrl</a>
  */
 public final class ListingTableUrl {
@@ -38,7 +38,7 @@ public final class ListingTableUrl {
    *
    * @return the URL string
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingTableUrl.html#method.get_url">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/datasource/listing/struct.ListingTableUrl.html#method.get_url">Rust
    *     DataFusion: ListingTableUrl::get_url</a>
    */
   public String getUrl() {
@@ -60,7 +60,7 @@ public final class ListingTableUrl {
    * @param path the directory path or URL
    * @return a new ListingTableUrl
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/datasource/listing/struct.ListingTableUrl.html#method.parse">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/datasource/listing/struct.ListingTableUrl.html#method.parse">Rust
    *     DataFusion: ListingTableUrl::parse</a>
    */
   public static ListingTableUrl parse(String path) {

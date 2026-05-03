@@ -12,7 +12,7 @@ package org.apache.arrow.datafusion.physical_plan;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion/52.1.0/datafusion/physical_plan/execution_plan/enum.Boundedness.html">Rust
+ *     href="https://docs.rs/datafusion/53.1.0/datafusion/physical_plan/execution_plan/enum.Boundedness.html">Rust
  *     DataFusion: Boundedness</a>
  */
 public enum Boundedness {

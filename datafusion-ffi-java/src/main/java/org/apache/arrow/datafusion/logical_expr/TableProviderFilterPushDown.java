@@ -29,7 +29,7 @@ import org.apache.arrow.datafusion.catalog.TableProvider;
  * </ul>
  *
  * @see <a
- *     href="https://docs.rs/datafusion-expr/52.1.0/datafusion_expr/enum.TableProviderFilterPushDown.html">Rust
+ *     href="https://docs.rs/datafusion-expr/53.1.0/datafusion_expr/enum.TableProviderFilterPushDown.html">Rust
  *     DataFusion: TableProviderFilterPushDown</a>
  */
 public enum TableProviderFilterPushDown {

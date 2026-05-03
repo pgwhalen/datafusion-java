@@ -21,6 +21,7 @@ import org.apache.arrow.datafusion.catalog.TableProvider;
 import org.apache.arrow.datafusion.common.ScalarValue;
 import org.apache.arrow.datafusion.dataframe.DataFrame;
 import org.apache.arrow.datafusion.execution.SessionContext;
+import org.apache.arrow.datafusion.execution.TaskContext;
 import org.apache.arrow.datafusion.logical_expr.ColumnAssignment;
 import org.apache.arrow.datafusion.logical_expr.Expr;
 import org.apache.arrow.datafusion.logical_expr.InsertOp;
@@ -554,7 +555,8 @@ public class CustomTableProviderTest {
                 }
 
                 @Override
-                public RecordBatchReader execute(int partition, BufferAllocator alloc) {
+                public RecordBatchReader execute(
+                    int partition, TaskContext taskContext, BufferAllocator alloc) {
                   return new TestRecordBatchReader(schema, List.of(usersDataBatch()), alloc);
                 }
               };
@@ -1126,7 +1128,8 @@ public class CustomTableProviderTest {
     }
 
     @Override
-    public RecordBatchReader execute(int partition, BufferAllocator allocator) {
+    public RecordBatchReader execute(
+        int partition, TaskContext taskContext, BufferAllocator allocator) {
       return new TestRecordBatchReader(schema, batches, allocator);
     }
   }
@@ -1409,7 +1412,8 @@ public class CustomTableProviderTest {
                 }
 
                 @Override
-                public RecordBatchReader execute(int partition, BufferAllocator alloc) {
+                public RecordBatchReader execute(
+                    int partition, TaskContext taskContext, BufferAllocator alloc) {
                   VectorSchemaRoot root = VectorSchemaRoot.create(schema, alloc);
                   return new RecordBatchReader() {
                     @Override

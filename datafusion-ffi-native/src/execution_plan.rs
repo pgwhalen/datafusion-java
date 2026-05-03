@@ -12,7 +12,15 @@ pub mod ffi {
         /// Returns boundedness: 0=Bounded, 1=Unbounded.
         fn boundedness(&self) -> i32;
         /// Returns DfRecordBatchReader raw ptr, or 0 on error (check error buffer).
-        fn execute(&self, partition: i32, error_addr: usize, error_cap: usize) -> usize;
+        /// task_ctx_addr is a raw pointer to a Box<DfTaskContext> that Java takes
+        /// ownership of and must close. It is non-zero for the lifetime of the call.
+        fn execute(
+            &self,
+            partition: i32,
+            task_ctx_addr: usize,
+            error_addr: usize,
+            error_cap: usize,
+        ) -> usize;
     }
 
     /// Opaque wrapper for an execution plan backed by a Diplomat trait.
@@ -22,7 +30,7 @@ pub mod ffi {
     impl DfExecutionPlan {
         /// Create from a DfExecutionPlanTrait impl and return the raw pointer address.
         pub fn create_raw(t: impl DfExecutionPlanTrait + 'static) -> usize {
-            let wrapper = crate::plan::ForeignDfPlan::new(t);
+            let wrapper = crate::execution_plan::ForeignDfPlan::new(t);
             let boxed: Box<dyn crate::bridge::ExecutionPlanBridge> = Box::new(wrapper);
             let ptr = Box::into_raw(Box::new(DfExecutionPlan(boxed)));
             ptr as usize
@@ -50,7 +58,7 @@ use std::sync::Arc;
 pub struct ForeignDfPlan<T: DfExecutionPlanTrait> {
     inner: T,
     /// Cached properties
-    properties: PlanProperties,
+    properties: Arc<PlanProperties>,
 }
 
 impl<T: DfExecutionPlanTrait> ForeignDfPlan<T> {
@@ -73,12 +81,12 @@ impl<T: DfExecutionPlanTrait> ForeignDfPlan<T> {
 
         let eq_props =
             datafusion::physical_expr::EquivalenceProperties::new(Arc::clone(&schema));
-        let properties = PlanProperties::new(
+        let properties = Arc::new(PlanProperties::new(
             eq_props,
             Partitioning::UnknownPartitioning(partitions as usize),
             emission,
             bounded,
-        );
+        ));
 
         Self {
             inner,
@@ -113,7 +121,7 @@ impl<T: DfExecutionPlanTrait + 'static> ExecutionPlan for ForeignDfPlan<T> {
         self
     }
 
-    fn properties(&self) -> &PlanProperties {
+    fn properties(&self) -> &Arc<PlanProperties> {
         &self.properties
     }
 
@@ -131,11 +139,17 @@ impl<T: DfExecutionPlanTrait + 'static> ExecutionPlan for ForeignDfPlan<T> {
     fn execute(
         &self,
         partition: usize,
-        _context: Arc<datafusion::execution::TaskContext>,
+        context: Arc<datafusion::execution::TaskContext>,
     ) -> datafusion::error::Result<SendableRecordBatchStream> {
+        // Transfer a boxed DfTaskContext to Java. Java owns it and must close().
+        let task_ctx = Box::new(crate::bridge::ffi::DfTaskContext { ctx: context });
+        let task_ctx_addr = Box::into_raw(task_ctx) as usize;
         let reader = do_returning_upcall::<DfRecordBatchReader>(
             "Java execute callback failed",
-            Box::new(|err: &ErrorBuffer| self.inner.execute(partition as i32, err.addr(), err.cap())),
+            Box::new(|err: &ErrorBuffer| {
+                self.inner
+                    .execute(partition as i32, task_ctx_addr, err.addr(), err.cap())
+            }),
         )?;
         let reader_bridge = reader.0;
         let reader_schema = reader_bridge.schema();

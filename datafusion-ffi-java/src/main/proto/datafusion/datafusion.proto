@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-// Vendored from apache/datafusion v52.1.0 — do not edit manually
+// Vendored from apache/datafusion v53.1.0 — do not edit manually
 
 syntax = "proto3";
 
@@ -753,6 +753,7 @@ message PhysicalPlanNode {
     MemoryScanExecNode memory_scan = 35;
     AsyncFuncExecNode async_func = 36;
     BufferExecNode buffer = 37;
+    ArrowScanExecNode arrow_scan = 38;
   }
 }
 
@@ -1031,6 +1032,7 @@ message FilterExecNode {
   uint32 default_filter_selectivity = 3;
   repeated uint32 projection = 9;
   uint32 batch_size = 10;
+  optional uint32 fetch = 11;
 }
 
 message FileGroup {
@@ -1105,6 +1107,10 @@ message JsonScanExecNode {
 }
 
 message AvroScanExecNode {
+  FileScanExecConf base_conf = 1;
+}
+
+message ArrowScanExecNode {
   FileScanExecConf base_conf = 1;
 }
 

@@ -28,7 +28,7 @@ import java.util.Optional;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion-catalog/52.1.0/datafusion_catalog/trait.SchemaProvider.html">Rust
+ *     href="https://docs.rs/datafusion-catalog/53.1.0/datafusion_catalog/trait.SchemaProvider.html">Rust
  *     DataFusion: SchemaProvider</a>
  */
 public interface SchemaProvider {
@@ -46,7 +46,7 @@ public interface SchemaProvider {
    *
    * @return List of table names
    * @see <a
-   *     href="https://docs.rs/datafusion-catalog/52.1.0/datafusion_catalog/trait.SchemaProvider.html#method.table_names">Rust
+   *     href="https://docs.rs/datafusion-catalog/53.1.0/datafusion_catalog/trait.SchemaProvider.html#method.table_names">Rust
    *     DataFusion: SchemaProvider::table_names</a>
    */
   List<String> tableNames();
@@ -66,7 +66,7 @@ public interface SchemaProvider {
    * @param name The table name
    * @return The table provider, or null if the table doesn't exist
    * @see <a
-   *     href="https://docs.rs/datafusion-catalog/52.1.0/datafusion_catalog/trait.SchemaProvider.html#method.table">Rust
+   *     href="https://docs.rs/datafusion-catalog/53.1.0/datafusion_catalog/trait.SchemaProvider.html#method.table">Rust
    *     DataFusion: SchemaProvider::table</a>
    */
   Optional<TableProvider> table(String name);
@@ -92,7 +92,7 @@ public interface SchemaProvider {
    * @return The previously registered table with the same name, if any
    * @throws UnsupportedOperationException if this schema does not support registering tables
    * @see <a
-   *     href="https://docs.rs/datafusion-catalog/52.1.0/datafusion_catalog/trait.SchemaProvider.html#method.register_table">Rust
+   *     href="https://docs.rs/datafusion-catalog/53.1.0/datafusion_catalog/trait.SchemaProvider.html#method.register_table">Rust
    *     DataFusion: SchemaProvider::register_table</a>
    */
   default Optional<TableProvider> registerTable(String name, TableProvider table) {
@@ -120,7 +120,7 @@ public interface SchemaProvider {
    * @return The previously registered table, if any
    * @throws UnsupportedOperationException if this schema does not support deregistering tables
    * @see <a
-   *     href="https://docs.rs/datafusion-catalog/52.1.0/datafusion_catalog/trait.SchemaProvider.html#method.deregister_table">Rust
+   *     href="https://docs.rs/datafusion-catalog/53.1.0/datafusion_catalog/trait.SchemaProvider.html#method.deregister_table">Rust
    *     DataFusion: SchemaProvider::deregister_table</a>
    */
   default Optional<TableProvider> deregisterTable(String name) {
@@ -142,7 +142,7 @@ public interface SchemaProvider {
    * @param name The table name
    * @return true if the table exists
    * @see <a
-   *     href="https://docs.rs/datafusion-catalog/52.1.0/datafusion_catalog/trait.SchemaProvider.html#method.table_exist">Rust
+   *     href="https://docs.rs/datafusion-catalog/53.1.0/datafusion_catalog/trait.SchemaProvider.html#method.table_exist">Rust
    *     DataFusion: SchemaProvider::table_exist</a>
    */
   default boolean tableExists(String name) {

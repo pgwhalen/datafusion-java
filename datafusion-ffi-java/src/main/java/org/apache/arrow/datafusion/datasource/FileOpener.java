@@ -29,7 +29,7 @@ import org.apache.arrow.datafusion.physical_plan.RecordBatchReader;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion-datasource/52.1.0/datafusion_datasource/file_stream/trait.FileOpener.html">Rust
+ *     href="https://docs.rs/datafusion-datasource/53.1.0/datafusion_datasource/file_stream/trait.FileOpener.html">Rust
  *     DataFusion: FileOpener</a>
  */
 public interface FileOpener {
@@ -48,7 +48,7 @@ public interface FileOpener {
    * @param file the partitioned file metadata including path, size, and optional byte range
    * @return a reader that produces record batches
    * @see <a
-   *     href="https://docs.rs/datafusion-datasource/52.1.0/datafusion_datasource/file_stream/trait.FileOpener.html#method.open">Rust
+   *     href="https://docs.rs/datafusion-datasource/53.1.0/datafusion_datasource/file_stream/trait.FileOpener.html#method.open">Rust
    *     DataFusion: FileOpener::open</a>
    */
   RecordBatchReader open(PartitionedFile file);

@@ -42,7 +42,7 @@ import org.apache.arrow.vector.types.pojo.Schema;
  *     .limit(0, 10);
  * }
  *
- * @see <a href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html">Rust
+ * @see <a href="https://docs.rs/datafusion/53.1.0/datafusion/dataframe/struct.DataFrame.html">Rust
  *     DataFusion: DataFrame</a>
  */
 public class DataFrame implements AutoCloseable {
@@ -73,7 +73,7 @@ public class DataFrame implements AutoCloseable {
    * @param exprs the expressions to select
    * @return a new DataFrame with the selected columns
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.select">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/dataframe/struct.DataFrame.html#method.select">Rust
    *     DataFusion: DataFrame::select</a>
    */
   public DataFrame select(Expr... exprs) {
@@ -88,7 +88,7 @@ public class DataFrame implements AutoCloseable {
    * @param exprs the expressions to select
    * @return a new DataFrame with the selected columns
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.select">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/dataframe/struct.DataFrame.html#method.select">Rust
    *     DataFusion: DataFrame::select</a>
    */
   public DataFrame select(List<Expr> exprs) {
@@ -109,7 +109,7 @@ public class DataFrame implements AutoCloseable {
    * @param columns the column names to select
    * @return a new DataFrame with the selected columns
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.select_columns">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/dataframe/struct.DataFrame.html#method.select_columns">Rust
    *     DataFusion: DataFrame::select_columns</a>
    */
   public DataFrame selectColumns(String... columns) {
@@ -133,7 +133,7 @@ public class DataFrame implements AutoCloseable {
    * @param predicate the filter expression
    * @return a new DataFrame with matching rows
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.filter">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/dataframe/struct.DataFrame.html#method.filter">Rust
    *     DataFusion: DataFrame::filter</a>
    */
   public DataFrame filter(Expr predicate) {
@@ -158,7 +158,7 @@ public class DataFrame implements AutoCloseable {
    * @param sortExprs the sort expressions
    * @return a new sorted DataFrame
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.sort">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/dataframe/struct.DataFrame.html#method.sort">Rust
    *     DataFusion: DataFrame::sort</a>
    */
   public DataFrame sort(SortExpr... sortExprs) {
@@ -174,7 +174,7 @@ public class DataFrame implements AutoCloseable {
    * @param sortExprs the sort expressions
    * @return a new sorted DataFrame
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.sort">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/dataframe/struct.DataFrame.html#method.sort">Rust
    *     DataFusion: DataFrame::sort</a>
    */
   public DataFrame sort(List<SortExpr> sortExprs) {
@@ -198,7 +198,7 @@ public class DataFrame implements AutoCloseable {
    * @param fetch maximum number of rows to return, or null for no limit
    * @return a new DataFrame with the limit applied
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.limit">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/dataframe/struct.DataFrame.html#method.limit">Rust
    *     DataFusion: DataFrame::limit</a>
    */
   public DataFrame limit(int skip, Integer fetch) {
@@ -228,7 +228,7 @@ public class DataFrame implements AutoCloseable {
    * @param aggrExprs aggregate expressions (e.g., {@code avg(col("salary"))})
    * @return a new aggregated DataFrame
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.aggregate">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/dataframe/struct.DataFrame.html#method.aggregate">Rust
    *     DataFusion: DataFrame::aggregate</a>
    */
   public DataFrame aggregate(List<Expr> groupExprs, List<Expr> aggrExprs) {
@@ -258,7 +258,7 @@ public class DataFrame implements AutoCloseable {
    * @param rightCols right join column names
    * @return a new joined DataFrame
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.join">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/dataframe/struct.DataFrame.html#method.join">Rust
    *     DataFusion: DataFrame::join</a>
    */
   public DataFrame join(
@@ -282,7 +282,7 @@ public class DataFrame implements AutoCloseable {
    * @param filter additional join filter expression
    * @return a new joined DataFrame
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.join">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/dataframe/struct.DataFrame.html#method.join">Rust
    *     DataFusion: DataFrame::join</a>
    */
   public DataFrame join(
@@ -314,7 +314,7 @@ public class DataFrame implements AutoCloseable {
    * @param onExprs join condition expressions
    * @return a new joined DataFrame
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.join_on">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/dataframe/struct.DataFrame.html#method.join_on">Rust
    *     DataFusion: DataFrame::join_on</a>
    */
   public DataFrame joinOn(DataFrame right, JoinType joinType, List<Expr> onExprs) {
@@ -337,7 +337,7 @@ public class DataFrame implements AutoCloseable {
    * @param other the other DataFrame
    * @return a new DataFrame containing all rows from both
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.union">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/dataframe/struct.DataFrame.html#method.union">Rust
    *     DataFusion: DataFrame::union</a>
    */
   public DataFrame union(DataFrame other) {
@@ -358,7 +358,7 @@ public class DataFrame implements AutoCloseable {
    * @param other the other DataFrame
    * @return a new DataFrame containing distinct rows from both
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.union_distinct">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/dataframe/struct.DataFrame.html#method.union_distinct">Rust
    *     DataFusion: DataFrame::union_distinct</a>
    */
   public DataFrame unionDistinct(DataFrame other) {
@@ -379,7 +379,7 @@ public class DataFrame implements AutoCloseable {
    * @param other the other DataFrame
    * @return a new DataFrame containing rows present in both
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.intersect">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/dataframe/struct.DataFrame.html#method.intersect">Rust
    *     DataFusion: DataFrame::intersect</a>
    */
   public DataFrame intersect(DataFrame other) {
@@ -400,7 +400,7 @@ public class DataFrame implements AutoCloseable {
    * @param other the other DataFrame
    * @return a new DataFrame containing rows in this but not in other
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.except">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/dataframe/struct.DataFrame.html#method.except">Rust
    *     DataFusion: DataFrame::except</a>
    */
   public DataFrame except(DataFrame other) {
@@ -422,7 +422,7 @@ public class DataFrame implements AutoCloseable {
    *
    * @return a new DataFrame with duplicate rows removed
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.distinct">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/dataframe/struct.DataFrame.html#method.distinct">Rust
    *     DataFusion: DataFrame::distinct</a>
    */
   public DataFrame distinct() {
@@ -448,7 +448,7 @@ public class DataFrame implements AutoCloseable {
    * @param expr expression to compute the column value
    * @return a new DataFrame with the added or replaced column
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.with_column">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/dataframe/struct.DataFrame.html#method.with_column">Rust
    *     DataFusion: DataFrame::with_column</a>
    */
   public DataFrame withColumn(String name, Expr expr) {
@@ -470,7 +470,7 @@ public class DataFrame implements AutoCloseable {
    * @param newName new column name
    * @return a new DataFrame with the renamed column
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.with_column_renamed">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/dataframe/struct.DataFrame.html#method.with_column_renamed">Rust
    *     DataFusion: DataFrame::with_column_renamed</a>
    */
   public DataFrame withColumnRenamed(String oldName, String newName) {
@@ -491,7 +491,7 @@ public class DataFrame implements AutoCloseable {
    * @param columns column names to drop
    * @return a new DataFrame without the specified columns
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.drop_columns">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/dataframe/struct.DataFrame.html#method.drop_columns">Rust
    *     DataFusion: DataFrame::drop_columns</a>
    */
   public DataFrame dropColumns(String... columns) {
@@ -512,7 +512,7 @@ public class DataFrame implements AutoCloseable {
    * @param path path to write the Parquet file to
    * @throws DataFusionError if writing fails
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.write_parquet">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/dataframe/struct.DataFrame.html#method.write_parquet">Rust
    *     DataFusion: DataFrame::write_parquet</a>
    */
   public void writeParquet(String path) {
@@ -527,7 +527,7 @@ public class DataFrame implements AutoCloseable {
    * @param options write options controlling output behavior
    * @throws DataFusionError if writing fails
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.write_parquet">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/dataframe/struct.DataFrame.html#method.write_parquet">Rust
    *     DataFusion: DataFrame::write_parquet</a>
    */
   public void writeParquet(String path, DataFrameWriteOptions options) {
@@ -543,7 +543,7 @@ public class DataFrame implements AutoCloseable {
    * @param parquetOptions Parquet-specific format options
    * @throws DataFusionError if writing fails
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.write_parquet">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/dataframe/struct.DataFrame.html#method.write_parquet">Rust
    *     DataFusion: DataFrame::write_parquet</a>
    */
   public void writeParquet(
@@ -561,7 +561,7 @@ public class DataFrame implements AutoCloseable {
    * @param path path to write the CSV file to
    * @throws DataFusionError if writing fails
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.write_csv">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/dataframe/struct.DataFrame.html#method.write_csv">Rust
    *     DataFusion: DataFrame::write_csv</a>
    */
   public void writeCsv(String path) {
@@ -575,7 +575,7 @@ public class DataFrame implements AutoCloseable {
    * @param options write options controlling output behavior
    * @throws DataFusionError if writing fails
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.write_csv">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/dataframe/struct.DataFrame.html#method.write_csv">Rust
    *     DataFusion: DataFrame::write_csv</a>
    */
   public void writeCsv(String path, DataFrameWriteOptions options) {
@@ -591,7 +591,7 @@ public class DataFrame implements AutoCloseable {
    * @param csvOptions CSV-specific format options
    * @throws DataFusionError if writing fails
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.write_csv">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/dataframe/struct.DataFrame.html#method.write_csv">Rust
    *     DataFusion: DataFrame::write_csv</a>
    */
   public void writeCsv(String path, DataFrameWriteOptions options, CsvOptions csvOptions) {
@@ -608,7 +608,7 @@ public class DataFrame implements AutoCloseable {
    * @param path path to write the JSON file to
    * @throws DataFusionError if writing fails
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.write_json">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/dataframe/struct.DataFrame.html#method.write_json">Rust
    *     DataFusion: DataFrame::write_json</a>
    */
   public void writeJson(String path) {
@@ -623,7 +623,7 @@ public class DataFrame implements AutoCloseable {
    * @param options write options controlling output behavior
    * @throws DataFusionError if writing fails
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.write_json">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/dataframe/struct.DataFrame.html#method.write_json">Rust
    *     DataFusion: DataFrame::write_json</a>
    */
   public void writeJson(String path, DataFrameWriteOptions options) {
@@ -639,7 +639,7 @@ public class DataFrame implements AutoCloseable {
    * @param jsonOptions JSON-specific format options
    * @throws DataFusionError if writing fails
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.write_json">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/dataframe/struct.DataFrame.html#method.write_json">Rust
    *     DataFusion: DataFrame::write_json</a>
    */
   public void writeJson(String path, DataFrameWriteOptions options, JsonOptions jsonOptions) {
@@ -664,7 +664,7 @@ public class DataFrame implements AutoCloseable {
    * @return A SendableRecordBatchStream for iterating over results
    * @throws DataFusionError if execution fails
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.execute_stream">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/dataframe/struct.DataFrame.html#method.execute_stream">Rust
    *     DataFusion: DataFrame::execute_stream</a>
    */
   public SendableRecordBatchStream executeStream(BufferAllocator allocator) {
@@ -688,7 +688,7 @@ public class DataFrame implements AutoCloseable {
    * @return A SendableRecordBatchStream with all results materialized
    * @throws DataFusionError if execution fails
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.collect">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/dataframe/struct.DataFrame.html#method.collect">Rust
    *     DataFusion: DataFrame::collect</a>
    */
   public SendableRecordBatchStream collect(BufferAllocator allocator) {
@@ -704,7 +704,7 @@ public class DataFrame implements AutoCloseable {
    *
    * @throws DataFusionError if execution fails
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.show">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/dataframe/struct.DataFrame.html#method.show">Rust
    *     DataFusion: DataFrame::show</a>
    */
   public void show() {
@@ -721,7 +721,7 @@ public class DataFrame implements AutoCloseable {
    * @return the number of rows
    * @throws DataFusionError if execution fails
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.count">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/dataframe/struct.DataFrame.html#method.count">Rust
    *     DataFusion: DataFrame::count</a>
    */
   public long count() {
@@ -738,7 +738,7 @@ public class DataFrame implements AutoCloseable {
    * @return the Arrow schema
    * @throws DataFusionError if the schema cannot be retrieved
    * @see <a
-   *     href="https://docs.rs/datafusion/52.1.0/datafusion/dataframe/struct.DataFrame.html#method.schema">Rust
+   *     href="https://docs.rs/datafusion/53.1.0/datafusion/dataframe/struct.DataFrame.html#method.schema">Rust
    *     DataFusion: DataFrame::schema</a>
    */
   public Schema schema() {

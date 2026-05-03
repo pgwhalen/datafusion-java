@@ -14,7 +14,7 @@ package org.apache.arrow.datafusion.logical_expr;
  * }
  *
  * @see <a
- *     href="https://docs.rs/datafusion/52.1.0/datafusion/logical_expr/window_frame/enum.WindowFrameUnits.html">Rust
+ *     href="https://docs.rs/datafusion/53.1.0/datafusion/logical_expr/window_frame/enum.WindowFrameUnits.html">Rust
  *     DataFusion: WindowFrameUnits</a>
  */
 public enum WindowFrameUnits {
