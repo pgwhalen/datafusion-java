@@ -1,6 +1,7 @@
 package org.apache.arrow.datafusion;
 
 import static org.apache.arrow.datafusion.Functions.*;
+import static org.apache.arrow.datafusion.testutil.VectorSchemaRootAssert.expect;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.IOException;
@@ -240,13 +241,11 @@ public class DataFrameTest {
                   .filter(op.apply(col("age"), lit(30)))
                   .sort(col("age").sortAsc());
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(expectedAges.length, root.getRowCount());
-        BigIntVector age = (BigIntVector) root.getVector("age");
-        for (int i = 0; i < expectedAges.length; i++) {
-          assertEquals(expectedAges[i], age.get(i), "row " + i + " for op " + opName);
+        var assertion = expect("age").allowExtraColumns();
+        for (long expected : expectedAges) {
+          assertion.row(expected);
         }
+        assertion.assertMatches(stream);
       }
     }
   }
@@ -262,22 +261,11 @@ public class DataFrameTest {
                   .select(col("name"), col("salary"))
                   .sort(col("name").sortAsc());
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        Schema schema = root.getSchema();
-        assertEquals(2, schema.getFields().size());
-        assertEquals("name", schema.getFields().get(0).getName());
-        assertEquals("salary", schema.getFields().get(1).getName());
-
-        assertEquals(3, root.getRowCount());
-        VarCharVector name = (VarCharVector) root.getVector("name");
-        BigIntVector salary = (BigIntVector) root.getVector("salary");
-        assertEquals("Alice", name.getObject(0).toString());
-        assertEquals(50000, salary.get(0));
-        assertEquals("Bob", name.getObject(1).toString());
-        assertEquals(30000, salary.get(1));
-        assertEquals("Charlie", name.getObject(2).toString());
-        assertEquals(70000, salary.get(2));
+        expect("name", "salary")
+            .row("Alice", 50000L)
+            .row("Bob", 30000L)
+            .row("Charlie", 70000L)
+            .assertMatches(stream);
       }
     }
   }
@@ -293,22 +281,11 @@ public class DataFrameTest {
                   .selectColumns("name", "age")
                   .sort(col("name").sortAsc());
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        Schema schema = root.getSchema();
-        assertEquals(2, schema.getFields().size());
-        assertEquals("name", schema.getFields().get(0).getName());
-        assertEquals("age", schema.getFields().get(1).getName());
-
-        assertEquals(3, root.getRowCount());
-        VarCharVector name = (VarCharVector) root.getVector("name");
-        BigIntVector age = (BigIntVector) root.getVector("age");
-        assertEquals("Alice", name.getObject(0).toString());
-        assertEquals(30, age.get(0));
-        assertEquals("Bob", name.getObject(1).toString());
-        assertEquals(25, age.get(1));
-        assertEquals("Charlie", name.getObject(2).toString());
-        assertEquals(35, age.get(2));
+        expect("name", "age")
+            .row("Alice", 30L)
+            .row("Bob", 25L)
+            .row("Charlie", 35L)
+            .assertMatches(stream);
       }
     }
   }
@@ -347,11 +324,9 @@ public class DataFrameTest {
               ctx.sql("SELECT * FROM employees")
                   .aggregate(List.of(), List.of(aggFn.apply(col("salary")).alias("result")));
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(1, root.getRowCount(), name + " should produce 1 row");
-        double actual = getNumericValue(root, "result", 0);
-        assertEquals(expected, actual, delta, name + "(salary)");
+        // Cast expected to Long: works for both BigInt (sum/count/min/max/countDistinct) and
+        // Float8 (avg/median/stddev) result columns since all test values are whole numbers.
+        expect("result").withDelta(delta).row((long) expected).assertMatches(stream);
       }
     }
   }
@@ -366,8 +341,7 @@ public class DataFrameTest {
               ctx.sql("SELECT * FROM employees")
                   .aggregate(List.of(), List.of(countAll().alias("result")));
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        assertEquals(3.0, getNumericValue(stream.getVectorSchemaRoot(), "result", 0), 0.01);
+        expect("result").row(3L).assertMatches(stream);
       }
     }
   }
@@ -385,20 +359,10 @@ public class DataFrameTest {
                       List.of(sum(col("salary")).alias("total"), count(col("name")).alias("cnt")))
                   .sort(col("dept").sortAsc());
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(2, root.getRowCount());
-
-        VarCharVector dept = (VarCharVector) root.getVector("dept");
-        // Engineering: Alice(50000) + Charlie(70000)
-        assertEquals("Engineering", dept.getObject(0).toString());
-        assertEquals(120_000.0, getNumericValue(root, "total", 0), 0.01);
-        assertEquals(2.0, getNumericValue(root, "cnt", 0), 0.01);
-
-        // Sales: Bob(30000)
-        assertEquals("Sales", dept.getObject(1).toString());
-        assertEquals(30_000.0, getNumericValue(root, "total", 1), 0.01);
-        assertEquals(1.0, getNumericValue(root, "cnt", 1), 0.01);
+        expect("dept", "total", "cnt")
+            .row("Engineering", 120_000L, 2L)
+            .row("Sales", 30_000L, 1L)
+            .assertMatches(stream);
       }
     }
   }
@@ -411,17 +375,12 @@ public class DataFrameTest {
 
       try (DataFrame df = ctx.sql("SELECT * FROM employees").sort(col("salary").sortDesc());
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(3, root.getRowCount());
-        VarCharVector name = (VarCharVector) root.getVector("name");
-        BigIntVector salary = (BigIntVector) root.getVector("salary");
-        assertEquals("Charlie", name.getObject(0).toString());
-        assertEquals(70000, salary.get(0));
-        assertEquals("Alice", name.getObject(1).toString());
-        assertEquals(50000, salary.get(1));
-        assertEquals("Bob", name.getObject(2).toString());
-        assertEquals(30000, salary.get(2));
+        expect("name", "salary")
+            .allowExtraColumns()
+            .row("Charlie", 70000L)
+            .row("Alice", 50000L)
+            .row("Bob", 30000L)
+            .assertMatches(stream);
       }
     }
   }
@@ -435,15 +394,11 @@ public class DataFrameTest {
       try (DataFrame df =
               ctx.sql("SELECT * FROM employees").sort(col("age").sortAsc()).limit(0, 2);
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(2, root.getRowCount());
-        VarCharVector name = (VarCharVector) root.getVector("name");
-        BigIntVector age = (BigIntVector) root.getVector("age");
-        assertEquals("Bob", name.getObject(0).toString());
-        assertEquals(25, age.get(0));
-        assertEquals("Alice", name.getObject(1).toString());
-        assertEquals(30, age.get(1));
+        expect("name", "age")
+            .allowExtraColumns()
+            .row("Bob", 25L)
+            .row("Alice", 30L)
+            .assertMatches(stream);
       }
     }
   }
@@ -457,13 +412,8 @@ public class DataFrameTest {
       try (DataFrame df =
               ctx.sql("SELECT * FROM employees").sort(col("age").sortAsc()).limit(1, 2);
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(2, root.getRowCount());
         // Skip first (age=25), should get age=30 and age=35
-        BigIntVector age = (BigIntVector) root.getVector("age");
-        assertEquals(30, age.get(0));
-        assertEquals(35, age.get(1));
+        expect("age").allowExtraColumns().row(30L).row(35L).assertMatches(stream);
       }
     }
   }
@@ -476,17 +426,12 @@ public class DataFrameTest {
 
       try (DataFrame df = ctx.sql("SELECT * FROM employees ORDER BY name");
           SendableRecordBatchStream stream = df.collect(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(3, root.getRowCount());
-        VarCharVector name = (VarCharVector) root.getVector("name");
-        BigIntVector age = (BigIntVector) root.getVector("age");
-        assertEquals("Alice", name.getObject(0).toString());
-        assertEquals(30, age.get(0));
-        assertEquals("Bob", name.getObject(1).toString());
-        assertEquals(25, age.get(1));
-        assertEquals("Charlie", name.getObject(2).toString());
-        assertEquals(35, age.get(2));
+        expect("name", "age")
+            .allowExtraColumns()
+            .row("Alice", 30L)
+            .row("Bob", 25L)
+            .row("Charlie", 35L)
+            .assertMatches(stream);
       }
     }
   }
@@ -551,22 +496,12 @@ public class DataFrameTest {
                   .join(departments, JoinType.INNER, List.of("dept"), List.of("dept_name"))
                   .sort(col("name").sortAsc());
           SendableRecordBatchStream stream = joined.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(3, root.getRowCount());
-
-        VarCharVector name = (VarCharVector) root.getVector("name");
-        BigIntVector age = (BigIntVector) root.getVector("age");
-        VarCharVector location = (VarCharVector) root.getVector("location");
-        assertEquals("Alice", name.getObject(0).toString());
-        assertEquals(30, age.get(0));
-        assertEquals("SF", location.getObject(0).toString());
-        assertEquals("Bob", name.getObject(1).toString());
-        assertEquals(25, age.get(1));
-        assertEquals("NYC", location.getObject(1).toString());
-        assertEquals("Charlie", name.getObject(2).toString());
-        assertEquals(35, age.get(2));
-        assertEquals("SF", location.getObject(2).toString());
+        expect("name", "age", "location")
+            .allowExtraColumns()
+            .row("Alice", 30L, "SF")
+            .row("Bob", 25L, "NYC")
+            .row("Charlie", 35L, "SF")
+            .assertMatches(stream);
       }
     }
   }
@@ -585,18 +520,12 @@ public class DataFrameTest {
                   .joinOn(departments, JoinType.INNER, List.of(col("dept").eq(col("dept_name"))))
                   .sort(col("name").sortAsc());
           SendableRecordBatchStream stream = joined.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(3, root.getRowCount());
-
-        VarCharVector name = (VarCharVector) root.getVector("name");
-        BigIntVector age = (BigIntVector) root.getVector("age");
-        assertEquals("Alice", name.getObject(0).toString());
-        assertEquals(30, age.get(0));
-        assertEquals("Bob", name.getObject(1).toString());
-        assertEquals(25, age.get(1));
-        assertEquals("Charlie", name.getObject(2).toString());
-        assertEquals(35, age.get(2));
+        expect("name", "age")
+            .allowExtraColumns()
+            .row("Alice", 30L)
+            .row("Bob", 25L)
+            .row("Charlie", 35L)
+            .assertMatches(stream);
       }
     }
   }
@@ -621,18 +550,12 @@ public class DataFrameTest {
                       col("location").eq(lit("SF")))
                   .sort(col("name").sortAsc());
           SendableRecordBatchStream stream = joined.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
         // Only Engineering employees (SF): Alice and Charlie
-        assertEquals(2, root.getRowCount());
-
-        VarCharVector name = (VarCharVector) root.getVector("name");
-        assertEquals("Alice", name.getObject(0).toString());
-        assertEquals("Charlie", name.getObject(1).toString());
-
-        VarCharVector location = (VarCharVector) root.getVector("location");
-        assertEquals("SF", location.getObject(0).toString());
-        assertEquals("SF", location.getObject(1).toString());
+        expect("name", "location")
+            .allowExtraColumns()
+            .row("Alice", "SF")
+            .row("Charlie", "SF")
+            .assertMatches(stream);
       }
     }
   }
@@ -651,19 +574,13 @@ public class DataFrameTest {
                   .join(departments, JoinType.LEFT, List.of("dept"), List.of("dept_name"))
                   .sort(col("name").sortAsc());
           SendableRecordBatchStream stream = joined.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
         // Left join: all 3 employees retained
-        assertEquals(3, root.getRowCount());
-
-        VarCharVector name = (VarCharVector) root.getVector("name");
-        VarCharVector location = (VarCharVector) root.getVector("location");
-        assertEquals("Alice", name.getObject(0).toString());
-        assertEquals("SF", location.getObject(0).toString());
-        assertEquals("Bob", name.getObject(1).toString());
-        assertEquals("NYC", location.getObject(1).toString());
-        assertEquals("Charlie", name.getObject(2).toString());
-        assertEquals("SF", location.getObject(2).toString());
+        expect("name", "location")
+            .allowExtraColumns()
+            .row("Alice", "SF")
+            .row("Bob", "NYC")
+            .row("Charlie", "SF")
+            .assertMatches(stream);
       }
     }
   }
@@ -678,21 +595,13 @@ public class DataFrameTest {
           DataFrame df2 = ctx.sql("SELECT name, age FROM employees WHERE age > 25");
           DataFrame unioned = df1.union(df2).sort(col("age").sortAsc(), col("name").sortAsc());
           SendableRecordBatchStream stream = unioned.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
         // Union ALL: Bob(25) + Alice(30) from df1 + Alice(30) + Charlie(35) from df2 = 4 rows
-        assertEquals(4, root.getRowCount());
-
-        VarCharVector name = (VarCharVector) root.getVector("name");
-        BigIntVector age = (BigIntVector) root.getVector("age");
-        assertEquals("Bob", name.getObject(0).toString());
-        assertEquals(25, age.get(0));
-        assertEquals("Alice", name.getObject(1).toString());
-        assertEquals(30, age.get(1));
-        assertEquals("Alice", name.getObject(2).toString());
-        assertEquals(30, age.get(2));
-        assertEquals("Charlie", name.getObject(3).toString());
-        assertEquals(35, age.get(3));
+        expect("name", "age")
+            .row("Bob", 25L)
+            .row("Alice", 30L)
+            .row("Alice", 30L)
+            .row("Charlie", 35L)
+            .assertMatches(stream);
       }
     }
   }
@@ -707,19 +616,12 @@ public class DataFrameTest {
           DataFrame df2 = ctx.sql("SELECT name, age FROM employees WHERE age > 25");
           DataFrame unioned = df1.unionDistinct(df2).sort(col("age").sortAsc());
           SendableRecordBatchStream stream = unioned.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
         // Union distinct: Bob(25) + Alice(30) + Charlie(35) = 3 unique rows
-        assertEquals(3, root.getRowCount());
-
-        VarCharVector name = (VarCharVector) root.getVector("name");
-        BigIntVector age = (BigIntVector) root.getVector("age");
-        assertEquals("Bob", name.getObject(0).toString());
-        assertEquals(25, age.get(0));
-        assertEquals("Alice", name.getObject(1).toString());
-        assertEquals(30, age.get(1));
-        assertEquals("Charlie", name.getObject(2).toString());
-        assertEquals(35, age.get(2));
+        expect("name", "age")
+            .row("Bob", 25L)
+            .row("Alice", 30L)
+            .row("Charlie", 35L)
+            .assertMatches(stream);
       }
     }
   }
@@ -734,15 +636,8 @@ public class DataFrameTest {
           DataFrame df2 = ctx.sql("SELECT name, age FROM employees WHERE age >= 30");
           DataFrame intersected = df1.intersect(df2);
           SendableRecordBatchStream stream = intersected.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
         // Intersection: only Alice(30) is in both
-        assertEquals(1, root.getRowCount());
-
-        VarCharVector name = (VarCharVector) root.getVector("name");
-        BigIntVector age = (BigIntVector) root.getVector("age");
-        assertEquals("Alice", name.getObject(0).toString());
-        assertEquals(30, age.get(0));
+        expect("name", "age").row("Alice", 30L).assertMatches(stream);
       }
     }
   }
@@ -757,17 +652,8 @@ public class DataFrameTest {
           DataFrame df2 = ctx.sql("SELECT name, age FROM employees WHERE age = 30");
           DataFrame excepted = df1.except(df2).sort(col("age").sortAsc());
           SendableRecordBatchStream stream = excepted.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
         // Except: all employees minus Alice(30) = Bob(25) and Charlie(35)
-        assertEquals(2, root.getRowCount());
-
-        VarCharVector name = (VarCharVector) root.getVector("name");
-        BigIntVector age = (BigIntVector) root.getVector("age");
-        assertEquals("Bob", name.getObject(0).toString());
-        assertEquals(25, age.get(0));
-        assertEquals("Charlie", name.getObject(1).toString());
-        assertEquals(35, age.get(1));
+        expect("name", "age").row("Bob", 25L).row("Charlie", 35L).assertMatches(stream);
       }
     }
   }
@@ -781,14 +667,8 @@ public class DataFrameTest {
       try (DataFrame df =
               ctx.sql("SELECT dept FROM employees").distinct().sort(col("dept").sortAsc());
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
         // 2 distinct departments: Engineering and Sales
-        assertEquals(2, root.getRowCount());
-
-        VarCharVector dept = (VarCharVector) root.getVector("dept");
-        assertEquals("Engineering", dept.getObject(0).toString());
-        assertEquals("Sales", dept.getObject(1).toString());
+        expect("dept").row("Engineering").row("Sales").assertMatches(stream);
       }
     }
   }
@@ -808,18 +688,12 @@ public class DataFrameTest {
         Schema schema = df.schema();
         assertEquals(4, schema.getFields().size());
 
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(3, root.getRowCount());
-
-        VarCharVector name = (VarCharVector) root.getVector("name");
-        BigIntVector age = (BigIntVector) root.getVector("age");
-        assertEquals("Alice", name.getObject(0).toString());
-        assertEquals(30, age.get(0));
-        assertEquals("Bob", name.getObject(1).toString());
-        assertEquals(25, age.get(1));
-        assertEquals("Charlie", name.getObject(2).toString());
-        assertEquals(35, age.get(2));
+        expect("name", "age")
+            .allowExtraColumns()
+            .row("Alice", 30L)
+            .row("Bob", 25L)
+            .row("Charlie", 35L)
+            .assertMatches(stream);
       }
     }
   }
@@ -851,33 +725,11 @@ public class DataFrameTest {
         SessionContext ctx = new SessionContext();
         DataFrame df = ctx.readCsv(csvFile.toString()).sort(col("id").sortAsc());
         SendableRecordBatchStream stream = df.executeStream(allocator)) {
-      Schema schema = df.schema();
-      assertEquals(3, schema.getFields().size());
-      assertEquals("id", schema.getFields().get(0).getName());
-      assertEquals("name", schema.getFields().get(1).getName());
-      assertEquals("value", schema.getFields().get(2).getName());
-
-      assertTrue(stream.loadNextBatch());
-      VectorSchemaRoot root = stream.getVectorSchemaRoot();
-      assertEquals(3, root.getRowCount());
-
-      BigIntVector id = (BigIntVector) root.getVector("id");
-      VarCharVector name = (VarCharVector) root.getVector("name");
-      BigIntVector value = (BigIntVector) root.getVector("value");
-
-      assertEquals(1, id.get(0));
-      assertEquals("Alice", name.getObject(0).toString());
-      assertEquals(100, value.get(0));
-
-      assertEquals(2, id.get(1));
-      assertEquals("Bob", name.getObject(1).toString());
-      assertEquals(200, value.get(1));
-
-      assertEquals(3, id.get(2));
-      assertEquals("Charlie", name.getObject(2).toString());
-      assertEquals(300, value.get(2));
-
-      assertFalse(stream.loadNextBatch());
+      expect("id", "name", "value")
+          .row(1L, "Alice", 100L)
+          .row(2L, "Bob", 200L)
+          .row(3L, "Charlie", 300L)
+          .assertMatches(stream);
     }
   }
 
@@ -890,20 +742,7 @@ public class DataFrameTest {
         SessionContext ctx = new SessionContext();
         DataFrame df = ctx.readJson(jsonFile.toString()).sort(col("id").sortAsc());
         SendableRecordBatchStream stream = df.executeStream(allocator)) {
-      assertTrue(stream.loadNextBatch());
-      VectorSchemaRoot root = stream.getVectorSchemaRoot();
-      assertEquals(2, root.getRowCount());
-
-      BigIntVector id = (BigIntVector) root.getVector("id");
-      VarCharVector name = (VarCharVector) root.getVector("name");
-
-      assertEquals(1, id.get(0));
-      assertEquals("Alice", name.getObject(0).toString());
-
-      assertEquals(2, id.get(1));
-      assertEquals("Bob", name.getObject(1).toString());
-
-      assertFalse(stream.loadNextBatch());
+      expect("id", "name").row(1L, "Alice").row(2L, "Bob").assertMatches(stream);
     }
   }
 
@@ -918,18 +757,12 @@ public class DataFrameTest {
         DataFrame df =
             ctx.readParquet("src/test/resources/test.parquet").sort(col("id").sortAsc());
         SendableRecordBatchStream stream = df.executeStream(allocator)) {
-      assertTrue(stream.loadNextBatch());
-      VectorSchemaRoot root = stream.getVectorSchemaRoot();
-      assertEquals(3, root.getRowCount());
-
-      BigIntVector id = (BigIntVector) root.getVector("id");
-      BigIntVector value = (BigIntVector) root.getVector("value");
-      assertEquals(1, id.get(0));
-      assertEquals(100, value.get(0));
-      assertEquals(2, id.get(1));
-      assertEquals(200, value.get(1));
-      assertEquals(3, id.get(2));
-      assertEquals(300, value.get(2));
+      expect("id", "value")
+          .allowExtraColumns()
+          .row(1L, 100L)
+          .row(2L, 200L)
+          .row(3L, 300L)
+          .assertMatches(stream);
     }
   }
 
@@ -945,21 +778,14 @@ public class DataFrameTest {
       }
 
       // Read back and verify
-      // Note: Parquet read-back may use ViewVarCharVector instead of VarCharVector,
-      // so use getObject().toString() for string comparison.
       try (DataFrame df = ctx.readParquet(outDir.toString()).sort(col("age").sortAsc());
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(3, root.getRowCount());
-
-        BigIntVector age = (BigIntVector) root.getVector("age");
-        assertEquals(25, age.get(0));
-        assertEquals("Bob", root.getVector("name").getObject(0).toString());
-        assertEquals(30, age.get(1));
-        assertEquals("Alice", root.getVector("name").getObject(1).toString());
-        assertEquals(35, age.get(2));
-        assertEquals("Charlie", root.getVector("name").getObject(2).toString());
+        expect("age", "name")
+            .allowExtraColumns()
+            .row(25L, "Bob")
+            .row(30L, "Alice")
+            .row(35L, "Charlie")
+            .assertMatches(stream);
       }
     }
   }
@@ -978,14 +804,7 @@ public class DataFrameTest {
       // Read back and verify
       try (DataFrame df = ctx.readCsv(outDir.toString()).sort(col("age").sortAsc());
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(3, root.getRowCount());
-
-        BigIntVector age = (BigIntVector) root.getVector("age");
-        assertEquals(25, age.get(0));
-        assertEquals(30, age.get(1));
-        assertEquals(35, age.get(2));
+        expect("age").allowExtraColumns().row(25L).row(30L).row(35L).assertMatches(stream);
       }
     }
   }
@@ -1004,22 +823,12 @@ public class DataFrameTest {
       // Read back and verify
       try (DataFrame df = ctx.readJson(outDir.toString()).sort(col("age").sortAsc());
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(3, root.getRowCount());
-
-        BigIntVector age = (BigIntVector) root.getVector("age");
-        VarCharVector name = (VarCharVector) root.getVector("name");
-        BigIntVector salary = (BigIntVector) root.getVector("salary");
-        assertEquals(25, age.get(0));
-        assertEquals("Bob", name.getObject(0).toString());
-        assertEquals(30000, salary.get(0));
-        assertEquals(30, age.get(1));
-        assertEquals("Alice", name.getObject(1).toString());
-        assertEquals(50000, salary.get(1));
-        assertEquals(35, age.get(2));
-        assertEquals("Charlie", name.getObject(2).toString());
-        assertEquals(70000, salary.get(2));
+        expect("age", "name", "salary")
+            .allowExtraColumns()
+            .row(25L, "Bob", 30000L)
+            .row(30L, "Alice", 50000L)
+            .row(35L, "Charlie", 70000L)
+            .assertMatches(stream);
       }
     }
   }
@@ -1046,17 +855,12 @@ public class DataFrameTest {
       // Read back and verify data
       try (DataFrame df = ctx.readParquet(outDir.toString()).sort(col("age").sortAsc());
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(3, root.getRowCount());
-
-        BigIntVector age = (BigIntVector) root.getVector("age");
-        assertEquals(25, age.get(0));
-        assertEquals("Bob", root.getVector("name").getObject(0).toString());
-        assertEquals(30, age.get(1));
-        assertEquals("Alice", root.getVector("name").getObject(1).toString());
-        assertEquals(35, age.get(2));
-        assertEquals("Charlie", root.getVector("name").getObject(2).toString());
+        expect("age", "name")
+            .row(25L, "Bob")
+            .row(30L, "Alice")
+            .row(35L, "Charlie")
+            .allowExtraColumns()
+            .assertMatches(stream);
       }
     }
   }
@@ -1076,14 +880,7 @@ public class DataFrameTest {
       // Read back and verify data
       try (DataFrame df = ctx.readParquet(outDir.toString()).sort(col("age").sortAsc());
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(3, root.getRowCount());
-
-        BigIntVector age = (BigIntVector) root.getVector("age");
-        assertEquals(25, age.get(0));
-        assertEquals(30, age.get(1));
-        assertEquals(35, age.get(2));
+        expect("age").row(25L).row(30L).row(35L).allowExtraColumns().assertMatches(stream);
       }
     }
   }
@@ -1106,18 +903,11 @@ public class DataFrameTest {
       try (DataFrame df =
               ctx.readCsv(outDir.toString(), readOpts, allocator).sort(col("age").sortAsc());
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(3, root.getRowCount());
-
-        BigIntVector age = (BigIntVector) root.getVector("age");
-        BigIntVector salary = (BigIntVector) root.getVector("salary");
-        assertEquals(25, age.get(0));
-        assertEquals(30000, salary.get(0));
-        assertEquals(30, age.get(1));
-        assertEquals(50000, salary.get(1));
-        assertEquals(35, age.get(2));
-        assertEquals(70000, salary.get(2));
+        expect("age", "salary")
+            .row(25L, 30000L)
+            .row(30L, 50000L)
+            .row(35L, 70000L)
+            .assertMatches(stream);
       }
     }
   }
@@ -1137,14 +927,7 @@ public class DataFrameTest {
       // Read back and verify
       try (DataFrame df = ctx.readCsv(outDir.toString()).sort(col("age").sortAsc());
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(3, root.getRowCount());
-
-        BigIntVector age = (BigIntVector) root.getVector("age");
-        assertEquals(25, age.get(0));
-        assertEquals(30, age.get(1));
-        assertEquals(35, age.get(2));
+        expect("age").row(25L).row(30L).row(35L).allowExtraColumns().assertMatches(stream);
       }
     }
   }
@@ -1165,22 +948,12 @@ public class DataFrameTest {
       // Read back and verify
       try (DataFrame df = ctx.readJson(outDir.toString()).sort(col("age").sortAsc());
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(3, root.getRowCount());
-
-        BigIntVector age = (BigIntVector) root.getVector("age");
-        VarCharVector name = (VarCharVector) root.getVector("name");
-        BigIntVector salary = (BigIntVector) root.getVector("salary");
-        assertEquals(25, age.get(0));
-        assertEquals("Bob", name.getObject(0).toString());
-        assertEquals(30000, salary.get(0));
-        assertEquals(30, age.get(1));
-        assertEquals("Alice", name.getObject(1).toString());
-        assertEquals(50000, salary.get(1));
-        assertEquals(35, age.get(2));
-        assertEquals("Charlie", name.getObject(2).toString());
-        assertEquals(70000, salary.get(2));
+        expect("age", "name", "salary")
+            .row(25L, "Bob", 30000L)
+            .row(30L, "Alice", 50000L)
+            .row(35L, "Charlie", 70000L)
+            .allowExtraColumns()
+            .assertMatches(stream);
       }
     }
   }
@@ -1200,14 +973,7 @@ public class DataFrameTest {
       // Read back and verify
       try (DataFrame df = ctx.readJson(outDir.toString()).sort(col("age").sortAsc());
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(3, root.getRowCount());
-
-        BigIntVector age = (BigIntVector) root.getVector("age");
-        assertEquals(25, age.get(0));
-        assertEquals(30, age.get(1));
-        assertEquals(35, age.get(2));
+        expect("age").row(25L).row(30L).row(35L).allowExtraColumns().assertMatches(stream);
       }
     }
   }
@@ -1230,10 +996,15 @@ public class DataFrameTest {
         assertEquals(5, schema.getFields().size());
         assertEquals("bonus", schema.getFields().get(4).getName());
 
-        assertTrue(stream.loadNextBatch());
-        Float8Vector bonus = (Float8Vector) stream.getVectorSchemaRoot().getVector("bonus");
-        // First employee (Alice): salary=50000, bonus=5000.0
-        assertEquals(5000.0, bonus.get(0), 0.01);
+        // Alice(50000)->5000, Bob(30000)->3000, Charlie(70000)->7000
+        expect("name", "bonus")
+            .row("Alice", 5000.0)
+            .row("Bob", 3000.0)
+            .row("Charlie", 7000.0)
+            .withDelta(0.01)
+            .unordered()
+            .allowExtraColumns()
+            .assertMatches(stream);
       }
     }
   }
@@ -1286,11 +1057,8 @@ public class DataFrameTest {
                   .sort(col("salary").sortDesc())
                   .limit(0, 1);
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        assertEquals(1, stream.getVectorSchemaRoot().getRowCount());
         // Highest salary among age>=30: Charlie(70000) > Alice(50000)
-        BigIntVector salary = (BigIntVector) stream.getVectorSchemaRoot().getVector("salary");
-        assertEquals(70000, salary.get(0));
+        expect("salary").row(70000L).allowExtraColumns().assertMatches(stream);
       }
     }
   }
@@ -1310,20 +1078,13 @@ public class DataFrameTest {
                           count(col("name")).alias("headcount")))
                   .sort(col("avg_salary").sortDesc());
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(2, root.getRowCount());
-
-        VarCharVector dept = (VarCharVector) root.getVector("dept");
         // Engineering: avg(50000, 70000) = 60000, headcount = 2
-        assertEquals("Engineering", dept.getObject(0).toString());
-        assertEquals(60000.0, getNumericValue(root, "avg_salary", 0), 0.01);
-        assertEquals(2.0, getNumericValue(root, "headcount", 0), 0.01);
-
         // Sales: avg(30000) = 30000, headcount = 1
-        assertEquals("Sales", dept.getObject(1).toString());
-        assertEquals(30000.0, getNumericValue(root, "avg_salary", 1), 0.01);
-        assertEquals(1.0, getNumericValue(root, "headcount", 1), 0.01);
+        expect("dept", "avg_salary", "headcount")
+            .row("Engineering", 60000.0, 2L)
+            .row("Sales", 30000.0, 1L)
+            .withDelta(0.01)
+            .assertMatches(stream);
       }
     }
   }
@@ -1340,15 +1101,8 @@ public class DataFrameTest {
                   .selectColumns("name", "salary")
                   .filter(col("salary").gt(lit(50000)));
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
         // Only Charlie with salary > 50000
-        assertEquals(1, root.getRowCount());
-
-        VarCharVector name = (VarCharVector) root.getVector("name");
-        BigIntVector salary = (BigIntVector) root.getVector("salary");
-        assertEquals("Charlie", name.getObject(0).toString());
-        assertEquals(70000, salary.get(0));
+        expect("name", "salary").row("Charlie", 70000L).assertMatches(stream);
       }
     }
   }
@@ -1368,21 +1122,13 @@ public class DataFrameTest {
                           .otherwise(lit("low")))
                   .sort(col("name").sortAsc());
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(5, root.getSchema().getFields().size());
-        assertEquals("salary_band", root.getSchema().getFields().get(4).getName());
-
-        assertEquals(3, root.getRowCount());
-        VarCharVector name = (VarCharVector) root.getVector("name");
-        VarCharVector salaryBand = (VarCharVector) root.getVector("salary_band");
         // Alice(50000) -> mid, Bob(30000) -> low, Charlie(70000) -> high
-        assertEquals("Alice", name.getObject(0).toString());
-        assertEquals("mid", salaryBand.getObject(0).toString());
-        assertEquals("Bob", name.getObject(1).toString());
-        assertEquals("low", salaryBand.getObject(1).toString());
-        assertEquals("Charlie", name.getObject(2).toString());
-        assertEquals("high", salaryBand.getObject(2).toString());
+        expect("name", "salary_band")
+            .row("Alice", "mid")
+            .row("Bob", "low")
+            .row("Charlie", "high")
+            .allowExtraColumns()
+            .assertMatches(stream);
       }
     }
   }
@@ -1407,20 +1153,8 @@ public class DataFrameTest {
                 .aggregate(List.of(col("region")), List.of(sum(col("amount")).alias("total")))
                 .sort(col("region").sortAsc());
         SendableRecordBatchStream stream = df.executeStream(allocator)) {
-      assertTrue(stream.loadNextBatch());
-      VectorSchemaRoot root = stream.getVectorSchemaRoot();
-      assertEquals(2, root.getRowCount());
-
-      VarCharVector region = (VarCharVector) root.getVector("region");
-      // East Widgets: 100 + 120 = 220
-      assertEquals("East", region.getObject(0).toString());
-      assertEquals(220.0, getNumericValue(root, "total", 0), 0.01);
-
-      // West Widgets: 150
-      assertEquals("West", region.getObject(1).toString());
-      assertEquals(150.0, getNumericValue(root, "total", 1), 0.01);
-
-      assertFalse(stream.loadNextBatch());
+      // East Widgets: 100 + 120 = 220; West Widgets: 150
+      expect("region", "total").row("East", 220L).row("West", 150L).assertMatches(stream);
     }
   }
 
@@ -1438,27 +1172,11 @@ public class DataFrameTest {
                       col("age").add(lit(1)).alias("next_age"))
                   .sort(col("name").sortAsc());
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        Schema schema = root.getSchema();
-        assertEquals(3, schema.getFields().size());
-        assertEquals("name", schema.getFields().get(0).getName());
-        assertEquals("annual_salary", schema.getFields().get(1).getName());
-        assertEquals("next_age", schema.getFields().get(2).getName());
-
-        assertEquals(3, root.getRowCount());
-        VarCharVector name = (VarCharVector) root.getVector("name");
-        BigIntVector annualSalary = (BigIntVector) root.getVector("annual_salary");
-        BigIntVector nextAge = (BigIntVector) root.getVector("next_age");
-        assertEquals("Alice", name.getObject(0).toString());
-        assertEquals(600000, annualSalary.get(0));
-        assertEquals(31, nextAge.get(0));
-        assertEquals("Bob", name.getObject(1).toString());
-        assertEquals(360000, annualSalary.get(1));
-        assertEquals(26, nextAge.get(1));
-        assertEquals("Charlie", name.getObject(2).toString());
-        assertEquals(840000, annualSalary.get(2));
-        assertEquals(36, nextAge.get(2));
+        expect("name", "annual_salary", "next_age")
+            .row("Alice", 600000L, 31L)
+            .row("Bob", 360000L, 26L)
+            .row("Charlie", 840000L, 36L)
+            .assertMatches(stream);
       }
     }
   }
@@ -1473,17 +1191,12 @@ public class DataFrameTest {
       try (DataFrame df =
               ctx.sql("SELECT * FROM employees").sort(col("age").sortAsc()).limit(1, null);
           SendableRecordBatchStream stream = df.collect(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(2, root.getRowCount()); // Skip 1, return remaining 2
-
-        BigIntVector age = (BigIntVector) root.getVector("age");
-        BigIntVector salary = (BigIntVector) root.getVector("salary");
         // Skip first (Bob, age=25), should get Alice(30, 50000) and Charlie(35, 70000)
-        assertEquals(30, age.get(0));
-        assertEquals(50000, salary.get(0));
-        assertEquals(35, age.get(1));
-        assertEquals(70000, salary.get(1));
+        expect("age", "salary")
+            .row(30L, 50000L)
+            .row(35L, 70000L)
+            .allowExtraColumns()
+            .assertMatches(stream);
       }
     }
   }
@@ -1499,27 +1212,14 @@ public class DataFrameTest {
               ctx.sql("SELECT * FROM employees")
                   .sort(col("dept").sortAsc(), col("salary").sortDesc());
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(3, root.getRowCount());
-
-        VarCharVector name = (VarCharVector) root.getVector("name");
-        VarCharVector dept = (VarCharVector) root.getVector("dept");
-        BigIntVector salary = (BigIntVector) root.getVector("salary");
-
         // Engineering first (asc), highest salary first (desc): Charlie(70000), Alice(50000)
-        assertEquals("Engineering", dept.getObject(0).toString());
-        assertEquals("Charlie", name.getObject(0).toString());
-        assertEquals(70000, salary.get(0));
-
-        assertEquals("Engineering", dept.getObject(1).toString());
-        assertEquals("Alice", name.getObject(1).toString());
-        assertEquals(50000, salary.get(1));
-
         // Sales last: Bob(30000)
-        assertEquals("Sales", dept.getObject(2).toString());
-        assertEquals("Bob", name.getObject(2).toString());
-        assertEquals(30000, salary.get(2));
+        expect("dept", "name", "salary")
+            .row("Engineering", "Charlie", 70000L)
+            .row("Engineering", "Alice", 50000L)
+            .row("Sales", "Bob", 30000L)
+            .allowExtraColumns()
+            .assertMatches(stream);
       }
     }
   }
@@ -1541,17 +1241,10 @@ public class DataFrameTest {
                           min(col("age")).alias("youngest"),
                           max(col("age")).alias("oldest")));
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(1, root.getRowCount());
-        BigIntVector total = (BigIntVector) root.getVector("total");
-        BigIntVector cnt = (BigIntVector) root.getVector("cnt");
-        BigIntVector youngest = (BigIntVector) root.getVector("youngest");
-        BigIntVector oldest = (BigIntVector) root.getVector("oldest");
-        assertEquals(150000, total.get(0)); // 50000 + 30000 + 70000
-        assertEquals(3, cnt.get(0));
-        assertEquals(25, youngest.get(0));
-        assertEquals(35, oldest.get(0));
+        // 50000 + 30000 + 70000 = 150000
+        expect("total", "cnt", "youngest", "oldest")
+            .row(150000L, 3L, 25L, 35L)
+            .assertMatches(stream);
       }
     }
   }
@@ -1709,13 +1402,7 @@ public class DataFrameTest {
           DataFrame joined =
               left.join(right, JoinType.INNER, List.of(unicodeCol), List.of(unicodeCol));
           SendableRecordBatchStream stream = joined.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(1, root.getRowCount());
-        BigIntVector valLeft = (BigIntVector) root.getVector("val_left");
-        BigIntVector valRight = (BigIntVector) root.getVector("val_right");
-        assertEquals(10, valLeft.get(0));
-        assertEquals(100, valRight.get(0));
+        expect("val_left", "val_right").row(10L, 100L).allowExtraColumns().assertMatches(stream);
       }
     }
   }
@@ -1746,13 +1433,7 @@ public class DataFrameTest {
       try (DataFrame df = ctx.sql("SELECT * FROM test_tbl");
           DataFrame dropped = df.dropColumns(unicodeCol);
           SendableRecordBatchStream stream = dropped.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot result = stream.getVectorSchemaRoot();
-        assertEquals(1, result.getRowCount());
-        assertEquals(1, result.getSchema().getFields().size());
-        assertEquals("keep", result.getSchema().getFields().get(0).getName());
-        BigIntVector keepResult = (BigIntVector) result.getVector("keep");
-        assertEquals(42, keepResult.get(0));
+        expect("keep").row(42L).assertMatches(stream);
       }
     }
   }

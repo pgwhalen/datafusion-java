@@ -1,6 +1,7 @@
 package org.apache.arrow.datafusion;
 
 import static org.apache.arrow.datafusion.Functions.*;
+import static org.apache.arrow.datafusion.testutil.VectorSchemaRootAssert.expect;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.Arrays;
@@ -85,25 +86,15 @@ class ScalarUDFTest {
 
       ctx.registerUdf(pow, allocator);
 
-      try (DataFrame df = ctx.sql("SELECT pow(a, b) FROM t");
+      try (DataFrame df = ctx.sql("SELECT pow(a, b) AS result FROM t");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertTrue(stream.loadNextBatch());
-        assertEquals(4, root.getRowCount());
-
-        Float8Vector result = (Float8Vector) root.getVector(0);
-
-        // 2.1^1.0 = 2.1
-        assertEquals(2.1, result.get(0), 0.0001);
-        // 3.1^2.0 = 9.61
-        assertEquals(9.61, result.get(1), 0.0001);
-        // 4.1^3.0 = 68.921
-        assertEquals(68.921, result.get(2), 0.001);
-        // 5.1^4.0 = 676.5201
-        assertEquals(676.5201, result.get(3), 0.001);
-
-        assertFalse(stream.loadNextBatch());
+        expect("result")
+            .withDelta(0.001)
+            .row(2.1) // 2.1^1.0
+            .row(9.61) // 3.1^2.0
+            .row(68.921) // 4.1^3.0
+            .row(676.5201) // 5.1^4.0
+            .assertMatches(stream);
       }
 
       testData.close();
@@ -139,19 +130,9 @@ class ScalarUDFTest {
 
       ctx.registerUdf(doubleIt, allocator);
 
-      try (DataFrame df = ctx.sql("SELECT double_it(x) FROM t");
+      try (DataFrame df = ctx.sql("SELECT double_it(x) AS result FROM t");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertTrue(stream.loadNextBatch());
-        assertEquals(3, root.getRowCount());
-
-        BigIntVector result = (BigIntVector) root.getVector(0);
-        assertEquals(20, result.get(0));
-        assertEquals(40, result.get(1));
-        assertEquals(60, result.get(2));
-
-        assertFalse(stream.loadNextBatch());
+        expect("result").row(20L).row(40L).row(60L).assertMatches(stream);
       }
 
       testData.close();

@@ -1,5 +1,6 @@
 package org.apache.arrow.datafusion.config;
 
+import static org.apache.arrow.datafusion.testutil.VectorSchemaRootAssert.expect;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.Map;
@@ -8,8 +9,6 @@ import org.apache.arrow.datafusion.execution.SessionContext;
 import org.apache.arrow.datafusion.physical_plan.SendableRecordBatchStream;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
-import org.apache.arrow.vector.BigIntVector;
-import org.apache.arrow.vector.VarCharVector;
 import org.junit.jupiter.api.Test;
 
 /** Tests for ConfigOptions and DataFusion configuration options. */
@@ -48,9 +47,7 @@ public class ConfigOptionsTest {
         SessionContext ctx = new SessionContext(config)) {
       try (DataFrame df = ctx.sql("SHOW datafusion.execution.batch_size");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VarCharVector valueVector = (VarCharVector) stream.getVectorSchemaRoot().getVector("value");
-        assertEquals("2048", new String(valueVector.get(0)));
+        expect("value").row("2048").allowExtraColumns().assertMatches(stream);
       }
     }
   }
@@ -65,9 +62,7 @@ public class ConfigOptionsTest {
         SessionContext ctx = new SessionContext(config)) {
       try (DataFrame df = ctx.sql("SELECT 42 as answer");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        BigIntVector answerValues = (BigIntVector) stream.getVectorSchemaRoot().getVector("answer");
-        assertEquals(42, answerValues.get(0));
+        expect("answer").row(42L).assertMatches(stream);
       }
     }
   }
@@ -457,9 +452,7 @@ public class ConfigOptionsTest {
       SessionContext ctx, BufferAllocator allocator, String key, String expected) {
     try (DataFrame df = ctx.sql("SHOW " + key);
         SendableRecordBatchStream stream = df.executeStream(allocator)) {
-      assertTrue(stream.loadNextBatch(), "No data for SHOW " + key);
-      VarCharVector valueVector = (VarCharVector) stream.getVectorSchemaRoot().getVector("value");
-      assertEquals(expected, new String(valueVector.get(0)), "Mismatch for " + key);
+      expect("value").row(expected).allowExtraColumns().assertMatches(stream);
     }
   }
 }
