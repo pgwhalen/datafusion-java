@@ -1,5 +1,6 @@
 package org.apache.arrow.datafusion;
 
+import static org.apache.arrow.datafusion.testutil.VectorSchemaRootAssert.expect;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.IOException;
@@ -24,7 +25,6 @@ import org.apache.arrow.datafusion.physical_plan.SendableRecordBatchStream;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.BigIntVector;
-import org.apache.arrow.vector.Float8Vector;
 import org.apache.arrow.vector.IntVector;
 import org.apache.arrow.vector.VarCharVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
@@ -69,16 +69,7 @@ public class SessionContextTest {
 
       try (DataFrame df = ctx.sql("SELECT id, name FROM test ORDER BY id");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot result = stream.getVectorSchemaRoot();
-        assertEquals(2, result.getRowCount());
-
-        IntVector idResult = (IntVector) result.getVector("id");
-        VarCharVector nameResult = (VarCharVector) result.getVector("name");
-        assertEquals(1, idResult.get(0));
-        assertEquals("Alice", nameResult.getObject(0).toString());
-        assertEquals(2, idResult.get(1));
-        assertEquals("Bob", nameResult.getObject(1).toString());
+        expect("id", "name").row(1, "Alice").row(2, "Bob").assertMatches(stream);
       }
     }
   }
@@ -117,16 +108,7 @@ public class SessionContextTest {
 
         try (DataFrame df = ctx.sql("SELECT id, value FROM my_table ORDER BY id");
             SendableRecordBatchStream stream = df.executeStream(allocator)) {
-          assertTrue(stream.loadNextBatch());
-          VectorSchemaRoot result = stream.getVectorSchemaRoot();
-          assertEquals(2, result.getRowCount());
-
-          BigIntVector idResult = (BigIntVector) result.getVector("id");
-          VarCharVector valueResult = (VarCharVector) result.getVector("value");
-          assertEquals(10, idResult.get(0));
-          assertEquals("hello", valueResult.getObject(0).toString());
-          assertEquals(20, idResult.get(1));
-          assertEquals("world", valueResult.getObject(1).toString());
+          expect("id", "value").row(10L, "hello").row(20L, "world").assertMatches(stream);
         }
       }
     }
@@ -190,25 +172,11 @@ public class SessionContextTest {
 
       try (DataFrame df = ctx.sql("SELECT id, name, score FROM scores ORDER BY id");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(3, root.getRowCount());
-
-        BigIntVector id = (BigIntVector) root.getVector("id");
-        VarCharVector name = (VarCharVector) root.getVector("name");
-        BigIntVector score = (BigIntVector) root.getVector("score");
-
-        assertEquals(1, id.get(0));
-        assertEquals("Alice", name.getObject(0).toString());
-        assertEquals(95, score.get(0));
-
-        assertEquals(2, id.get(1));
-        assertEquals("Bob", name.getObject(1).toString());
-        assertEquals(87, score.get(1));
-
-        assertEquals(3, id.get(2));
-        assertEquals("Charlie", name.getObject(2).toString());
-        assertEquals(92, score.get(2));
+        expect("id", "name", "score")
+            .row(1L, "Alice", 95L)
+            .row(2L, "Bob", 87L)
+            .row(3L, "Charlie", 92L)
+            .assertMatches(stream);
       }
     }
   }
@@ -226,19 +194,7 @@ public class SessionContextTest {
 
       try (DataFrame df = ctx.sql("SELECT id, value FROM test_parquet ORDER BY id");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(3, root.getRowCount());
-
-        BigIntVector id = (BigIntVector) root.getVector("id");
-        BigIntVector value = (BigIntVector) root.getVector("value");
-
-        assertEquals(1, id.get(0));
-        assertEquals(100, value.get(0));
-        assertEquals(2, id.get(1));
-        assertEquals(200, value.get(1));
-        assertEquals(3, id.get(2));
-        assertEquals(300, value.get(2));
+        expect("id", "value").row(1L, 100L).row(2L, 200L).row(3L, 300L).assertMatches(stream);
       }
     }
   }
@@ -256,17 +212,7 @@ public class SessionContextTest {
 
       try (DataFrame df = ctx.sql("SELECT id, city FROM cities ORDER BY id");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(2, root.getRowCount());
-
-        BigIntVector id = (BigIntVector) root.getVector("id");
-        VarCharVector city = (VarCharVector) root.getVector("city");
-
-        assertEquals(1, id.get(0));
-        assertEquals("NYC", city.getObject(0).toString());
-        assertEquals(2, id.get(1));
-        assertEquals("LA", city.getObject(1).toString());
+        expect("id", "city").row(1L, "NYC").row(2L, "LA").assertMatches(stream);
       }
     }
   }
@@ -294,19 +240,11 @@ public class SessionContextTest {
 
       try (DataFrame df = ctx.sql("SELECT id, name, score FROM test_arrow ORDER BY id");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(3, root.getRowCount());
-
-        BigIntVector id = (BigIntVector) root.getVector("id");
-        assertEquals(1, id.get(0));
-        assertEquals(2, id.get(1));
-        assertEquals(3, id.get(2));
-
-        BigIntVector score = (BigIntVector) root.getVector("score");
-        assertEquals(95, score.get(0));
-        assertEquals(87, score.get(1));
-        assertEquals(92, score.get(2));
+        expect("id", "name", "score")
+            .row(1L, "Alice", 95L)
+            .row(2L, "Bob", 87L)
+            .row(3L, "Carol", 92L)
+            .assertMatches(stream);
       }
     }
   }
@@ -329,22 +267,11 @@ public class SessionContextTest {
 
       try (DataFrame df = ctx.readCsv(csvFile.toString(), options, allocator);
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(2, root.getRowCount());
-
         // With no header, columns are named column_1, column_2, column_3
-        BigIntVector col1 = (BigIntVector) root.getVector("column_1");
-        VarCharVector col2 = (VarCharVector) root.getVector("column_2");
-        BigIntVector col3 = (BigIntVector) root.getVector("column_3");
-
-        assertEquals(1, col1.get(0));
-        assertEquals("Alice", col2.getObject(0).toString());
-        assertEquals(100, col3.get(0));
-
-        assertEquals(2, col1.get(1));
-        assertEquals("Bob", col2.getObject(1).toString());
-        assertEquals(200, col3.get(1));
+        expect("column_1", "column_2", "column_3")
+            .row(1L, "Alice", 100L)
+            .row(2L, "Bob", 200L)
+            .assertMatches(stream);
       }
     }
   }
@@ -358,15 +285,13 @@ public class SessionContextTest {
 
       try (DataFrame df = ctx.readParquet("src/test/resources/test.parquet", options, allocator);
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(3, root.getRowCount());
-
-        BigIntVector id = (BigIntVector) root.getVector("id");
-        BigIntVector value = (BigIntVector) root.getVector("value");
-
-        assertEquals(1, id.get(0));
-        assertEquals(100, value.get(0));
+        expect("id", "value")
+            .unordered()
+            .allowExtraColumns()
+            .row(1L, 100L)
+            .row(2L, 200L)
+            .row(3L, 300L)
+            .assertMatches(stream);
       }
     }
   }
@@ -384,19 +309,12 @@ public class SessionContextTest {
 
       try (DataFrame df = ctx.readJson(jsonFile.toString(), options, allocator);
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(3, root.getRowCount());
-
-        Float8Vector x = (Float8Vector) root.getVector("x");
-        VarCharVector y = (VarCharVector) root.getVector("y");
-
-        assertEquals(1.5, x.get(0), 0.001);
-        assertEquals("A", y.getObject(0).toString());
-        assertEquals(2.5, x.get(1), 0.001);
-        assertEquals("B", y.getObject(1).toString());
-        assertEquals(3.5, x.get(2), 0.001);
-        assertEquals("C", y.getObject(2).toString());
+        expect("x", "y")
+            .withDelta(0.001)
+            .row(1.5, "A")
+            .row(2.5, "B")
+            .row(3.5, "C")
+            .assertMatches(stream);
       }
     }
   }
@@ -421,17 +339,7 @@ public class SessionContextTest {
 
       try (DataFrame df = ctx.readArrow(arrowFile.toString());
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(2, root.getRowCount());
-
-        BigIntVector id = (BigIntVector) root.getVector("id");
-        assertEquals(1, id.get(0));
-        assertEquals(2, id.get(1));
-
-        BigIntVector value = (BigIntVector) root.getVector("value");
-        assertEquals(100, value.get(0));
-        assertEquals(200, value.get(1));
+        expect("id", "value").row(1L, 100L).row(2L, 200L).assertMatches(stream);
       }
     }
   }
@@ -458,14 +366,12 @@ public class SessionContextTest {
 
       try (DataFrame df = ctx.readArrow(arrowFile.toString(), options, allocator);
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(3, root.getRowCount());
-
-        Float8Vector x = (Float8Vector) root.getVector("x");
-        assertEquals(1.5, x.get(0), 0.001);
-        assertEquals(2.5, x.get(1), 0.001);
-        assertEquals(3.5, x.get(2), 0.001);
+        expect("x", "y")
+            .withDelta(0.001)
+            .row(1.5, "A")
+            .row(2.5, "B")
+            .row(3.5, "C")
+            .assertMatches(stream);
       }
     }
   }
@@ -628,13 +534,10 @@ public class SessionContextTest {
 
       try (DataFrame df = ctx.sql("SELECT @name, @count");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
         VectorSchemaRoot result = stream.getVectorSchemaRoot();
-        assertEquals(1, result.getRowCount());
-        VarCharVector nameCol = (VarCharVector) result.getVector(0);
-        assertEquals("Alice", nameCol.getObject(0).toString());
-        IntVector countCol = (IntVector) result.getVector(1);
-        assertEquals(42, countCol.get(0));
+        String nameCol = result.getVector(0).getField().getName();
+        String countCol = result.getVector(1).getField().getName();
+        expect(nameCol, countCol).row("Alice", 42).assertMatches(stream);
       }
     }
   }
@@ -665,11 +568,9 @@ public class SessionContextTest {
 
       try (DataFrame df = ctx.sql("SELECT @@version");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
         VectorSchemaRoot result = stream.getVectorSchemaRoot();
-        assertEquals(1, result.getRowCount());
-        VarCharVector col = (VarCharVector) result.getVector(0);
-        assertEquals("1.0.0", col.getObject(0).toString());
+        String colName = result.getVector(0).getField().getName();
+        expect(colName).row("1.0.0").assertMatches(stream);
       }
     }
   }
@@ -711,12 +612,7 @@ public class SessionContextTest {
       // Query using the variable in WHERE clause
       try (DataFrame df = ctx.sql("SELECT id FROM test WHERE id > @threshold ORDER BY id");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot result = stream.getVectorSchemaRoot();
-        assertEquals(2, result.getRowCount());
-        IntVector idResult = (IntVector) result.getVector("id");
-        assertEquals(3, idResult.get(0));
-        assertEquals(4, idResult.get(1));
+        expect("id").row(3).row(4).assertMatches(stream);
       }
     }
   }
