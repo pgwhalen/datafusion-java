@@ -8,5 +8,7 @@ mod plan;
 mod schema;
 mod stream;
 mod table;
+mod udaf;
 mod udf;
+mod udf_common;
 mod var_provider;

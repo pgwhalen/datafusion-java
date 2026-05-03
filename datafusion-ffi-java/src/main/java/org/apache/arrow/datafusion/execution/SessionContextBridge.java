@@ -10,6 +10,7 @@ import java.util.Optional;
 import org.apache.arrow.c.ArrowArray;
 import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
+import org.apache.arrow.datafusion.DfAggregateUDFAdapter;
 import org.apache.arrow.datafusion.DfCatalogAdapter;
 import org.apache.arrow.datafusion.DfFileFormatAdapter;
 import org.apache.arrow.datafusion.DfScalarUDFAdapter;
@@ -38,6 +39,7 @@ import org.apache.arrow.datafusion.generated.DfSessionContext;
 import org.apache.arrow.datafusion.generated.DfSessionState;
 import org.apache.arrow.datafusion.generated.DfStringArray;
 import org.apache.arrow.datafusion.generated.DfVarType;
+import org.apache.arrow.datafusion.logical_expr.AggregateUDF;
 import org.apache.arrow.datafusion.logical_expr.Expr;
 import org.apache.arrow.datafusion.logical_expr.ScalarUDF;
 import org.apache.arrow.memory.BufferAllocator;
@@ -280,6 +282,20 @@ public final class SessionContextBridge implements AutoCloseable {
       throw new NativeDataFusionError(e);
     } catch (Exception e) {
       throw new DataFusionError("Failed to register UDF", e);
+    }
+  }
+
+  void registerUdaf(AggregateUDF udaf, BufferAllocator allocator) {
+    try {
+      DfAggregateUDFAdapter adapter =
+          new DfAggregateUDFAdapter(udaf, allocator, config.fullStackTrace());
+      traitImpls.add(adapter);
+      dfCtx.registerUdaf(adapter);
+      logger.debug("Registered UDAF '{}'", udaf.name());
+    } catch (DfError e) {
+      throw new NativeDataFusionError(e);
+    } catch (Exception e) {
+      throw new DataFusionError("Failed to register UDAF", e);
     }
   }
 

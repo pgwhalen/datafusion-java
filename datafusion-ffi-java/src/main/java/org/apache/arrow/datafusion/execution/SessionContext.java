@@ -15,6 +15,7 @@ import org.apache.arrow.datafusion.datasource.FileFormat;
 import org.apache.arrow.datafusion.datasource.ListingTable;
 import org.apache.arrow.datafusion.datasource.NdJsonReadOptions;
 import org.apache.arrow.datafusion.datasource.ParquetReadOptions;
+import org.apache.arrow.datafusion.logical_expr.AggregateUDF;
 import org.apache.arrow.datafusion.logical_expr.Expr;
 import org.apache.arrow.datafusion.logical_expr.LogicalPlan;
 import org.apache.arrow.datafusion.logical_expr.ScalarUDF;
@@ -363,6 +364,36 @@ public class SessionContext implements AutoCloseable {
   public void registerUdf(ScalarUDF udf, BufferAllocator allocator) {
     checkNotClosed();
     bridge.registerUdf(udf, allocator);
+  }
+
+  /**
+   * Registers an aggregate UDF with the session context.
+   *
+   * <p>Once registered, the UDAF can be used in SQL queries by name. For example:
+   *
+   * {@snippet :
+   * AggregateUDF mySum = new AggregateUDF() {
+   *     public String name() { return "my_sum"; }
+   *     public Signature signature() { return new Signature(Volatility.IMMUTABLE); }
+   *     public Field returnField(List<Field> argFields) {
+   *         return Field.nullable("my_sum", new ArrowType.Int(64, true));
+   *     }
+   *     public Accumulator createAccumulator() { return new MySumAccumulator(); }
+   * };
+   * ctx.registerUdaf(mySum, allocator);
+   * DataFrame result = ctx.sql("SELECT my_sum(value) FROM t GROUP BY key");
+   * }
+   *
+   * @param udaf The aggregate UDF implementation
+   * @param allocator The buffer allocator to use for Arrow data transfers
+   * @throws DataFusionError if registration fails
+   * @see <a
+   *     href="https://docs.rs/datafusion/52.1.0/datafusion/execution/context/struct.SessionContext.html#method.register_udaf">Rust
+   *     DataFusion: SessionContext::register_udaf</a>
+   */
+  public void registerUdaf(AggregateUDF udaf, BufferAllocator allocator) {
+    checkNotClosed();
+    bridge.registerUdaf(udaf, allocator);
   }
 
   /**

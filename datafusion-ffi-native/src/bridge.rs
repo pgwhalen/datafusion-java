@@ -239,6 +239,107 @@ pub mod ffi {
         ) -> i32;
     }
 
+    // -- Aggregate UDF --
+
+    /// Aggregate UDF trait: user-defined aggregate function callbacks.
+    /// A single trait handles both UDAF metadata and accumulator operations.
+    /// Accumulator instances are tracked by ID on the Java side.
+    pub trait DfAggregateUdfTrait {
+        /// Write function name to buf at buf_addr (cap buf_cap). Returns bytes written.
+        fn name_to(&self, buf_addr: usize, buf_cap: usize) -> i64;
+        /// Returns volatility: 0=Immutable, 1=Stable, 2=Volatile.
+        fn volatility(&self) -> i32;
+        /// Compute return field from arg types. Writes FFI_ArrowSchema to out_schema_addr.
+        fn return_field(
+            &self,
+            arg_types_addr: usize,
+            arg_types_len: usize,
+            out_schema_addr: usize,
+            error_addr: usize,
+            error_cap: usize,
+        ) -> i32;
+        /// Return the number of state fields (so Rust can size the result buffer).
+        /// return_field_addr points to FFI_ArrowSchema for the return field.
+        /// Returns count, or negative on error.
+        fn state_fields_count(
+            &self,
+            return_field_addr: usize,
+            error_addr: usize,
+            error_cap: usize,
+        ) -> i32;
+        /// Return state fields. Writes FFI_ArrowSchema array to result_addr.
+        /// return_field_addr points to FFI_ArrowSchema for the return field.
+        /// result_cap must equal the value returned by state_fields_count.
+        /// Returns count of fields written, or negative on error.
+        fn state_fields(
+            &self,
+            return_field_addr: usize,
+            result_addr: usize,
+            result_cap: usize,
+            error_addr: usize,
+            error_cap: usize,
+        ) -> i32;
+        /// Coerce argument types. Returns count written, or negative on error.
+        fn coerce_types(
+            &self,
+            arg_types_addr: usize,
+            arg_types_len: usize,
+            result_addr: usize,
+            result_cap: usize,
+            error_addr: usize,
+            error_cap: usize,
+        ) -> i32;
+        /// Create a new accumulator instance. Returns accumulator ID (>0), or negative on error.
+        fn accumulator_create(
+            &self,
+            error_addr: usize,
+            error_cap: usize,
+        ) -> i64;
+        /// Update accumulator with input arrays (FFI_ArrowArray+FFI_ArrowSchema pairs).
+        fn accumulator_update(
+            &self,
+            acc_id: i64,
+            args_addr: usize,
+            num_args: usize,
+            error_addr: usize,
+            error_cap: usize,
+        ) -> i32;
+        /// Evaluate accumulator. Returns DfExprBytes raw ptr with proto ScalarValue, or 0 on error.
+        fn accumulator_evaluate(
+            &self,
+            acc_id: i64,
+            error_addr: usize,
+            error_cap: usize,
+        ) -> usize;
+        /// Return accumulator state as length-prefixed proto ScalarValue list.
+        /// Returns DfExprBytes raw ptr, or 0 on error.
+        fn accumulator_state(
+            &self,
+            acc_id: i64,
+            error_addr: usize,
+            error_cap: usize,
+        ) -> usize;
+        /// Merge accumulator with state arrays (FFI_ArrowArray+FFI_ArrowSchema pairs).
+        fn accumulator_merge(
+            &self,
+            acc_id: i64,
+            states_addr: usize,
+            num_states: usize,
+            error_addr: usize,
+            error_cap: usize,
+        ) -> i32;
+        /// Return accumulator memory size in bytes.
+        fn accumulator_size(
+            &self,
+            acc_id: i64,
+        ) -> usize;
+        /// Drop/destroy an accumulator instance.
+        fn accumulator_drop(
+            &self,
+            acc_id: i64,
+        );
+    }
+
     // -- File format chain --
 
     /// File format trait: creates file sources.
@@ -1861,6 +1962,18 @@ pub mod ffi {
             let scalar_udf =
                 datafusion::logical_expr::ScalarUDF::new_from_impl(foreign);
             self.ctx.register_udf(scalar_udf);
+            Ok(())
+        }
+
+        /// Register an aggregate UDF backed by a Java-implemented DfAggregateUdfTrait.
+        pub fn register_udaf(
+            &self,
+            udaf: impl DfAggregateUdfTrait + 'static,
+        ) -> Result<(), Box<DfError>> {
+            let foreign = crate::udaf::ForeignDfUdaf::new(udaf);
+            let aggregate_udf =
+                datafusion::logical_expr::AggregateUDF::new_from_impl(foreign);
+            self.ctx.register_udaf(aggregate_udf);
             Ok(())
         }
 

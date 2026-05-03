@@ -144,6 +144,31 @@ Adapter methods write error strings to Rust-provided buffers using `Errors.write
 }
 ```
 
+### No Custom Byte Encoding
+
+**NEVER invent ad-hoc binary wire formats** (length-prefixed lists, hand-rolled tag/value layouts, custom struct packing) to move data across the FFI boundary. This produces fragile parsers on both sides, bypasses Diplomat's type system, and the meaning of the bytes is only conveyed by comments.
+
+#### Bad: hand-rolled length-prefixed encoding
+
+```rust
+// DON'T do this — wire format documented only in a comment
+// Wire format: `[count:4 LE][len:4 LE][proto_bytes]...`
+fn decode_scalar_value_list(bytes: &[u8]) -> DFResult<Vec<ScalarValue>> {
+    let count = u32::from_le_bytes(bytes[0..4].try_into().unwrap()) as usize;
+    let mut offset = 4;
+    // ... manual offset arithmetic, truncation checks, etc.
+}
+```
+
+#### Good: use existing typed mechanisms
+
+Pick the right tool for the data:
+- **Lists of Diplomat opaques** — return a `Df*Array` opaque (see `DfStringArray` pattern) or have Java call back to fetch by index
+- **Structured values (single or list)** — serialize with the existing protobuf codec (`encode_exprs`, `ScalarValueProtoConverter`, etc.) and pass the bytes as a single `&[u8]` slice
+- **Repeated callbacks** — define a Diplomat trait method that Rust calls once per element
+
+If none of those fit, add a new Diplomat opaque or trait rather than inventing a byte layout.
+
 ### Proto Byte Passing
 
 Expressions are serialized as protobuf bytes (`LogicalExprList`) and passed as `&[u8]` Diplomat slices. The `DfExprBytes` opaque wraps `Vec<u8>` for returning bytes from Rust.
