@@ -1,22 +1,20 @@
 package org.apache.arrow.datafusion;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.apache.arrow.datafusion.testutil.VectorSchemaRootAssert.expect;
 
 import java.io.FileOutputStream;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.apache.arrow.compression.CommonsCompressionFactory;
+import org.apache.arrow.datafusion.testutil.VectorSchemaRootAssert;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.FieldVector;
-import org.apache.arrow.vector.VarCharVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.compression.CompressionCodec;
 import org.apache.arrow.vector.compression.CompressionUtil;
@@ -163,19 +161,14 @@ public class TestListingTable {
         context.registerTable("test", listingTable);
         try (ArrowReader reader =
             context
-                .sql("SELECT x FROM test")
+                .sql("SELECT x FROM test ORDER BY x")
                 .thenComposeAsync(df -> df.collect(allocator))
                 .join()) {
-
-          int globalRow = 0;
-          VectorSchemaRoot root = reader.getVectorSchemaRoot();
-          while (reader.loadNextBatch()) {
-            BigIntVector xValues = (BigIntVector) root.getVector(0);
-            for (int row = 0; row < root.getRowCount(); ++row, ++globalRow) {
-              assertEquals(globalRow * 2 + 1, xValues.get(row));
-            }
+          VectorSchemaRootAssert assertion = expect("x");
+          for (int i = 0; i < numRows; i++) {
+            assertion.row((long) (i * 2 + 1));
           }
-          assertEquals(numRows, globalRow);
+          assertion.assertMatches(reader);
         }
       }
     }
@@ -291,18 +284,7 @@ public class TestListingTable {
             .sql("SELECT y FROM test WHERE x = 3 ORDER BY y")
             .thenComposeAsync(df -> df.collect(allocator))
             .join()) {
-
-      long[] expectedResults = {4, 14};
-      int globalRow = 0;
-      VectorSchemaRoot root = reader.getVectorSchemaRoot();
-      while (reader.loadNextBatch()) {
-        BigIntVector yValues = (BigIntVector) root.getVector(0);
-        for (int row = 0; row < root.getRowCount(); ++row, ++globalRow) {
-          assertTrue(globalRow < expectedResults.length);
-          assertEquals(expectedResults[globalRow], yValues.get(row));
-        }
-      }
-      assertEquals(expectedResults.length, globalRow);
+      expect("y").row(4L).row(14L).assertMatches(reader);
     }
   }
 
@@ -371,23 +353,7 @@ public class TestListingTable {
                     "SELECT id,text FROM test WHERE ID IN (2, 3, 4) AND timestamp < '2023-01-01T00:00:00Z' ORDER BY id")
                 .thenComposeAsync(df -> df.collect(allocator))
                 .join()) {
-
-          Long[] expectedIds = {2L, 3L};
-          String[] expectedText = {"Text2", "Text3"};
-          List<Long> actualIds = new ArrayList<>();
-          List<String> actualText = new ArrayList<>();
-          int globalRow = 0;
-          VectorSchemaRoot root = reader.getVectorSchemaRoot();
-          while (reader.loadNextBatch()) {
-            BigIntVector idValues = (BigIntVector) root.getVector(0);
-            VarCharVector textValues = (VarCharVector) root.getVector(1);
-            for (int row = 0; row < root.getRowCount(); ++row, ++globalRow) {
-              actualIds.add(idValues.get(row));
-              actualText.add(new String(textValues.get(row), StandardCharsets.UTF_8));
-            }
-          }
-          assertArrayEquals(expectedIds, actualIds.toArray(new Long[0]));
-          assertArrayEquals(expectedText, actualText.toArray(new String[0]));
+          expect("id", "text").row(2L, "Text2").row(3L, "Text3").assertMatches(reader);
         }
       }
     }

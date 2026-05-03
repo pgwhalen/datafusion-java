@@ -347,6 +347,23 @@ javadoc {
     }
 }
 
+// Test JAR exposing the testutil helpers (e.g. VectorSchemaRootAssert) so that
+// the deprecated datafusion-java module's tests can reuse them. Wired through
+// the testArtifacts configuration; not published.
+configurations {
+    testArtifacts
+}
+
+tasks.register('testJar', Jar) {
+    archiveClassifier = 'tests'
+    from sourceSets.test.output
+    dependsOn testClasses
+}
+
+artifacts {
+    testArtifacts tasks.testJar
+}
+
 // JAR with only the local platform's native library (for development)
 tasks.register('jarWithLocalLib', Jar) {
     dependsOn copyReleaseLibraryForJar, classes

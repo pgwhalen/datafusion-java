@@ -1,6 +1,6 @@
 package org.apache.arrow.datafusion;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.apache.arrow.datafusion.testutil.VectorSchemaRootAssert.expect;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -11,8 +11,6 @@ import java.util.Arrays;
 import java.util.List;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
-import org.apache.arrow.vector.BigIntVector;
-import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.ipc.ArrowReader;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -110,15 +108,7 @@ public class TestQuery {
             .sql("SELECT y FROM test WHERE x = 3")
             .thenComposeAsync(df -> df.collect(allocator))
             .join()) {
-
-      VectorSchemaRoot root = reader.getVectorSchemaRoot();
-      assertTrue(reader.loadNextBatch());
-
-      assertEquals(1, root.getRowCount());
-      BigIntVector yValues = (BigIntVector) root.getVector(0);
-      assertEquals(4, yValues.get(0));
-
-      assertFalse(reader.loadNextBatch());
+      expect("y").row(4L).assertMatches(reader);
     }
   }
 }
