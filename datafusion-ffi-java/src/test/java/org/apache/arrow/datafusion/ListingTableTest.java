@@ -1,5 +1,6 @@
 package org.apache.arrow.datafusion;
 
+import static org.apache.arrow.datafusion.testutil.VectorSchemaRootAssert.expect;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.IOException;
@@ -8,9 +9,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import org.apache.arrow.datafusion.config.ConfigOptions;
 import org.apache.arrow.datafusion.config.ExecutionOptions;
@@ -285,29 +284,11 @@ public class ListingTableTest {
 
         try (DataFrame df = ctx.sql("SELECT id, name, value FROM tsv_data ORDER BY id");
             SendableRecordBatchStream stream = df.executeStream(allocator)) {
-
-          VectorSchemaRoot root = stream.getVectorSchemaRoot();
-
-          assertTrue(stream.loadNextBatch());
-          assertEquals(3, root.getRowCount());
-
-          BigIntVector idVector = (BigIntVector) root.getVector("id");
-          VarCharVector nameVector = (VarCharVector) root.getVector("name");
-          BigIntVector valueVector = (BigIntVector) root.getVector("value");
-
-          assertEquals(1, idVector.get(0));
-          assertEquals("Alice", new String(nameVector.get(0)));
-          assertEquals(100, valueVector.get(0));
-
-          assertEquals(2, idVector.get(1));
-          assertEquals("Bob", new String(nameVector.get(1)));
-          assertEquals(200, valueVector.get(1));
-
-          assertEquals(3, idVector.get(2));
-          assertEquals("Charlie", new String(nameVector.get(2)));
-          assertEquals(300, valueVector.get(2));
-
-          assertFalse(stream.loadNextBatch());
+          expect("id", "name", "value")
+              .row(1L, "Alice", 100L)
+              .row(2L, "Bob", 200L)
+              .row(3L, "Charlie", 300L)
+              .assertMatches(stream);
         }
       }
 
@@ -342,24 +323,12 @@ public class ListingTableTest {
 
         try (DataFrame df = ctx.sql("SELECT id, name FROM multi_data ORDER BY id");
             SendableRecordBatchStream stream = df.executeStream(allocator)) {
-
-          VectorSchemaRoot root = stream.getVectorSchemaRoot();
-
-          // Collect all rows across batches
-          Set<Long> allIds = new HashSet<>();
-          int totalRows = 0;
-
-          while (stream.loadNextBatch()) {
-            int rowCount = root.getRowCount();
-            totalRows += rowCount;
-            BigIntVector idVector = (BigIntVector) root.getVector("id");
-            for (int i = 0; i < rowCount; i++) {
-              allIds.add(idVector.get(i));
-            }
-          }
-
-          assertEquals(4, totalRows, "Should have 4 total rows from 2 files");
-          assertEquals(Set.of(1L, 2L, 3L, 4L), allIds, "Should have ids 1-4");
+          expect("id", "name")
+              .row(1L, "Alice")
+              .row(2L, "Bob")
+              .row(3L, "Charlie")
+              .row(4L, "Dave")
+              .assertMatches(stream);
         }
       }
 
@@ -403,23 +372,12 @@ public class ListingTableTest {
 
         try (DataFrame df = ctx.sql("SELECT id, name FROM multi_path_data ORDER BY id");
             SendableRecordBatchStream stream = df.executeStream(allocator)) {
-
-          VectorSchemaRoot root = stream.getVectorSchemaRoot();
-
-          Set<Long> allIds = new HashSet<>();
-          int totalRows = 0;
-
-          while (stream.loadNextBatch()) {
-            int rowCount = root.getRowCount();
-            totalRows += rowCount;
-            BigIntVector idVector = (BigIntVector) root.getVector("id");
-            for (int i = 0; i < rowCount; i++) {
-              allIds.add(idVector.get(i));
-            }
-          }
-
-          assertEquals(4, totalRows, "Should have 4 total rows from 2 directories");
-          assertEquals(Set.of(1L, 2L, 3L, 4L), allIds, "Should have ids 1-4");
+          expect("id", "name")
+              .row(1L, "Alice")
+              .row(2L, "Bob")
+              .row(3L, "Charlie")
+              .row(4L, "Dave")
+              .assertMatches(stream);
         }
       }
 
@@ -713,9 +671,7 @@ public class ListingTableTest {
         // without crashes verifies the string was correctly transmitted.
         try (DataFrame df = ctx.sql("SELECT id, name FROM custom_type_data");
             SendableRecordBatchStream stream = df.executeStream(allocator)) {
-          assertTrue(stream.loadNextBatch());
-          assertEquals(1, stream.getVectorSchemaRoot().getRowCount());
-          assertFalse(stream.loadNextBatch());
+          expect("id", "name").row(1L, "Alice").assertMatches(stream);
         }
       }
 

@@ -1,14 +1,12 @@
 package org.apache.arrow.datafusion.providers.flight;
 
 import static org.apache.arrow.datafusion.providers.ProviderTestSupport.readPhysicalPlan;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.apache.arrow.datafusion.testutil.VectorSchemaRootAssert.expect;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
 import java.util.List;
 import org.apache.arrow.c.ArrowArray;
 import org.apache.arrow.c.ArrowSchema;
@@ -132,11 +130,10 @@ class FlightSqlFederationTest {
             usersVep.contains("amount"),
             "users_remote base_sql should not reference the amount column:\n" + usersVep);
 
-        List<String[]> rows = collectNameAmount(ctx, query, allocator);
-        assertEquals(2, rows.size(), "expected two joined rows");
-        rows.sort(Comparator.comparing(r -> r[0]));
-        assertArrayEqualsStr(new String[] {"Alice", "150"}, rows.get(0));
-        assertArrayEqualsStr(new String[] {"Bob", "200"}, rows.get(1));
+        try (DataFrame df = ctx.sql(query);
+            SendableRecordBatchStream stream = df.executeStream(allocator)) {
+          expect("name", "amount").row("Alice", 150).row("Bob", 200).assertMatches(stream);
+        }
 
         // Corroborate pushdown at the wire level: inspect the SQL each test server received.
         List<String> ordersSql = toList(ordersServer.receivedSql());
@@ -207,28 +204,5 @@ class FlightSqlFederationTest {
       String physical = readPhysicalPlan(stream);
       return physical == null ? "" : physical;
     }
-  }
-
-  private static List<String[]> collectNameAmount(
-      SessionContext ctx, String sql, BufferAllocator allocator) {
-    List<String[]> all = new ArrayList<>();
-    try (DataFrame df = ctx.sql(sql);
-        SendableRecordBatchStream stream = df.executeStream(allocator)) {
-      while (stream.loadNextBatch()) {
-        VectorSchemaRoot r = stream.getVectorSchemaRoot();
-        VarCharVector name = (VarCharVector) r.getVector("name");
-        IntVector amount = (IntVector) r.getVector("amount");
-        for (int i = 0; i < r.getRowCount(); i++) {
-          all.add(new String[] {name.getObject(i).toString(), Integer.toString(amount.get(i))});
-        }
-      }
-    }
-    return all;
-  }
-
-  private static void assertArrayEqualsStr(String[] expected, String[] actual) {
-    assertTrue(
-        Arrays.equals(expected, actual),
-        "expected=" + Arrays.toString(expected) + " actual=" + Arrays.toString(actual));
   }
 }

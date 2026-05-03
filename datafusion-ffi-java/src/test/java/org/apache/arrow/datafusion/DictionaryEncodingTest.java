@@ -1,6 +1,6 @@
 package org.apache.arrow.datafusion;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.apache.arrow.datafusion.testutil.VectorSchemaRootAssert.expect;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -10,7 +10,6 @@ import org.apache.arrow.datafusion.physical_plan.SendableRecordBatchStream;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.BigIntVector;
-import org.apache.arrow.vector.FieldVector;
 import org.apache.arrow.vector.IntVector;
 import org.apache.arrow.vector.VarCharVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
@@ -88,71 +87,22 @@ public class DictionaryEncodingTest {
       // Register table with dictionary provider
       ctx.registerBatch("fruits", root, provider, allocator);
 
-      // Query the table - DataFusion should handle the dictionary-encoded data
+      // Query the table - DataFusion should handle the dictionary-encoded data.
+      // The DSL auto-decodes dictionary-encoded VarChar columns via the stream's
+      // DictionaryProvider, so we assert against the decoded string values directly.
       try (DataFrame df = ctx.sql("SELECT id, fruit FROM fruits ORDER BY id");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-
-        VectorSchemaRoot result = stream.getVectorSchemaRoot();
-
-        assertTrue(stream.loadNextBatch());
-        assertEquals(5, result.getRowCount());
-
-        BigIntVector resultId = (BigIntVector) result.getVector("id");
-        FieldVector fruitVector = result.getVector("fruit");
-
-        // Verify the data came through correctly
-        assertEquals(1, resultId.get(0));
-        assertEquals(2, resultId.get(1));
-        assertEquals(3, resultId.get(2));
-        assertEquals(4, resultId.get(3));
-        assertEquals(5, resultId.get(4));
-
-        // The fruit vector may be dictionary-encoded - decode it if necessary
-        DictionaryEncoding dictEncoding = fruitVector.getField().getDictionary();
-        String[] fruitValues = new String[5];
-        if (dictEncoding != null) {
-          // Vector is dictionary-encoded - decode using the stream's dictionary provider
-          long dictId = dictEncoding.getId();
-          Dictionary dict = stream.lookup(dictId);
-          assertNotNull(dict, "Dictionary with ID " + dictId + " should exist in provider");
-
-          try (VarCharVector decoded =
-              (VarCharVector) DictionaryEncoder.decode(fruitVector, dict)) {
-            for (int i = 0; i < 5; i++) {
-              fruitValues[i] = new String(decoded.get(i), StandardCharsets.UTF_8);
-            }
-          }
-        } else {
-          // Vector is already decoded
-          for (int i = 0; i < 5; i++) {
-            fruitValues[i] = getStringValue(fruitVector, i);
-          }
-        }
-
-        assertEquals("apple", fruitValues[0]);
-        assertEquals("banana", fruitValues[1]);
-        assertEquals("apple", fruitValues[2]);
-        assertEquals("cherry", fruitValues[3]);
-        assertEquals("banana", fruitValues[4]);
-
-        assertFalse(stream.loadNextBatch());
+        expect("id", "fruit")
+            .row(1L, "apple")
+            .row(2L, "banana")
+            .row(3L, "apple")
+            .row(4L, "cherry")
+            .row(5L, "banana")
+            .assertMatches(stream);
       }
 
       root.close();
       dictVector.close();
-    }
-  }
-
-  /** Helper to extract string value from a vector that may be dictionary-encoded */
-  private String getStringValue(FieldVector vector, int index) {
-    if (vector instanceof VarCharVector) {
-      return new String(((VarCharVector) vector).get(index));
-    } else {
-      Object value = vector.getObject(index);
-      if (value instanceof byte[]) {
-        return new String((byte[]) value);
-      }
-      return value.toString();
     }
   }
 }

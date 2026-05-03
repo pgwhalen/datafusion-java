@@ -1,6 +1,7 @@
 package org.apache.arrow.datafusion;
 
 import static org.apache.arrow.datafusion.Functions.*;
+import static org.apache.arrow.datafusion.testutil.VectorSchemaRootAssert.expect;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.Arrays;
@@ -16,7 +17,6 @@ import org.apache.arrow.datafusion.physical_plan.SendableRecordBatchStream;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.BigIntVector;
-import org.apache.arrow.vector.VarCharVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.Field;
@@ -39,13 +39,7 @@ public class LogicalPlanBuilderTest {
           LogicalPlan builtPlan = LogicalPlanBuilder.from(sqlPlan, ctx).build();
           DataFrame df = ctx.executeLogicalPlan(builtPlan);
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(3, root.getRowCount());
-        BigIntVector xCol = (BigIntVector) root.getVector("x");
-        assertEquals(1, xCol.get(0));
-        assertEquals(2, xCol.get(1));
-        assertEquals(3, xCol.get(2));
+        expect("x", "y").row(1L, 10L).row(2L, 20L).row(3L, 30L).assertMatches(stream);
       }
     }
   }
@@ -62,13 +56,7 @@ public class LogicalPlanBuilderTest {
               LogicalPlanBuilder.from(tablePlan, ctx).project(List.of(col("x"))).build();
           DataFrame df = ctx.executeLogicalPlan(plan);
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(3, root.getRowCount());
-        assertEquals(1, root.getSchema().getFields().size());
-        assertEquals("x", root.getSchema().getFields().get(0).getName());
-        BigIntVector xCol = (BigIntVector) root.getVector("x");
-        assertNotNull(xCol);
+        expect("x").row(1L).row(2L).row(3L).unordered().assertMatches(stream);
       }
     }
   }
@@ -106,12 +94,7 @@ public class LogicalPlanBuilderTest {
               LogicalPlanBuilder.from(tablePlan, ctx).filter(col("x").gt(lit(1))).build();
           DataFrame df = ctx.executeLogicalPlan(plan);
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(2, root.getRowCount());
-        BigIntVector xCol = (BigIntVector) root.getVector("x");
-        assertEquals(2, xCol.get(0));
-        assertEquals(3, xCol.get(1));
+        expect("x", "y").row(2L, 20L).row(3L, 30L).unordered().assertMatches(stream);
       }
     }
   }
@@ -130,14 +113,8 @@ public class LogicalPlanBuilderTest {
                   .build();
           DataFrame df = ctx.executeLogicalPlan(plan);
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(3, root.getRowCount());
-        BigIntVector xCol = (BigIntVector) root.getVector("x");
         // Sorted descending
-        assertEquals(3, xCol.get(0));
-        assertEquals(2, xCol.get(1));
-        assertEquals(1, xCol.get(2));
+        expect("x", "y").row(3L, 30L).row(2L, 20L).row(1L, 10L).assertMatches(stream);
       }
     }
   }
@@ -156,12 +133,7 @@ public class LogicalPlanBuilderTest {
                   .build();
           DataFrame df = ctx.executeLogicalPlan(plan);
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        BigIntVector xCol = (BigIntVector) root.getVector("x");
-        assertEquals(1, xCol.get(0));
-        assertEquals(2, xCol.get(1));
-        assertEquals(3, xCol.get(2));
+        expect("x", "y").row(1L, 10L).row(2L, 20L).row(3L, 30L).assertMatches(stream);
       }
     }
   }
@@ -177,11 +149,7 @@ public class LogicalPlanBuilderTest {
           LogicalPlan plan = LogicalPlanBuilder.from(tablePlan, ctx).limit(1, 1).build();
           DataFrame df = ctx.executeLogicalPlan(plan);
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(1, root.getRowCount());
-        BigIntVector xCol = (BigIntVector) root.getVector("x");
-        assertEquals(2, xCol.get(0));
+        expect("x", "y").row(2L, 20L).assertMatches(stream);
       }
     }
   }
@@ -200,11 +168,7 @@ public class LogicalPlanBuilderTest {
                   .build();
           DataFrame df = ctx.executeLogicalPlan(plan);
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(1, root.getRowCount());
-        BigIntVector sumCol = (BigIntVector) root.getVector(0);
-        assertEquals(6, sumCol.get(0));
+        expect("sum(test_table.x)").row(6L).assertMatches(stream);
       }
     }
   }
@@ -237,12 +201,7 @@ public class LogicalPlanBuilderTest {
                   .build();
           DataFrame df = ctx.executeLogicalPlan(plan);
           SendableRecordBatchStream stream = df.collect(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot result = stream.getVectorSchemaRoot();
-        assertEquals(2, result.getRowCount());
-        BigIntVector vCol = (BigIntVector) result.getVector("v");
-        assertEquals(1, vCol.get(0));
-        assertEquals(2, vCol.get(1));
+        expect("v").row(1L).row(2L).assertMatches(stream);
       }
 
       root.close();
@@ -266,13 +225,8 @@ public class LogicalPlanBuilderTest {
                   .build();
           DataFrame df = ctx.executeLogicalPlan(plan);
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot result = stream.getVectorSchemaRoot();
         // test_table has x=1,2,3; test_table2 has a=2,3,4; inner join matches 2,3
-        assertEquals(2, result.getRowCount());
-        BigIntVector xCol = (BigIntVector) result.getVector("x");
-        assertEquals(2, xCol.get(0));
-        assertEquals(3, xCol.get(1));
+        expect("x", "a").row(2L, 2L).row(3L, 3L).allowExtraColumns().assertMatches(stream);
       }
     }
   }
@@ -290,17 +244,19 @@ public class LogicalPlanBuilderTest {
           LogicalPlan plan = LogicalPlanBuilder.from(leftPlan, ctx).crossJoin(rightPlan).build();
           DataFrame df = ctx.executeLogicalPlan(plan);
           SendableRecordBatchStream stream = df.collect(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot result = stream.getVectorSchemaRoot();
-        // Cross join: count all rows across batches
-        int totalRows = result.getRowCount();
-        // Verify both columns exist
-        assertNotNull(result.getVector("x"));
-        assertNotNull(result.getVector("a"));
-        while (stream.loadNextBatch()) {
-          totalRows += stream.getVectorSchemaRoot().getRowCount();
-        }
-        assertEquals(9, totalRows);
+        // Cross join: test_table.x={1,2,3} × test_table2.a={2,3,4} = 9 rows
+        expect("x", "a")
+            .row(1L, 2L)
+            .row(1L, 3L)
+            .row(1L, 4L)
+            .row(2L, 2L)
+            .row(2L, 3L)
+            .row(2L, 4L)
+            .row(3L, 2L)
+            .row(3L, 3L)
+            .row(3L, 4L)
+            .unordered()
+            .assertMatches(stream);
       }
     }
   }
@@ -321,15 +277,8 @@ public class LogicalPlanBuilderTest {
                   .build();
           DataFrame df = ctx.executeLogicalPlan(plan);
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot result = stream.getVectorSchemaRoot();
         // Union ALL: x=1,2 + x=2,3 = 4 rows
-        assertEquals(4, result.getRowCount());
-        BigIntVector xCol = (BigIntVector) result.getVector("x");
-        assertEquals(1, xCol.get(0));
-        assertEquals(2, xCol.get(1));
-        assertEquals(2, xCol.get(2));
-        assertEquals(3, xCol.get(3));
+        expect("x").row(1L).row(2L).row(2L).row(3L).assertMatches(stream);
       }
     }
   }
@@ -350,14 +299,8 @@ public class LogicalPlanBuilderTest {
                   .build();
           DataFrame df = ctx.executeLogicalPlan(plan);
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot result = stream.getVectorSchemaRoot();
         // Union DISTINCT: {1,2} U {2,3} = {1,2,3}
-        assertEquals(3, result.getRowCount());
-        BigIntVector xCol = (BigIntVector) result.getVector("x");
-        assertEquals(1, xCol.get(0));
-        assertEquals(2, xCol.get(1));
-        assertEquals(3, xCol.get(2));
+        expect("x").row(1L).row(2L).row(3L).assertMatches(stream);
       }
     }
   }
@@ -374,11 +317,7 @@ public class LogicalPlanBuilderTest {
           LogicalPlan plan = LogicalPlanBuilder.intersect(plan1, plan2, false);
           DataFrame df = ctx.executeLogicalPlan(plan);
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot result = stream.getVectorSchemaRoot();
-        assertEquals(1, result.getRowCount());
-        BigIntVector xCol = (BigIntVector) result.getVector("x");
-        assertEquals(2, xCol.get(0));
+        expect("x").row(2L).assertMatches(stream);
       }
     }
   }
@@ -395,11 +334,7 @@ public class LogicalPlanBuilderTest {
           LogicalPlan plan = LogicalPlanBuilder.except(plan1, plan2, false);
           DataFrame df = ctx.executeLogicalPlan(plan);
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot result = stream.getVectorSchemaRoot();
-        assertEquals(1, result.getRowCount());
-        BigIntVector xCol = (BigIntVector) result.getVector("x");
-        assertEquals(1, xCol.get(0));
+        expect("x").row(1L).assertMatches(stream);
       }
     }
   }
@@ -415,11 +350,7 @@ public class LogicalPlanBuilderTest {
           LogicalPlan plan = LogicalPlanBuilder.from(tablePlan, ctx).alias("my_alias").build();
           DataFrame df = ctx.executeLogicalPlan(plan);
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(3, root.getRowCount());
-        BigIntVector xCol = (BigIntVector) root.getVector("x");
-        assertEquals(1, xCol.get(0));
+        expect("x").row(1L).row(2L).row(3L).assertMatches(stream);
       }
     }
   }
@@ -437,15 +368,10 @@ public class LogicalPlanBuilderTest {
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
         assertTrue(stream.loadNextBatch());
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
+        // Explain output is plan-text dependent, so only verify shape.
         assertTrue(root.getRowCount() > 0);
-        // Explain produces "plan_type" and "plan" columns
-        VarCharVector planTypeCol = (VarCharVector) root.getVector("plan_type");
-        VarCharVector planCol = (VarCharVector) root.getVector("plan");
-        assertNotNull(planTypeCol);
-        assertNotNull(planCol);
-        // At least one row should have content
-        assertNotNull(new String(planTypeCol.get(0)));
-        assertNotNull(new String(planCol.get(0)));
+        assertNotNull(root.getVector("plan_type"));
+        assertNotNull(root.getVector("plan"));
       }
     }
   }
@@ -487,11 +413,7 @@ public class LogicalPlanBuilderTest {
                   .build();
           DataFrame df = ctx.executeLogicalPlan(plan);
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot result = stream.getVectorSchemaRoot();
-        assertEquals(1, result.getRowCount());
-        BigIntVector grpCol = (BigIntVector) result.getVector("grp");
-        assertEquals(1, grpCol.get(0));
+        expect("grp").row(1L).allowExtraColumns().assertMatches(stream);
       }
 
       root.close();
@@ -515,13 +437,7 @@ public class LogicalPlanBuilderTest {
                   .build();
           DataFrame df = ctx.executeLogicalPlan(plan);
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot result = stream.getVectorSchemaRoot();
-        assertEquals(1, result.getRowCount());
-        BigIntVector xCol = (BigIntVector) result.getVector("x");
-        assertEquals(3, xCol.get(0));
-        BigIntVector yCol = (BigIntVector) result.getVector("y");
-        assertEquals(30, yCol.get(0));
+        expect("x", "y").row(3L, 30L).assertMatches(stream);
       }
     }
   }
@@ -618,7 +534,7 @@ public class LogicalPlanBuilderTest {
   void testJoinWithMultiByteUtf8ColumnName() {
     try (BufferAllocator allocator = new RootAllocator();
         SessionContext ctx = new SessionContext()) {
-      String colWithNull = "key_\u00e9\u00e0\u00fc";
+      String colWithNull = "key_éàü";
 
       // Register left table
       Schema leftSchema =
@@ -667,13 +583,7 @@ public class LogicalPlanBuilderTest {
           LogicalPlan joinedPlan = joined.build();
           DataFrame df = ctx.executeLogicalPlan(joinedPlan);
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot result = stream.getVectorSchemaRoot();
-        assertEquals(1, result.getRowCount());
-        BigIntVector lv = (BigIntVector) result.getVector("left_val");
-        BigIntVector rv = (BigIntVector) result.getVector("right_val");
-        assertEquals(10, lv.get(0));
-        assertEquals(100, rv.get(0));
+        expect("left_val", "right_val").row(10L, 100L).allowExtraColumns().assertMatches(stream);
       }
     }
   }

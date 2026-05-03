@@ -1,5 +1,6 @@
 package org.apache.arrow.datafusion;
 
+import static org.apache.arrow.datafusion.testutil.VectorSchemaRootAssert.expect;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.Arrays;
@@ -9,7 +10,6 @@ import org.apache.arrow.datafusion.physical_plan.SendableRecordBatchStream;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.BigIntVector;
-import org.apache.arrow.vector.FieldVector;
 import org.apache.arrow.vector.VarCharVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.types.pojo.ArrowType;
@@ -29,23 +29,7 @@ public class SqlTest {
       // Execute a simple SQL query that doesn't require any tables
       try (DataFrame df = ctx.sql("SELECT 1 as x, 2 as y");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        org.apache.arrow.vector.types.pojo.Schema schema = root.getSchema();
-
-        assertEquals(2, schema.getFields().size());
-        assertEquals("x", schema.getFields().get(0).getName());
-        assertEquals("y", schema.getFields().get(1).getName());
-
-        assertTrue(stream.loadNextBatch());
-        assertEquals(1, root.getRowCount());
-
-        BigIntVector xValues = (BigIntVector) root.getVector("x");
-        BigIntVector yValues = (BigIntVector) root.getVector("y");
-        assertEquals(1, xValues.get(0));
-        assertEquals(2, yValues.get(0));
-
-        assertFalse(stream.loadNextBatch());
+        expect("x", "y").row(1L, 2L).assertMatches(stream);
       }
     }
   }
@@ -62,22 +46,7 @@ public class SqlTest {
       // Query the registered table
       try (DataFrame df = ctx.sql("SELECT x, y FROM test WHERE x > 1");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-
-        assertTrue(stream.loadNextBatch());
-        assertEquals(2, root.getRowCount());
-
-        BigIntVector xValues = (BigIntVector) root.getVector("x");
-        BigIntVector yValues = (BigIntVector) root.getVector("y");
-
-        // Should have rows where x > 1, i.e., x=2,y=20 and x=3,y=30
-        assertEquals(2, xValues.get(0));
-        assertEquals(20, yValues.get(0));
-        assertEquals(3, xValues.get(1));
-        assertEquals(30, yValues.get(1));
-
-        assertFalse(stream.loadNextBatch());
+        expect("x", "y").row(2L, 20L).row(3L, 30L).assertMatches(stream);
       }
 
       testData.close();
@@ -96,16 +65,7 @@ public class SqlTest {
       // Execute aggregate query
       try (DataFrame df = ctx.sql("SELECT SUM(y) as total FROM test");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-
-        assertTrue(stream.loadNextBatch());
-        assertEquals(1, root.getRowCount());
-
-        BigIntVector totalValues = (BigIntVector) root.getVector("total");
-        assertEquals(60, totalValues.get(0)); // 10 + 20 + 30 = 60
-
-        assertFalse(stream.loadNextBatch());
+        expect("total").row(60L).assertMatches(stream); // 10 + 20 + 30 = 60
       }
 
       testData.close();
@@ -124,10 +84,7 @@ public class SqlTest {
       for (int i = 0; i < 3; i++) {
         try (DataFrame df = ctx.sql("SELECT COUNT(*) as cnt FROM test");
             SendableRecordBatchStream stream = df.executeStream(allocator)) {
-
-          assertTrue(stream.loadNextBatch());
-          BigIntVector countValues = (BigIntVector) stream.getVectorSchemaRoot().getVector("cnt");
-          assertEquals(3, countValues.get(0));
+          expect("cnt").row(3L).assertMatches(stream);
         }
       }
 
@@ -150,31 +107,7 @@ public class SqlTest {
               ctx.sql(
                   "SELECT category, COUNT(*) as cnt FROM categories GROUP BY category ORDER BY category");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-
-        assertTrue(stream.loadNextBatch());
-        assertEquals(3, root.getRowCount()); // 3 distinct categories
-
-        FieldVector categoryVector = root.getVector("category");
-        BigIntVector countVector = (BigIntVector) root.getVector("cnt");
-
-        // Extract string values
-        String[] categories = new String[3];
-        for (int i = 0; i < 3; i++) {
-          categories[i] = getStringValue(categoryVector, i);
-        }
-
-        // Verify results (ordered alphabetically)
-        assertEquals("A", categories[0]);
-        assertEquals("B", categories[1]);
-        assertEquals("C", categories[2]);
-
-        assertEquals(2, countVector.get(0)); // 'A' appears 2 times
-        assertEquals(2, countVector.get(1)); // 'B' appears 2 times
-        assertEquals(1, countVector.get(2)); // 'C' appears 1 time
-
-        assertFalse(stream.loadNextBatch());
+        expect("category", "cnt").row("A", 2L).row("B", 2L).row("C", 1L).assertMatches(stream);
       }
 
       testData.close();
@@ -192,35 +125,10 @@ public class SqlTest {
 
       try (DataFrame df = ctx.sql("SELECT DISTINCT category FROM categories ORDER BY category");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-
-        assertTrue(stream.loadNextBatch());
-        assertEquals(3, root.getRowCount());
-
-        FieldVector categoryVector = root.getVector("category");
-        assertEquals("A", getStringValue(categoryVector, 0));
-        assertEquals("B", getStringValue(categoryVector, 1));
-        assertEquals("C", getStringValue(categoryVector, 2));
-
-        assertFalse(stream.loadNextBatch());
+        expect("category").row("A").row("B").row("C").assertMatches(stream);
       }
 
       testData.close();
-    }
-  }
-
-  /** Helper to extract string value from a vector that may be dictionary-encoded */
-  private String getStringValue(FieldVector vector, int index) {
-    if (vector instanceof VarCharVector) {
-      return new String(((VarCharVector) vector).get(index));
-    } else {
-      // For dictionary-encoded vectors, get the decoded value
-      Object value = vector.getObject(index);
-      if (value instanceof byte[]) {
-        return new String((byte[]) value);
-      }
-      return value.toString();
     }
   }
 

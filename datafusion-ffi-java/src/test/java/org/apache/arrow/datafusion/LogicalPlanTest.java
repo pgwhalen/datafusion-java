@@ -1,5 +1,6 @@
 package org.apache.arrow.datafusion;
 
+import static org.apache.arrow.datafusion.testutil.VectorSchemaRootAssert.expect;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.List;
@@ -375,13 +376,11 @@ public class LogicalPlanTest {
         // Execute via SessionContext
         try (DataFrame df = ctx.executeLogicalPlan(plan);
             SendableRecordBatchStream stream = df.collect(allocator)) {
-          assertTrue(stream.loadNextBatch());
-          VectorSchemaRoot root = stream.getVectorSchemaRoot();
-          assertEquals(3, root.getRowCount());
-          IntVector idVec = (IntVector) root.getVector("id");
-          assertEquals(1, idVec.get(0));
-          assertEquals(2, idVec.get(1));
-          assertEquals(3, idVec.get(2));
+          expect("id", "name")
+              .row(1, "Alice")
+              .row(2, "Bob")
+              .row(3, "Charlie")
+              .assertMatches(stream);
         }
       }
     }

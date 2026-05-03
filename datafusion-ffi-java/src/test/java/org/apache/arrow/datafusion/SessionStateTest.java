@@ -1,5 +1,6 @@
 package org.apache.arrow.datafusion;
 
+import static org.apache.arrow.datafusion.testutil.VectorSchemaRootAssert.expect;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.Arrays;
@@ -95,12 +96,7 @@ public class SessionStateTest {
         LogicalPlan plan = state.createLogicalPlan("SELECT 1 + 1 AS result");
         DataFrame df = ctx.executeLogicalPlan(plan);
         SendableRecordBatchStream stream = df.executeStream(allocator)) {
-      assertTrue(stream.loadNextBatch());
-      VectorSchemaRoot root = stream.getVectorSchemaRoot();
-      assertEquals(1, root.getRowCount());
-      BigIntVector col = (BigIntVector) root.getVector("result");
-      assertEquals(2, col.get(0));
-      assertFalse(stream.loadNextBatch());
+      expect("result").row(2L).assertMatches(stream);
     }
   }
 
@@ -114,18 +110,12 @@ public class SessionStateTest {
       // Execute the plan twice to verify clone semantics
       try (DataFrame df1 = ctx.executeLogicalPlan(plan);
           SendableRecordBatchStream stream1 = df1.executeStream(allocator)) {
-        assertTrue(stream1.loadNextBatch());
-        VectorSchemaRoot root1 = stream1.getVectorSchemaRoot();
-        BigIntVector col1 = (BigIntVector) root1.getVector("answer");
-        assertEquals(42, col1.get(0));
+        expect("answer").row(42L).assertMatches(stream1);
       }
 
       try (DataFrame df2 = ctx.executeLogicalPlan(plan);
           SendableRecordBatchStream stream2 = df2.executeStream(allocator)) {
-        assertTrue(stream2.loadNextBatch());
-        VectorSchemaRoot root2 = stream2.getVectorSchemaRoot();
-        BigIntVector col2 = (BigIntVector) root2.getVector("answer");
-        assertEquals(42, col2.get(0));
+        expect("answer").row(42L).assertMatches(stream2);
       }
     }
   }
@@ -143,16 +133,7 @@ public class SessionStateTest {
               state.createLogicalPlan("SELECT x, y FROM test_table WHERE x > 1 ORDER BY x");
           DataFrame df = ctx.executeLogicalPlan(plan);
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch());
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(2, root.getRowCount());
-        BigIntVector xCol = (BigIntVector) root.getVector("x");
-        BigIntVector yCol = (BigIntVector) root.getVector("y");
-        assertEquals(2, xCol.get(0));
-        assertEquals(20, yCol.get(0));
-        assertEquals(3, xCol.get(1));
-        assertEquals(30, yCol.get(1));
-        assertFalse(stream.loadNextBatch());
+        expect("x", "y").row(2L, 20L).row(3L, 30L).assertMatches(stream);
       }
 
       testData.close();

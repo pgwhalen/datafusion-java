@@ -1,5 +1,6 @@
 package org.apache.arrow.datafusion;
 
+import static org.apache.arrow.datafusion.testutil.VectorSchemaRootAssert.expect;
 import static org.junit.jupiter.api.Assertions.*;
 
 import org.apache.arrow.datafusion.config.ConfigOptions;
@@ -22,8 +23,7 @@ public class MemoryPoolTest {
       try (BufferAllocator allocator = new RootAllocator();
           DataFrame df = ctx.sql("SELECT 1 + 1 AS result");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch(), "Expected at least one batch");
-        assertEquals(2L, stream.getVectorSchemaRoot().getVector("result").getObject(0));
+        expect("result").row(2L).assertMatches(stream);
       }
     }
   }
@@ -63,8 +63,7 @@ public class MemoryPoolTest {
       try (BufferAllocator allocator = new RootAllocator();
           DataFrame df = ctx.sql("SELECT 42 AS answer");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch(), "Expected at least one batch");
-        assertEquals(42L, stream.getVectorSchemaRoot().getVector("answer").getObject(0));
+        expect("answer").row(42L).assertMatches(stream);
       }
     }
   }

@@ -1,6 +1,7 @@
 package org.apache.arrow.datafusion;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.apache.arrow.datafusion.testutil.VectorSchemaRootAssert.expect;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.Arrays;
 import java.util.List;
@@ -40,18 +41,10 @@ class AggregateUDFTest {
       AggregateUDF mySum = createSumUdaf();
       ctx.registerUdaf(mySum, allocator);
 
-      try (DataFrame df = ctx.sql("SELECT my_sum(x) FROM t");
+      try (DataFrame df = ctx.sql("SELECT my_sum(x) AS result FROM t");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertTrue(stream.loadNextBatch());
-        assertEquals(1, root.getRowCount());
-
-        BigIntVector result = (BigIntVector) root.getVector(0);
         // 10 + 20 + 30 = 60
-        assertEquals(60, result.get(0));
-
-        assertFalse(stream.loadNextBatch());
+        expect("result").row(60L).assertMatches(stream);
       }
 
       testData.close();
@@ -69,23 +62,13 @@ class AggregateUDFTest {
       AggregateUDF mySum = createSumUdaf();
       ctx.registerUdaf(mySum, allocator);
 
-      try (DataFrame df = ctx.sql("SELECT grp, my_sum(val) FROM t GROUP BY grp ORDER BY grp");
+      try (DataFrame df =
+              ctx.sql("SELECT grp, my_sum(val) AS result FROM t GROUP BY grp ORDER BY grp");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertTrue(stream.loadNextBatch());
-        assertEquals(2, root.getRowCount());
-
-        VarCharVector grpVec = (VarCharVector) root.getVector(0);
-        BigIntVector sumVec = (BigIntVector) root.getVector(1);
-
-        assertEquals("a", grpVec.getObject(0).toString());
-        assertEquals(3, sumVec.get(0)); // 1 + 2
-
-        assertEquals("b", grpVec.getObject(1).toString());
-        assertEquals(7, sumVec.get(1)); // 3 + 4
-
-        assertFalse(stream.loadNextBatch());
+        expect("grp", "result")
+            .row("a", 3L) // 1 + 2
+            .row("b", 7L) // 3 + 4
+            .assertMatches(stream);
       }
 
       testData.close();
@@ -141,18 +124,10 @@ class AggregateUDFTest {
 
       ctx.registerUdaf(myAvg, allocator);
 
-      try (DataFrame df = ctx.sql("SELECT my_avg(a) FROM t");
+      try (DataFrame df = ctx.sql("SELECT my_avg(a) AS result FROM t");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertTrue(stream.loadNextBatch());
-        assertEquals(1, root.getRowCount());
-
-        Float8Vector result = (Float8Vector) root.getVector(0);
         // avg(2.0, 4.0, 6.0, 8.0) = 5.0
-        assertEquals(5.0, result.get(0), 0.0001);
-
-        assertFalse(stream.loadNextBatch());
+        expect("result").row(5.0).withDelta(0.0001).assertMatches(stream);
       }
 
       testData.close();

@@ -1,5 +1,6 @@
 package org.apache.arrow.datafusion.execution;
 
+import static org.apache.arrow.datafusion.testutil.VectorSchemaRootAssert.expect;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.HashMap;
@@ -52,10 +53,7 @@ public class TaskContextTest {
 
       try (DataFrame df = ctx.sql("SELECT * FROM cap.def.t");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        assertTrue(stream.loadNextBatch(), "reader must yield at least one batch");
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(1, root.getRowCount());
-        assertEquals(42L, ((BigIntVector) root.getVector("id")).get(0));
+        expect("id").row(42L).assertMatches(stream);
       }
     }
 

@@ -1,16 +1,15 @@
 package org.apache.arrow.datafusion;
 
+import static org.apache.arrow.datafusion.testutil.VectorSchemaRootAssert.expect;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.apache.arrow.datafusion.catalog.CatalogProvider;
@@ -36,7 +35,6 @@ import org.apache.arrow.datafusion.physical_plan.SendableRecordBatchStream;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.BigIntVector;
-import org.apache.arrow.vector.UInt8Vector;
 import org.apache.arrow.vector.VarCharVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.types.pojo.ArrowType;
@@ -68,18 +66,7 @@ public class CustomTableProviderTest {
       // Query it via fully-qualified table name
       try (DataFrame df = ctx.sql("SELECT * FROM my_catalog.my_schema.my_table");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-
-        assertTrue(stream.loadNextBatch());
-        assertEquals(3, root.getRowCount());
-
-        BigIntVector idVector = (BigIntVector) root.getVector("id");
-        assertEquals(1, idVector.get(0));
-        assertEquals(2, idVector.get(1));
-        assertEquals(3, idVector.get(2));
-
-        assertFalse(stream.loadNextBatch());
+        expect("id").row(1L).row(2L).row(3L).allowExtraColumns().assertMatches(stream);
       }
     }
   }
@@ -100,17 +87,7 @@ public class CustomTableProviderTest {
       try (DataFrame df =
               ctx.sql("SELECT id, name FROM test_catalog.public.test_table WHERE id > 1");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-
-        assertTrue(stream.loadNextBatch());
-        assertEquals(2, root.getRowCount()); // Only id=2 and id=3
-
-        BigIntVector idVector = (BigIntVector) root.getVector("id");
-        assertEquals(2, idVector.get(0));
-        assertEquals(3, idVector.get(1));
-
-        assertFalse(stream.loadNextBatch());
+        expect("id").row(2L).row(3L).allowExtraColumns().assertMatches(stream);
       }
     }
   }
@@ -130,16 +107,7 @@ public class CustomTableProviderTest {
       // Query with column selection
       try (DataFrame df = ctx.sql("SELECT name FROM app.main.data WHERE id = 2");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-
-        assertTrue(stream.loadNextBatch());
-        assertEquals(1, root.getRowCount());
-
-        VarCharVector nameVector = (VarCharVector) root.getVector("name");
-        assertEquals("Bob", new String(nameVector.get(0)));
-
-        assertFalse(stream.loadNextBatch());
+        expect("name").row("Bob").assertMatches(stream);
       }
     }
   }
@@ -163,29 +131,16 @@ public class CustomTableProviderTest {
       // Query without ORDER BY to avoid coalescing batches during sort
       try (DataFrame df = ctx.sql("SELECT * FROM batch_catalog.test.multi_batch");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-
-        // Collect all rows across all batches - DataFusion may or may not coalesce
-        Set<Long> allIds = new HashSet<>();
-        int totalRows = 0;
-        int batchCount = 0;
-
-        while (stream.loadNextBatch()) {
-          batchCount++;
-          int rowCount = root.getRowCount();
-          totalRows += rowCount;
-
-          BigIntVector idVector = (BigIntVector) root.getVector("id");
-          for (int i = 0; i < rowCount; i++) {
-            allIds.add(idVector.get(i));
-          }
-        }
-
-        // Verify we got all 6 rows with ids 1-6
-        assertEquals(6, totalRows, "Should have 6 total rows");
-        assertEquals(Set.of(1L, 2L, 3L, 4L, 5L, 6L), allIds, "Should have ids 1-6");
-        assertTrue(batchCount >= 1, "Should have at least one batch");
+        expect("id")
+            .row(1L)
+            .row(2L)
+            .row(3L)
+            .row(4L)
+            .row(5L)
+            .row(6L)
+            .unordered()
+            .allowExtraColumns()
+            .assertMatches(stream);
       }
     }
   }
@@ -212,28 +167,13 @@ public class CustomTableProviderTest {
       // Query the first table
       try (DataFrame df = ctx.sql("SELECT * FROM store.default.users ORDER BY id");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertTrue(stream.loadNextBatch());
-        assertEquals(3, root.getRowCount());
-
-        BigIntVector idVector = (BigIntVector) root.getVector("id");
-        assertEquals(1, idVector.get(0));
-        assertEquals(2, idVector.get(1));
-        assertEquals(3, idVector.get(2));
+        expect("id").row(1L).row(2L).row(3L).allowExtraColumns().assertMatches(stream);
       }
 
       // Query the second table
       try (DataFrame df = ctx.sql("SELECT * FROM store.default.products ORDER BY product_id");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertTrue(stream.loadNextBatch());
-        assertEquals(2, root.getRowCount());
-
-        BigIntVector idVector = (BigIntVector) root.getVector("product_id");
-        assertEquals(100, idVector.get(0));
-        assertEquals(101, idVector.get(1));
+        expect("product_id").row(100L).row(101L).allowExtraColumns().assertMatches(stream);
       }
 
       // Query with JOIN between the two tables
@@ -244,26 +184,10 @@ public class CustomTableProviderTest {
                       + "JOIN store.default.products p ON u.id = p.user_id "
                       + "ORDER BY p.product_id");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertTrue(stream.loadNextBatch());
-        assertEquals(2, root.getRowCount());
-
-        // First row: Alice's product (product_id=100)
-        VarCharVector nameVector = (VarCharVector) root.getVector("name");
-        BigIntVector productIdVector = (BigIntVector) root.getVector("product_id");
-        BigIntVector priceVector = (BigIntVector) root.getVector("price");
-
-        assertEquals("Alice", new String(nameVector.get(0)));
-        assertEquals(100, productIdVector.get(0));
-        assertEquals(999, priceVector.get(0));
-
-        // Second row: Bob's product (product_id=101)
-        assertEquals("Bob", new String(nameVector.get(1)));
-        assertEquals(101, productIdVector.get(1));
-        assertEquals(1499, priceVector.get(1));
-
-        assertFalse(stream.loadNextBatch());
+        expect("name", "product_id", "price")
+            .row("Alice", 100L, 999L)
+            .row("Bob", 101L, 1499L)
+            .assertMatches(stream);
       }
     }
   }
@@ -288,10 +212,7 @@ public class CustomTableProviderTest {
       // Query the initial table
       try (DataFrame df = ctx.sql("SELECT * FROM dynamic.default.users ORDER BY id");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertTrue(stream.loadNextBatch());
-        assertEquals(3, root.getRowCount());
+        expect("id").row(1L).row(2L).row(3L).allowExtraColumns().assertMatches(stream);
       }
 
       // Dynamically register a second table
@@ -303,14 +224,7 @@ public class CustomTableProviderTest {
       // Query the newly registered table
       try (DataFrame df = ctx.sql("SELECT * FROM dynamic.default.products ORDER BY product_id");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertTrue(stream.loadNextBatch());
-        assertEquals(2, root.getRowCount());
-
-        BigIntVector idVector = (BigIntVector) root.getVector("product_id");
-        assertEquals(100, idVector.get(0));
-        assertEquals(101, idVector.get(1));
+        expect("product_id").row(100L).row(101L).allowExtraColumns().assertMatches(stream);
       }
 
       // Deregister the original table
@@ -361,9 +275,12 @@ public class CustomTableProviderTest {
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
 
         VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertTrue(stream.loadNextBatch());
+        int totalRows = 0;
+        while (stream.loadNextBatch()) {
+          totalRows += root.getRowCount();
+        }
         // DataFusion applies the limit, so we get at most 2 rows
-        assertTrue(root.getRowCount() <= 2);
+        assertTrue(totalRows <= 2);
       }
 
       // Verify that the limit was passed to the table provider
@@ -404,10 +321,7 @@ public class CustomTableProviderTest {
       // Query without LIMIT clause
       try (DataFrame df = ctx.sql("SELECT * FROM no_limit_catalog.test.no_limit_test");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertTrue(stream.loadNextBatch());
-        assertEquals(3, root.getRowCount()); // All rows returned
+        expect("id").row(1L).row(2L).row(3L).allowExtraColumns().assertMatches(stream);
       }
 
       // Verify that no limit was passed (null)
@@ -446,15 +360,7 @@ public class CustomTableProviderTest {
       // SELECT * resolves to explicit column indices via the optimizer
       try (DataFrame df = ctx.sql("SELECT * FROM proj_specific_catalog.test.proj_test");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertTrue(stream.loadNextBatch());
-        assertEquals(3, root.getRowCount());
-
-        BigIntVector idVector = (BigIntVector) root.getVector("id");
-        assertEquals(1, idVector.get(0));
-        assertEquals(2, idVector.get(1));
-        assertEquals(3, idVector.get(2));
+        expect("id").row(1L).row(2L).row(3L).allowExtraColumns().assertMatches(stream);
       }
 
       List<Integer> projection = capturedProjection.get();
@@ -571,17 +477,7 @@ public class CustomTableProviderTest {
       // Query the table - should work correctly regardless of plan properties
       try (DataFrame df = ctx.sql("SELECT * FROM props_catalog.default.props_test ORDER BY id");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertTrue(stream.loadNextBatch());
-        assertEquals(3, root.getRowCount());
-
-        BigIntVector idVector = (BigIntVector) root.getVector("id");
-        assertEquals(1, idVector.get(0));
-        assertEquals(2, idVector.get(1));
-        assertEquals(3, idVector.get(2));
-
-        assertFalse(stream.loadNextBatch());
+        expect("id").row(1L).row(2L).row(3L).allowExtraColumns().assertMatches(stream);
       }
     }
   }
@@ -629,13 +525,9 @@ public class CustomTableProviderTest {
       // Query with WHERE clause - filters are pushed down
       try (DataFrame df = ctx.sql("SELECT * FROM filter_catalog.test.filter_test WHERE id > 1");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertTrue(stream.loadNextBatch());
         // With EXACT pushdown, DataFusion trusts our provider to handle the filter.
         // Since our provider returns all data, we get all 3 rows.
-        assertEquals(3, root.getRowCount());
-        assertFalse(stream.loadNextBatch());
+        expect("id").row(1L).row(2L).row(3L).allowExtraColumns().assertMatches(stream);
       }
 
       // Verify the callback was invoked
@@ -681,17 +573,8 @@ public class CustomTableProviderTest {
       try (DataFrame df =
               ctx.sql("SELECT * FROM unsupported_catalog.test.unsupported_test WHERE id > 1");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertTrue(stream.loadNextBatch());
         // DataFusion applies the filter post-scan since provider said UNSUPPORTED
-        assertEquals(2, root.getRowCount());
-
-        BigIntVector idVector = (BigIntVector) root.getVector("id");
-        assertEquals(2, idVector.get(0));
-        assertEquals(3, idVector.get(1));
-
-        assertFalse(stream.loadNextBatch());
+        expect("id").row(2L).row(3L).allowExtraColumns().assertMatches(stream);
       }
     }
   }
@@ -715,17 +598,8 @@ public class CustomTableProviderTest {
       // Query with WHERE clause — INEXACT means DataFusion re-applies filter post-scan
       try (DataFrame df = ctx.sql("SELECT * FROM default_catalog.test.default_test WHERE id > 1");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertTrue(stream.loadNextBatch());
         // DataFusion applies filter, so only id=2 and id=3
-        assertEquals(2, root.getRowCount());
-
-        BigIntVector idVector = (BigIntVector) root.getVector("id");
-        assertEquals(2, idVector.get(0));
-        assertEquals(3, idVector.get(1));
-
-        assertFalse(stream.loadNextBatch());
+        expect("id").row(2L).row(3L).allowExtraColumns().assertMatches(stream);
       }
     }
   }
@@ -886,12 +760,8 @@ public class CustomTableProviderTest {
       // DELETE rows where id > 1
       try (DataFrame df = ctx.sql("DELETE FROM dml.default.users WHERE id > 1");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertTrue(stream.loadNextBatch());
-        // DML results produce a "count" column — read as long regardless of vector type
-        long count = readCountColumn(root);
-        assertEquals(2L, count, "Should delete 2 rows (Bob and Charlie)");
-        assertFalse(stream.loadNextBatch());
+        // DML results produce a "count" column — DSL handles both BigIntVector and UInt8Vector
+        expect("count").row(2L).assertMatches(stream);
       }
 
       // Verify remaining data
@@ -917,10 +787,7 @@ public class CustomTableProviderTest {
       // DELETE all rows (no WHERE)
       try (DataFrame df = ctx.sql("DELETE FROM dml_del_all.default.users");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertTrue(stream.loadNextBatch());
-        long count = readCountColumn(root);
-        assertEquals(2L, count, "Should delete all 2 rows");
+        expect("count").row(2L).assertMatches(stream);
       }
 
       assertTrue(mutableTable.rows.isEmpty(), "Table should be empty after DELETE all");
@@ -948,10 +815,7 @@ public class CustomTableProviderTest {
       try (DataFrame df =
               ctx.sql("UPDATE dml_upd.default.users SET name = 'updated' WHERE id = 1");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertTrue(stream.loadNextBatch());
-        long count = readCountColumn(root);
-        assertEquals(1L, count, "Should update 1 row");
+        expect("count").row(1L).assertMatches(stream);
       }
 
       // Verify the updated data
@@ -979,10 +843,7 @@ public class CustomTableProviderTest {
       try (DataFrame df =
               ctx.sql("INSERT INTO dml_ins.default.users VALUES (2, 'Bob'), (3, 'Charlie')");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertTrue(stream.loadNextBatch());
-        long count = readCountColumn(root);
-        assertEquals(2L, count, "Should insert 2 rows");
+        expect("count").row(2L).assertMatches(stream);
       }
 
       // Verify all data
@@ -1017,10 +878,7 @@ public class CustomTableProviderTest {
 
       try (DataFrame df = ctx.sql(sb.toString());
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertTrue(stream.loadNextBatch());
-        long count = readCountColumn(root);
-        assertEquals(10L, count, "Should insert 10 rows");
+        expect("count").row(10L).assertMatches(stream);
       }
 
       // Verify all rows were inserted
@@ -1029,23 +887,6 @@ public class CustomTableProviderTest {
         assertEquals((long) (i + 1), mutableTable.rows.get(i)[0]);
         assertEquals("Name" + (i + 1), mutableTable.rows.get(i)[1]);
       }
-    }
-  }
-
-  /**
-   * Reads the "count" column from a DML result batch. DataFusion DML operations return the count as
-   * UInt64, which Arrow Java represents as a UInt8Vector (unsigned 64-bit). Our
-   * MutableTableProvider returns Int64 (BigIntVector). This helper handles both.
-   */
-  private long readCountColumn(VectorSchemaRoot root) {
-    var vector = root.getVector("count");
-    if (vector instanceof BigIntVector bigInt) {
-      return bigInt.get(0);
-    } else if (vector instanceof UInt8Vector uint8) {
-      return uint8.get(0);
-    } else {
-      throw new AssertionError(
-          "Unexpected count vector type: " + vector.getClass().getSimpleName());
     }
   }
 
@@ -1505,27 +1346,16 @@ public class CustomTableProviderTest {
       CatalogProvider myCatalog = new SimpleCatalogProvider(Map.of("s", mySchema));
       ctx.registerCatalog("multi_cat", myCatalog, allocator);
 
-      // Collect all results from the lazy stream into a flat list of (id, name) pairs
-      List<Long> ids = new ArrayList<>();
-      List<String> names = new ArrayList<>();
-
+      // All 4 rows should be present (multiBatchData gives 1+2+1 = 4 rows with ids 1,3,4,5)
       try (DataFrame df = ctx.sql("SELECT * FROM multi_cat.s.multi ORDER BY id");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        while (stream.loadNextBatch()) {
-          BigIntVector id = (BigIntVector) root.getVector("id");
-          VarCharVector name = (VarCharVector) root.getVector("name");
-          for (int i = 0; i < root.getRowCount(); i++) {
-            ids.add(id.get(i));
-            names.add(new String(name.get(i)));
-          }
-        }
+        expect("id", "name")
+            .row(1L, "Name1")
+            .row(3L, "Name3")
+            .row(4L, "Name4")
+            .row(5L, "Name5")
+            .assertMatches(stream);
       }
-
-      // All 4 rows should be present (multiBatchData gives 1+2+1 = 4 rows with ids 1,3,4,5)
-      assertEquals(List.of(1L, 3L, 4L, 5L), ids);
-      assertEquals(List.of("Name1", "Name3", "Name4", "Name5"), names);
     }
   }
 

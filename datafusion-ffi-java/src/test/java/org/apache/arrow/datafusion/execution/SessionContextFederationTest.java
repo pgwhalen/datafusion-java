@@ -1,9 +1,8 @@
 package org.apache.arrow.datafusion.execution;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.apache.arrow.datafusion.testutil.VectorSchemaRootAssert.expect;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-import java.nio.charset.StandardCharsets;
 import org.apache.arrow.datafusion.config.CatalogOptions;
 import org.apache.arrow.datafusion.config.ConfigOptions;
 import org.apache.arrow.datafusion.config.ExecutionOptions;
@@ -11,9 +10,6 @@ import org.apache.arrow.datafusion.dataframe.DataFrame;
 import org.apache.arrow.datafusion.physical_plan.SendableRecordBatchStream;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
-import org.apache.arrow.vector.BigIntVector;
-import org.apache.arrow.vector.VarCharVector;
-import org.apache.arrow.vector.VectorSchemaRoot;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -31,11 +27,7 @@ class SessionContextFederationTest {
       assertNotNull(ctx);
       try (DataFrame df = ctx.sql("SELECT 1 + 1 AS result");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        stream.loadNextBatch();
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(1, root.getRowCount());
-        BigIntVector col = (BigIntVector) root.getVector("result");
-        assertEquals(2L, col.get(0));
+        expect("result").row(2L).assertMatches(stream);
       }
     }
   }
@@ -52,12 +44,7 @@ class SessionContextFederationTest {
       assertNotNull(ctx);
       try (DataFrame df = ctx.sql("SHOW datafusion.execution.batch_size");
           SendableRecordBatchStream stream = df.executeStream(allocator)) {
-        stream.loadNextBatch();
-        VectorSchemaRoot root = stream.getVectorSchemaRoot();
-        assertEquals(1, root.getRowCount());
-        String value =
-            new String(((VarCharVector) root.getVector("value")).get(0), StandardCharsets.UTF_8);
-        assertEquals("512", value);
+        expect("value").row("512").allowExtraColumns().assertMatches(stream);
       }
     }
   }
