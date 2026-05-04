@@ -59,26 +59,14 @@ final class DfRecordBatchReaderAdapter implements DfRecordBatchReaderTrait, Auto
           ArrowArray batchArray = ArrowArray.allocateNew(allocator)) {
         Data.exportVectorSchemaRoot(allocator, root, null, batchArray, batchSchema);
 
-        // Copy the FFI structs to the Rust-provided output addresses
-        java.lang.foreign.MemorySegment srcSchema =
+        ArrowFfiUtil.copySchemaToAddress(
             java.lang.foreign.MemorySegment.ofAddress(batchSchema.memoryAddress())
-                .reinterpret(ARROW_SCHEMA_SIZE);
-        java.lang.foreign.MemorySegment destSchema =
-            java.lang.foreign.MemorySegment.ofAddress(schemaOutAddr).reinterpret(ARROW_SCHEMA_SIZE);
-        destSchema.copyFrom(srcSchema);
-        // Clear source release to prevent double-free (dest now owns it)
-        srcSchema.set(
-            java.lang.foreign.ValueLayout.ADDRESS, 64, java.lang.foreign.MemorySegment.NULL);
-
-        java.lang.foreign.MemorySegment srcArray =
+                .reinterpret(ArrowFfiUtil.ARROW_SCHEMA_SIZE),
+            schemaOutAddr);
+        ArrowFfiUtil.copyArrayToAddress(
             java.lang.foreign.MemorySegment.ofAddress(batchArray.memoryAddress())
-                .reinterpret(ARROW_ARRAY_SIZE);
-        java.lang.foreign.MemorySegment destArray =
-            java.lang.foreign.MemorySegment.ofAddress(arrayOutAddr).reinterpret(ARROW_ARRAY_SIZE);
-        destArray.copyFrom(srcArray);
-        // Clear source release to prevent double-free
-        srcArray.set(
-            java.lang.foreign.ValueLayout.ADDRESS, 64, java.lang.foreign.MemorySegment.NULL);
+                .reinterpret(ArrowFfiUtil.ARROW_ARRAY_SIZE),
+            arrayOutAddr);
       }
 
       return 1; // Data available
@@ -99,9 +87,4 @@ final class DfRecordBatchReaderAdapter implements DfRecordBatchReaderTrait, Auto
       }
     }
   }
-
-  // FFI_ArrowSchema size (standard C Data Interface)
-  private static final long ARROW_SCHEMA_SIZE = 72;
-  // FFI_ArrowArray size (standard C Data Interface)
-  private static final long ARROW_ARRAY_SIZE = 80;
 }

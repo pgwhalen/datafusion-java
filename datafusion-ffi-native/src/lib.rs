@@ -1,3 +1,4 @@
+mod arrow_ffi_util;
 mod bridge;
 mod catalog;
 mod diplomat_util;

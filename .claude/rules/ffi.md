@@ -120,27 +120,19 @@ Adapter classes:
 
 #### Downcalls (Java → Rust)
 
-Diplomat-generated methods throw `DfError` (an opaque that implements `AutoCloseable`). Bridge classes catch and convert:
-
-```java
-try {
-    DfPhysicalExpr dfExpr = DfPhysicalExpr.fromProtoFilters(filterBytes, schemaAddr);
-    return new PhysicalExprBridge(dfExpr);
-} catch (DfError e) {
-    try (e) {
-        throw new DataFusionException(e.toDisplay());
-    }
-}
-```
+Diplomat-generated methods throw `DfError` (an opaque that implements `AutoCloseable`). Bridge classes route every downcall through `BridgeUtil.unwrap(context, () -> ...)` (see the BridgeUtil section below), which catches `DfError`, closes it, and wraps it in `NativeDataFusionError`. Do not open-code the `try { ... } catch (DfError e) { try (e) { throw ...; } }` pattern.
 
 #### Upcalls (Rust → Java callbacks)
 
 Adapter methods write error strings to Rust-provided buffers using `Errors.writeException()`:
 
 ```java
+try {
+    // ... trait method body ...
+    return 0;
 } catch (Exception e) {
     Errors.writeException(errorAddr, errorCap, e, fullStackTrace);
-    return 0;
+    return -1;
 }
 ```
 
@@ -179,19 +171,7 @@ If none of those fit, add a new Diplomat opaque or trait rather than inventing a
 
 ### Proto Byte Passing
 
-Expressions are serialized as protobuf bytes (`LogicalExprList`) and passed as `&[u8]` Diplomat slices. The `DfExprBytes` opaque wraps `Vec<u8>` for returning bytes from Rust.
-
-To extract bytes from `DfExprBytes`:
-```java
-try (DfExprBytes exprBytes = ...) {
-    long len = exprBytes.len();
-    try (Arena arena = Arena.ofConfined()) {
-        MemorySegment buf = arena.allocate(len);
-        exprBytes.copyTo(buf.address(), len);
-        byte[] bytes = buf.toArray(ValueLayout.JAVA_BYTE);
-    }
-}
-```
+Expressions are serialized as protobuf bytes (`LogicalExprList`) and passed as `&[u8]` Diplomat slices. The `DfExprBytes` opaque wraps `Vec<u8>` for returning bytes from Rust. To extract those bytes on the Java side, use `BridgeUtil.toBytes(DfExprBytes)` (see the BridgeUtil section below) — do not open-code the `Arena` + `copyTo` + `toArray` dance.
 
 ### Encapsulation Rules
 
@@ -205,138 +185,53 @@ Enforced by `DiplomatEncapsulationTest` (ArchUnit):
 
 ### Rust Helpers
 
-#### `do_returning_upcall` (`upcall_utils.rs`)
+A handful of Rust modules centralize patterns that show up across every `Foreign*` wrapper. Reach for them rather than open-coding the equivalent — the doc comment on each item describes its precise contract.
 
-Most Rust→Java upcalls follow the same pattern: allocate an error buffer, call Java, check for null pointer, reconstruct `Box<T>` on success. **Use `do_returning_upcall`** for any upcall that returns a raw pointer (0 on error):
+#### `arrow_ffi_util.rs` — Arrow C Data Interface (Rust side)
 
-```rust
-use crate::upcall_utils::do_returning_upcall;
+See @datafusion-ffi-native/src/arrow_ffi_util.rs.
 
-let boxed = do_returning_upcall::<DfExecutionPlan>(
-    "Java scan callback failed",
-    Box::new(|ea, ec| self.inner.scan(session_addr, ..., ea, ec)),
-)?;
-```
+The Rust mirror of the Java-side `ArrowFfiUtil`. The single home for code that constructs, exports, or imports `FFI_ArrowSchema` / `FFI_ArrowArray` structs across the boundary — `export_schema_to` (write a schema into a Java-allocated address), `export_field_as_ffi_schema` and friends (single-field-Schema convention used for passing `Field`s), `export_arrays_as_ffi`, `import_field_from_ffi_schema`. Reach for this any time you are touching an Arrow C Data Interface struct so the `try_from` / `to_ffi` / `unsafe { std::ptr::write }` mechanics stay confined here.
 
-The `Upcall` type alias documents the closure signature: `(error_addr: usize, error_cap: usize) -> usize`. The function creates the `ErrorBuffer` internally, checks for null, and returns `Result<Box<T>, DataFusionError>`. The `unsafe` for `Box::from_raw` is contained within the function since the null check is the only meaningful validation.
+#### `upcall_utils.rs` — Rust→Java trait upcalls
 
-#### `do_upcall` (`upcall_utils.rs`)
+Every upcall does the same dance: allocate an `ErrorBuffer`, hand its address + capacity to Java, invoke the trait method, then translate the result back into a `Result`. `do_returning_upcall`, `do_option_returning_upcall`, `do_option_upcall`, `do_upcall`, `do_counted_upcall`, and `do_optional_upcall` cover the standard return-code conventions; pick the one whose contract matches the trait method you're calling (raw pointer, count, tri-state, etc.). For unusual conventions (e.g., the `stream.rs` tri-state path), use `ErrorBuffer` directly. **Always go through these helpers** so the `unsafe` for `Box::from_raw` and the error-buffer plumbing stay in one place.
 
-For upcalls that return 0 on success, non-zero on error (no pointer reconstruction needed). Returns `Result<(), DataFusionError>`:
+#### `udf_common.rs` — UDF / UDAF upcall plumbing
 
-```rust
-use crate::upcall_utils::do_upcall;
+UDF-shaped upcall helpers built on top of `arrow_ffi_util` and `upcall_utils`: `upcall_return_field`, `upcall_coerce_types`, plus small conversions like `volatility_from_df` and `decode_scalar_value`. Reach for these from `udf.rs` / `udaf.rs`; reach for the underlying modules elsewhere.
 
-do_upcall("Java return_field failed", |ea, ec| {
-    self.inner.return_field(arg1, arg2, ea, ec)
-})?;
-```
+#### `encode_exprs` (`table.rs`) — outgoing expression serialization
 
-#### `do_counted_upcall` (`upcall_utils.rs`)
+The single canonical way to turn `&[Expr]` into protobuf `LogicalExprList` bytes for handing to Java. Use this instead of open-coding `DefaultLogicalExtensionCodec` + `serialize_exprs` + `LogicalExprList::encode_to_vec` — it keeps the codec choice consistent and handles the empty-slice short-circuit.
 
-For upcalls that return a non-negative count on success, or negative on error. Returns `Result<usize, DataFusionError>`:
+### Java FFI Util Classes
 
-```rust
-use crate::upcall_utils::do_counted_upcall;
+There are three Java helper classes that sit on three distinct sides of the FFI boundary. They do not overlap; pick the right one based on what you are holding.
 
-let count = do_counted_upcall("Java coerce_types failed", |ea, ec| {
-    self.inner.coerce_types(arg1, arg2, result_addr, result_cap, ea, ec)
-})?;
-```
+#### `NativeUtil` (root package, package-private) — adapter-side raw FFM
 
-#### `do_option_returning_upcall` (`upcall_utils.rs`)
+See @datafusion-ffi-java/src/main/java/org/apache/arrow/datafusion/NativeUtil.java.
 
-For upcalls that return a raw pointer where null is valid (means "not found"), and only a populated error buffer indicates failure. Returns `Result<Option<Box<T>>, DataFusionError>`:
+The home for **adapter-side FFM primitives**. `Df*Adapter` classes implementing Diplomat trait upcalls receive raw `long` addresses + lengths from Rust and need to (a) read those, (b) bind their own downcall handles for opaques whose generated APIs are out of reach, and (c) hand a `DfStringArray` back as a raw pointer. Reach for `NativeUtil` whenever you are working with raw memory addresses inside an upcall implementation.
 
-```rust
-use crate::upcall_utils::do_option_returning_upcall;
+#### `BridgeUtil` (`common` package, public) — bridge-side Diplomat helpers
 
-let boxed = do_option_returning_upcall::<DfTableProvider>(
-    "Java SchemaProvider.table() failed",
-    Box::new(|ea, ec| self.inner.table(name_addr, name_len, ea, ec)),
-)?;
-// boxed is Option<Box<DfTableProvider>>
-```
+See @datafusion-ffi-java/src/main/java/org/apache/arrow/datafusion/common/BridgeUtil.java.
 
-For upcalls with non-standard error handling (e.g., `stream.rs` with tri-state returns), use `ErrorBuffer` directly:
+The home for **bridge-side Diplomat-opaque handling**. `*Bridge` classes wrapping Diplomat downcalls hold typed Diplomat opaques (`DfError`, `DfExprBytes`, `DfStringArray`) and need to (a) translate `DfError` into the project's `DataFusionError` hierarchy with a context message, and (b) materialize Diplomat opaques into ordinary Java values. Public because bridges live across packages (`execution`, `logical_expr`, `physical_expr`, ...). Reach for `BridgeUtil` from any `*Bridge` class.
 
-```rust
-use crate::upcall_utils::ErrorBuffer;
+#### `ArrowFfiUtil` (root package, package-private) — Arrow C Data Interface
 
-let err = ErrorBuffer::new();
-let ptr = self.inner.some_callback(arg1, arg2, err.addr(), err.cap());
-if ptr == 0 {
-    let msg = err.read();
-    if !msg.is_empty() { return Err(...); }
-    return Ok(None);
-}
-```
+See @datafusion-ffi-java/src/main/java/org/apache/arrow/datafusion/ArrowFfiUtil.java.
 
-#### `encode_exprs` (`table.rs`)
+The home for **the Arrow C Data Interface spec**. `FFI_ArrowSchema` and `FFI_ArrowArray` have well-defined layouts (sizes, release-callback offsets) and a release-callback ownership protocol that is easy to get wrong. `ArrowFfiUtil` keeps that knowledge in one place: copy + clear-release on import, copy + null-out-private-data on export, and the wrapped-single-field-Schema convention used for passing `Field`s across the boundary. Reach for `ArrowFfiUtil` any time you are touching a `FFI_ArrowSchema` or `FFI_ArrowArray` struct.
 
-Serializes `&[Expr]` to protobuf `LogicalExprList` bytes for passing to Java. Returns empty `Vec` for empty input. Use this instead of manually creating a `DefaultLogicalExtensionCodec` + `serialize_exprs` + `LogicalExprList` + `encode_to_vec`:
+#### Choosing between them
 
-```rust
-let filter_bytes = encode_exprs(filters)?;
-// Pass to Java as (addr, len) pair:
-self.inner.callback(filter_bytes.as_ptr() as usize, filter_bytes.len(), ...);
-```
-
-#### `export_schema_to` (`bridge.rs`)
-
-Writes an `ArrowSchema` as `FFI_ArrowSchema` to a Java-provided `out_addr`. Centralizes the null-address check, `FFI_ArrowSchema::try_from`, and the `unsafe { std::ptr::write(...) }`. **Always use this helper** in any bridge method that exports a schema to a Java-allocated address — do not open-code the pattern:
-
-```rust
-pub fn schema_to(&self, out_addr: usize) -> Result<(), Box<DfError>> {
-    export_schema_to(self.schema.as_ref(), out_addr)
-}
-```
-
-If the schema must be constructed first (e.g., from `Field`s), build it, then pass a reference:
-
-```rust
-let arrow_schema = ArrowSchema::new(fields);
-export_schema_to(&arrow_schema, out_addr)
-```
-
-### NativeUtil (Java)
-
-Contains adapter helpers used by `Df*Adapter` classes:
-
-| Method                                    | Purpose                                  |
-|-------------------------------------------|------------------------------------------|
-| `readString(long, long)`                  | Read UTF-8 string from raw address       |
-| `readU32s(long, long)`                    | Read u32 array from raw address          |
-| `readBytes(long, long)`                   | Read byte array from raw address         |
-| `toRawStringArray(List<String>)`          | Java → Rust: string list via DfStringArray |
-| `fromRawStringArray(long)`                | Rust → Java: string list via DfStringArray |
-
-#### `toRawStringArray` — Java → Rust string list
-
-Creates a `DfStringArray`, pushes strings, and returns a raw pointer. Rust consumes it via `DfStringArray::take_from_raw()`:
-
-```java
-// In a Df*Adapter method returning strings to Rust:
-return NativeUtil.toRawStringArray(provider.schemaNames());
-```
-
-#### `fromRawStringArray` — Rust → Java string list
-
-Reads strings from a raw `DfStringArray` pointer passed by Rust, then destroys it (takes ownership). Uses native method handles directly since the generated `DfStringArray` constructor is package-private to the `generated` package:
-
-```java
-// In a Df*Adapter method receiving strings from Rust:
-List<String> colNames = NativeUtil.fromRawStringArray(colNamesPtr);
-```
-
-Rust side to create the pointer:
-
-```rust
-use crate::bridge::ffi::DfStringArray;
-let arr = Box::new(DfStringArray { strings: col_names });
-let ptr = Box::into_raw(arr) as usize;
-// Pass ptr to Java — Java takes ownership and destroys it
-```
+- Holding a raw `long` address from an upcall → `NativeUtil`.
+- Holding a Diplomat opaque (`Df*`) returned by a downcall → `BridgeUtil`.
+- Holding (or producing) an Arrow C Data Interface struct → `ArrowFfiUtil`.
 
 ### Build Process
 

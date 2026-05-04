@@ -1,8 +1,5 @@
 package org.apache.arrow.datafusion.logical_expr;
 
-import java.lang.foreign.Arena;
-import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -10,6 +7,7 @@ import java.util.OptionalLong;
 import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
 import org.apache.arrow.datafusion.ExprProtoConverter;
+import org.apache.arrow.datafusion.common.BridgeUtil;
 import org.apache.arrow.datafusion.common.DataFusionError;
 import org.apache.arrow.datafusion.common.NativeDataFusionError;
 import org.apache.arrow.datafusion.common.TableReference;
@@ -424,15 +422,7 @@ public final class LogicalPlanBridge implements AutoCloseable {
   }
 
   private static byte[] readRawBytes(DfExprBytes exprBytes) {
-    long len = exprBytes.len();
-    if (len == 0) {
-      return new byte[0];
-    }
-    try (Arena arena = Arena.ofConfined()) {
-      MemorySegment buf = arena.allocate(len);
-      exprBytes.copyTo(buf.address(), len);
-      return buf.toArray(ValueLayout.JAVA_BYTE);
-    }
+    return BridgeUtil.toBytes(exprBytes);
   }
 
   @Override

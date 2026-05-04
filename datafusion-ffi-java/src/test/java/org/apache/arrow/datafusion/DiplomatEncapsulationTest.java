@@ -36,7 +36,7 @@ public class DiplomatEncapsulationTest {
   private static final String GENERATED_PACKAGE = "org.apache.arrow.datafusion.generated";
 
   private static final Set<String> UTILITY_CLASS_NAMES =
-      Set.of("NativeUtil", "NativeLoader", "Errors");
+      Set.of("NativeUtil", "NativeLoader", "Errors", "BridgeUtil", "ArrowFfiUtil");
 
   private static final DescribedPredicate<JavaClass> IS_INTERNAL_FFI_CLASS =
       new DescribedPredicate<>("an internal FFI/bridge/adapter/generated class") {
@@ -121,6 +121,64 @@ public class DiplomatEncapsulationTest {
           .dependOnClassesThat()
           .haveSimpleName("NativeLoader")
           .because("NativeLoader should only be used by internal FFI/bridge classes");
+
+  /**
+   * Names of public types that are intentionally allowed to return Diplomat-generated {@code Df*}
+   * handles to internal callers. This is a documented carve-out (see
+   * {@code .claude/ffi-violations.md}); the rule still catches any new cases.
+   */
+  private static final Set<String> KNOWN_GENERATED_TYPE_RETURNERS =
+      Set.of("RustCatalogProvider", "RustTableProvider");
+
+  private static final DescribedPredicate<JavaClass> IS_KNOWN_GENERATED_RETURNER =
+      new DescribedPredicate<>("a class whose Df*-returning getter is documented as intentional") {
+        @Override
+        public boolean test(JavaClass javaClass) {
+          return KNOWN_GENERATED_TYPE_RETURNERS.contains(javaClass.getSimpleName());
+        }
+      };
+
+  /**
+   * Rule 5: Public API methods (on classes that are not internal FFI/bridge/adapter/generated) must
+   * not return Diplomat-generated {@code Df*} types. The bridge layer is responsible for
+   * encapsulating those.
+   *
+   * <p>{@code RustCatalogProvider} and {@code RustTableProvider} are listed as documented carve-outs
+   * — their {@code handle()} accessors are needed by {@code SessionContextBridge} in a different
+   * package, and refactoring this would require significant package restructuring.
+   */
+  @ArchTest
+  static final ArchRule publicApiMethodsShouldNotReturnGeneratedTypes =
+      classes()
+          .that()
+          .arePublic()
+          .and(DescribedPredicate.not(IS_INTERNAL_FFI_CLASS))
+          .and(DescribedPredicate.not(IS_INNER_OF_FFI_CLASS))
+          .and(DescribedPredicate.not(IS_KNOWN_GENERATED_RETURNER))
+          .should(notHavePublicMembersReturningGeneratedType())
+          .because("public API classes must not expose Diplomat-generated Df* types");
+
+  private static ArchCondition<JavaClass> notHavePublicMembersReturningGeneratedType() {
+    return new ArchCondition<>("not have public methods returning Diplomat-generated Df* types") {
+      @Override
+      public void check(JavaClass javaClass, ConditionEvents events) {
+        for (JavaMethod method : javaClass.getMethods()) {
+          if (!method.getModifiers().contains(JavaModifier.PUBLIC)) {
+            continue;
+          }
+          JavaClass returnType = method.getRawReturnType();
+          if (returnType.getPackageName().equals(GENERATED_PACKAGE)) {
+            events.add(
+                SimpleConditionEvent.violated(
+                    method,
+                    String.format(
+                        "%s returns Diplomat-generated %s",
+                        method.getDescription(), returnType.getSimpleName())));
+          }
+        }
+      }
+    };
+  }
 
   private static ArchCondition<JavaClass> notHavePublicMembersUsingMemorySegment() {
     return new ArchCondition<>("not have public members using MemorySegment") {

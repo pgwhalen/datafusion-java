@@ -88,7 +88,9 @@ public class DocsValidationDoclet implements Doclet {
           // RecordBatchReader maps to arrow::record_batch::RecordBatch (Arrow, not DataFusion)
           "RecordBatchReader",
           // ColumnAssignment maps to Rust's (String, Expr) tuple — no standalone Rust type
-          "ColumnAssignment");
+          "ColumnAssignment",
+          // Pure Java helper used by Bridge classes — no Rust counterpart
+          "BridgeUtil");
 
   /** Name mismatch exceptions: Java name -> expected Rust label in @see. */
   private static final Map<String, String> NAME_EXCEPTIONS =
@@ -205,7 +207,9 @@ public class DocsValidationDoclet implements Doclet {
           // Pure Java helper record, created via CaseBuilder
           "WhenThen",
           // Simple (column, expr) pair used in TableProvider.update()
-          "ColumnAssignment");
+          "ColumnAssignment",
+          // Pure Java helper used by Bridge classes — no Rust counterpart
+          "BridgeUtil");
 
   /**
    * Per-class method exclusions for snippet validation. Methods listed here do not need a

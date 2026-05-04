@@ -175,7 +175,7 @@ pub(crate) fn register_memtable_impl(
     batch: &crate::bridge::ffi::DfArrowBatch,
 ) -> Result<(), Box<crate::bridge::ffi::DfError>> {
     // Access the pub(super) fields on DfArrowBatch from bridge.rs via a helper accessor pattern.
-    let name_str = std::str::from_utf8(name)?;
+    let name_str = crate::diplomat_util::diplomat_str(name)?;
     let (schema, record_batch) = arrow_batch_fields(batch);
     let table = MemTable::try_new(schema, vec![vec![record_batch]])?;
     handle

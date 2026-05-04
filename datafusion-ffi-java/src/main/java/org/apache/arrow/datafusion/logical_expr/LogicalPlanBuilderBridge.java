@@ -2,11 +2,8 @@ package org.apache.arrow.datafusion.logical_expr;
 
 import java.util.List;
 import org.apache.arrow.datafusion.ExprProtoConverter;
-import org.apache.arrow.datafusion.common.DataFusionError;
-import org.apache.arrow.datafusion.common.NativeDataFusionError;
-import org.apache.arrow.datafusion.generated.DfError;
+import org.apache.arrow.datafusion.common.BridgeUtil;
 import org.apache.arrow.datafusion.generated.DfJoinType;
-import org.apache.arrow.datafusion.generated.DfLogicalPlan;
 import org.apache.arrow.datafusion.generated.DfLogicalPlanBuilder;
 import org.apache.arrow.datafusion.generated.DfSessionContext;
 import org.apache.arrow.datafusion.proto.SortExprNodeCollection;
@@ -29,140 +26,84 @@ public final class LogicalPlanBuilderBridge implements AutoCloseable {
   }
 
   static LogicalPlanBuilderBridge createEmpty(DfSessionContext dfCtx, boolean produceOneRow) {
-    try {
-      return new LogicalPlanBuilderBridge(DfLogicalPlanBuilder.empty(dfCtx, produceOneRow));
-    } catch (DfError e) {
-      throw new NativeDataFusionError(e);
-    } catch (Exception e) {
-      throw new DataFusionError("Failed to create empty plan builder", e);
-    }
+    return BridgeUtil.unwrap(
+        "Failed to create empty plan builder",
+        () -> new LogicalPlanBuilderBridge(DfLogicalPlanBuilder.empty(dfCtx, produceOneRow)));
   }
 
   static LogicalPlanBuilderBridge createFromPlan(DfSessionContext dfCtx, LogicalPlanBridge plan) {
-    try {
-      return new LogicalPlanBuilderBridge(DfLogicalPlanBuilder.fromPlan(dfCtx, plan.dfPlan()));
-    } catch (DfError e) {
-      throw new NativeDataFusionError(e);
-    } catch (Exception e) {
-      throw new DataFusionError("Failed to create plan builder from plan", e);
-    }
+    return BridgeUtil.unwrap(
+        "Failed to create plan builder from plan",
+        () -> new LogicalPlanBuilderBridge(DfLogicalPlanBuilder.fromPlan(dfCtx, plan.dfPlan())));
   }
 
   LogicalPlanBuilderBridge project(List<Expr> exprs) {
     checkNotClosed();
     byte[] bytes = ExprProtoConverter.toProtoBytes(exprs);
-    try {
-      return new LogicalPlanBuilderBridge(dfBuilder.project(bytes));
-    } catch (DfError e) {
-      throw new NativeDataFusionError(e);
-    } catch (Exception e) {
-      throw new DataFusionError("Failed to project", e);
-    }
+    return BridgeUtil.unwrap(
+        "Failed to project", () -> new LogicalPlanBuilderBridge(dfBuilder.project(bytes)));
   }
 
   LogicalPlanBuilderBridge filter(Expr predicate) {
     checkNotClosed();
     byte[] bytes = ExprProtoConverter.toProtoBytes(List.of(predicate));
-    try {
-      return new LogicalPlanBuilderBridge(dfBuilder.filter(bytes));
-    } catch (DfError e) {
-      throw new NativeDataFusionError(e);
-    } catch (Exception e) {
-      throw new DataFusionError("Failed to filter", e);
-    }
+    return BridgeUtil.unwrap(
+        "Failed to filter", () -> new LogicalPlanBuilderBridge(dfBuilder.filter(bytes)));
   }
 
   LogicalPlanBuilderBridge sort(List<SortExpr> sortExprs) {
     checkNotClosed();
     byte[] bytes = sortExprToProtoBytes(sortExprs);
-    try {
-      return new LogicalPlanBuilderBridge(dfBuilder.sort(bytes));
-    } catch (DfError e) {
-      throw new NativeDataFusionError(e);
-    } catch (Exception e) {
-      throw new DataFusionError("Failed to sort", e);
-    }
+    return BridgeUtil.unwrap(
+        "Failed to sort", () -> new LogicalPlanBuilderBridge(dfBuilder.sort(bytes)));
   }
 
   LogicalPlanBuilderBridge limit(long skip, long fetch) {
     checkNotClosed();
-    try {
-      return new LogicalPlanBuilderBridge(dfBuilder.limit(skip, fetch));
-    } catch (DfError e) {
-      throw new NativeDataFusionError(e);
-    } catch (Exception e) {
-      throw new DataFusionError("Failed to limit", e);
-    }
+    return BridgeUtil.unwrap(
+        "Failed to limit", () -> new LogicalPlanBuilderBridge(dfBuilder.limit(skip, fetch)));
   }
 
   LogicalPlanBuilderBridge aggregate(List<Expr> groupExprs, List<Expr> aggrExprs) {
     checkNotClosed();
     byte[] groupBytes = ExprProtoConverter.toProtoBytes(groupExprs);
     byte[] aggrBytes = ExprProtoConverter.toProtoBytes(aggrExprs);
-    try {
-      return new LogicalPlanBuilderBridge(dfBuilder.aggregate(groupBytes, aggrBytes));
-    } catch (DfError e) {
-      throw new NativeDataFusionError(e);
-    } catch (Exception e) {
-      throw new DataFusionError("Failed to aggregate", e);
-    }
+    return BridgeUtil.unwrap(
+        "Failed to aggregate",
+        () -> new LogicalPlanBuilderBridge(dfBuilder.aggregate(groupBytes, aggrBytes)));
   }
 
   LogicalPlanBuilderBridge distinct() {
     checkNotClosed();
-    try {
-      return new LogicalPlanBuilderBridge(dfBuilder.distinct());
-    } catch (DfError e) {
-      throw new NativeDataFusionError(e);
-    } catch (Exception e) {
-      throw new DataFusionError("Failed to distinct", e);
-    }
+    return BridgeUtil.unwrap(
+        "Failed to distinct", () -> new LogicalPlanBuilderBridge(dfBuilder.distinct()));
   }
 
   LogicalPlanBuilderBridge having(Expr predicate) {
     checkNotClosed();
     byte[] bytes = ExprProtoConverter.toProtoBytes(List.of(predicate));
-    try {
-      return new LogicalPlanBuilderBridge(dfBuilder.having(bytes));
-    } catch (DfError e) {
-      throw new NativeDataFusionError(e);
-    } catch (Exception e) {
-      throw new DataFusionError("Failed to apply having", e);
-    }
+    return BridgeUtil.unwrap(
+        "Failed to apply having", () -> new LogicalPlanBuilderBridge(dfBuilder.having(bytes)));
   }
 
   LogicalPlanBuilderBridge window(List<Expr> windowExprs) {
     checkNotClosed();
     byte[] bytes = ExprProtoConverter.toProtoBytes(windowExprs);
-    try {
-      return new LogicalPlanBuilderBridge(dfBuilder.window(bytes));
-    } catch (DfError e) {
-      throw new NativeDataFusionError(e);
-    } catch (Exception e) {
-      throw new DataFusionError("Failed to apply window", e);
-    }
+    return BridgeUtil.unwrap(
+        "Failed to apply window", () -> new LogicalPlanBuilderBridge(dfBuilder.window(bytes)));
   }
 
   LogicalPlanBuilderBridge alias(String name) {
     checkNotClosed();
-    try {
-      return new LogicalPlanBuilderBridge(dfBuilder.alias(name));
-    } catch (DfError e) {
-      throw new NativeDataFusionError(e);
-    } catch (Exception e) {
-      throw new DataFusionError("Failed to apply alias", e);
-    }
+    return BridgeUtil.unwrap(
+        "Failed to apply alias", () -> new LogicalPlanBuilderBridge(dfBuilder.alias(name)));
   }
 
   LogicalPlanBuilderBridge explain(boolean verbose, boolean analyze) {
     checkNotClosed();
-    try {
-      return new LogicalPlanBuilderBridge(dfBuilder.explain(verbose, analyze));
-    } catch (DfError e) {
-      throw new NativeDataFusionError(e);
-    } catch (Exception e) {
-      throw new DataFusionError("Failed to explain", e);
-    }
+    return BridgeUtil.unwrap(
+        "Failed to explain",
+        () -> new LogicalPlanBuilderBridge(dfBuilder.explain(verbose, analyze)));
   }
 
   LogicalPlanBuilderBridge join(
@@ -170,82 +111,54 @@ public final class LogicalPlanBuilderBridge implements AutoCloseable {
     checkNotClosed();
     String[] leftArr = leftCols.toArray(new String[0]);
     String[] rightArr = rightCols.toArray(new String[0]);
-    try {
-      return new LogicalPlanBuilderBridge(
-          dfBuilder.join(right.dfPlan(), joinTypeToDfJoinType(joinType), leftArr, rightArr));
-    } catch (DfError e) {
-      throw new NativeDataFusionError(e);
-    } catch (Exception e) {
-      throw new DataFusionError("Failed to join", e);
-    }
+    return BridgeUtil.unwrap(
+        "Failed to join",
+        () ->
+            new LogicalPlanBuilderBridge(
+                dfBuilder.join(right.dfPlan(), joinTypeToDfJoinType(joinType), leftArr, rightArr)));
   }
 
   LogicalPlanBuilderBridge crossJoin(LogicalPlanBridge right) {
     checkNotClosed();
-    try {
-      return new LogicalPlanBuilderBridge(dfBuilder.crossJoin(right.dfPlan()));
-    } catch (DfError e) {
-      throw new NativeDataFusionError(e);
-    } catch (Exception e) {
-      throw new DataFusionError("Failed to cross join", e);
-    }
+    return BridgeUtil.unwrap(
+        "Failed to cross join",
+        () -> new LogicalPlanBuilderBridge(dfBuilder.crossJoin(right.dfPlan())));
   }
 
   LogicalPlanBuilderBridge union(LogicalPlanBridge other) {
     checkNotClosed();
-    try {
-      return new LogicalPlanBuilderBridge(dfBuilder.union(other.dfPlan()));
-    } catch (DfError e) {
-      throw new NativeDataFusionError(e);
-    } catch (Exception e) {
-      throw new DataFusionError("Failed to union", e);
-    }
+    return BridgeUtil.unwrap(
+        "Failed to union", () -> new LogicalPlanBuilderBridge(dfBuilder.union(other.dfPlan())));
   }
 
   LogicalPlanBuilderBridge unionDistinct(LogicalPlanBridge other) {
     checkNotClosed();
-    try {
-      return new LogicalPlanBuilderBridge(dfBuilder.unionDistinct(other.dfPlan()));
-    } catch (DfError e) {
-      throw new NativeDataFusionError(e);
-    } catch (Exception e) {
-      throw new DataFusionError("Failed to union distinct", e);
-    }
+    return BridgeUtil.unwrap(
+        "Failed to union distinct",
+        () -> new LogicalPlanBuilderBridge(dfBuilder.unionDistinct(other.dfPlan())));
   }
 
   LogicalPlanBridge build() {
     checkNotClosed();
-    try {
-      DfLogicalPlan plan = dfBuilder.build();
-      return new LogicalPlanBridge(plan);
-    } catch (DfError e) {
-      throw new NativeDataFusionError(e);
-    } catch (Exception e) {
-      throw new DataFusionError("Failed to build logical plan", e);
-    }
+    return BridgeUtil.unwrap(
+        "Failed to build logical plan", () -> new LogicalPlanBridge(dfBuilder.build()));
   }
 
   static LogicalPlanBridge intersect(
       LogicalPlanBridge left, LogicalPlanBridge right, boolean isAll) {
-    try {
-      DfLogicalPlan plan = DfLogicalPlanBuilder.intersect(left.dfPlan(), right.dfPlan(), isAll);
-      return new LogicalPlanBridge(plan);
-    } catch (DfError e) {
-      throw new NativeDataFusionError(e);
-    } catch (Exception e) {
-      throw new DataFusionError("Failed to intersect", e);
-    }
+    return BridgeUtil.unwrap(
+        "Failed to intersect",
+        () ->
+            new LogicalPlanBridge(
+                DfLogicalPlanBuilder.intersect(left.dfPlan(), right.dfPlan(), isAll)));
   }
 
   static LogicalPlanBridge except(LogicalPlanBridge left, LogicalPlanBridge right, boolean isAll) {
-    try {
-      DfLogicalPlan plan = DfLogicalPlanBuilder.except(left.dfPlan(), right.dfPlan(), isAll);
-      return new LogicalPlanBridge(plan);
-    } catch (DfError e) {
-      throw new NativeDataFusionError(e);
-    } catch (Exception e) {
-      throw new DataFusionError("Failed to except", e);
-    }
+    return BridgeUtil.unwrap(
+        "Failed to except",
+        () ->
+            new LogicalPlanBridge(
+                DfLogicalPlanBuilder.except(left.dfPlan(), right.dfPlan(), isAll)));
   }
 
   // ── Private helpers ──

@@ -3,6 +3,8 @@ package org.apache.arrow.datafusion;
 import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
 import org.apache.arrow.datafusion.execution.TaskContext;
+import org.apache.arrow.datafusion.generated.DfBoundedness;
+import org.apache.arrow.datafusion.generated.DfEmissionType;
 import org.apache.arrow.datafusion.generated.DfExecutionPlanTrait;
 import org.apache.arrow.datafusion.generated.DfRecordBatchReader;
 import org.apache.arrow.datafusion.physical_plan.ExecutionPlan;
@@ -53,19 +55,19 @@ final class DfExecutionPlanAdapter implements DfExecutionPlanTrait {
   }
 
   @Override
-  public int emissionType() {
+  public DfEmissionType emissionType() {
     return switch (plan.properties().emissionType()) {
-      case INCREMENTAL -> 0;
-      case FINAL -> 1;
-      case BOTH -> 2;
+      case INCREMENTAL -> DfEmissionType.INCREMENTAL;
+      case FINAL -> DfEmissionType.FINAL;
+      case BOTH -> DfEmissionType.BOTH;
     };
   }
 
   @Override
-  public int boundedness() {
+  public DfBoundedness boundedness() {
     return switch (plan.properties().boundedness()) {
-      case BOUNDED -> 0;
-      case UNBOUNDED -> 1;
+      case BOUNDED -> DfBoundedness.BOUNDED;
+      case UNBOUNDED -> DfBoundedness.UNBOUNDED;
     };
   }
 

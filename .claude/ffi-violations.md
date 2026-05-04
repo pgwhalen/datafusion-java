@@ -1,120 +1,137 @@
 # FFI Rule Violations & Duplication
 
-Audit of the codebase against `.claude/rules/ffi.md`, performed by 10 parallel agents and spot-verified. Findings are prioritized by impact. Line numbers are at the time of writing — re-grep before fixing.
+Audit of the codebase against `.claude/rules/ffi.md`. Most items in this file have been resolved;
+remaining work and deferred items are flagged below.
 
 ## Rule Violations
 
-### Integer-encoded enums across the FFI boundary
-The rule "NEVER return an integer value to represent an enumerated type across the FFI boundary" is violated in several Diplomat trait signatures. Every one of these has a corresponding Java adapter that switches on the int and a Rust caller that switches it back. All should be Diplomat enums.
+### Integer-encoded enums across the FFI boundary — **DONE**
+The rule "NEVER return an integer value to represent an enumerated type across the FFI boundary"
+was violated in several Diplomat trait signatures. Fixed by introducing Diplomat enums
+(`DfVolatility`, `DfTableType`, `DfEmissionType`, `DfBoundedness`, `DfFilterPushdown`) plus the
+already-existing `DfInsertOp`, and reworking `supports_filters_pushdown` to return a raw pointer
+to a new `DfFilterPushdownList` opaque (Java pushes typed enum values; Rust takes ownership and
+reads them back).
 
-- `bridge.rs:245` — `DfScalarUdfTrait::volatility() -> i32` (0/1/2)
-- `bridge.rs:290` — `DfAggregateUdfTrait::volatility() -> i32` (0/1/2)
-- `bridge.rs:403` — `DfTableTrait::table_type() -> i32` (0/1/2)
-- `bridge.rs:419` — `DfTableTrait::supports_filters_pushdown(...)` writes `i32` discriminants into the result buffer (3-state filter pushdown). The fixed-len buffer here is sized to `filters.len()` so it is not a cap violation, but the discriminant encoding is.
-- `bridge.rs:433` — `DfTableTrait::insert_into(..., insert_op: i32, ...)` — there is already a `DfInsertOp` Diplomat enum at `bridge.rs:102`; the trait should take that.
-- `execution_plan.rs:11` — `DfExecutionPlanTrait::emission_type() -> i32` (0/1/2)
-- `execution_plan.rs:13` — `DfExecutionPlanTrait::boundedness() -> i32` (0/1)
+Trait signatures updated:
+- `DfScalarUdfTrait::volatility() -> DfVolatility` (was `i32`)
+- `DfAggregateUdfTrait::volatility() -> DfVolatility` (was `i32`)
+- `DfTableTrait::table_type() -> DfTableType` (was `i32`)
+- `DfTableTrait::supports_filters_pushdown(...) -> usize` returning a `DfFilterPushdownList` raw
+  ptr (was an `(addr, cap) -> count` buffer of `i32` discriminants)
+- `DfTableTrait::insert_into(..., insert_op: DfInsertOp, ...)` (was `i32`)
+- `DfExecutionPlanTrait::emission_type() -> DfEmissionType` (was `i32`)
+- `DfExecutionPlanTrait::boundedness() -> DfBoundedness` (was `i32`)
 
-The Java adapters (`DfScalarUDFAdapter`, `DfAggregateUDFAdapter`, `DfTableAdapter`, `DfExecutionPlanAdapter`) all switch on the matching Java enum to produce these ints; converting to Diplomat enums would let the generated code do the mapping.
+Helpers `volatility_from_i32` (in `udf_common.rs`) and the inline `match` in `execution_plan.rs`
+became Diplomat-enum match statements.
 
-### Bridge classes are public when they should be package-private
-The rule says bridge classes "Are package-private (`final class *Bridge`)". 8 are `public`:
+### Public methods exposing Diplomat-generated types — **DEFERRED**
+The cross-package layout (Bridge classes in different packages need to share Diplomat handles)
+makes a clean fix impossible without a larger restructure:
 
-- `dataframe/DataFrameBridge.java:38`
-- `physical_expr/LiteralGuaranteeBridge.java:31`
-- `physical_plan/PhysicalExprBridge.java:19`
-- `physical_plan/SendableRecordBatchStreamBridge.java:24`
-- `logical_expr/LogicalPlanBridge.java:33`
-- `logical_expr/LogicalPlanBuilderBridge.java:21`
-- `execution/RuntimeEnvBridge.java:15`
-- `execution/SessionContextBridge.java:59`
+- `SessionContextBridge.dfContext()` is called from `LogicalPlanBuilder` in the `logical_expr`
+  package, so it can't be made package-private without moving code.
+- `RustCatalogProvider.handle()` / `RustTableProvider.handle()` are called from
+  `SessionContextBridge` in the `execution` package — same constraint.
 
-These are public because the public API classes that wrap them (e.g. `DataFrame`) live in different packages and need a way to construct them. Fixing this requires either co-locating the wrapper into the bridge's package or introducing package-private factory hops. Worth doing — the leak lets external code construct or downcast bridges.
+The new ArchUnit rule (`publicApiMethodsShouldNotReturnGeneratedTypes`) carves out
+`RustCatalogProvider` and `RustTableProvider` as documented exceptions; any new offender will fail
+the test.
 
-### Public methods exposing Diplomat-generated types
-- `SessionContextBridge.java:234` — `dfContext()` is `public` and returns `DfSessionContext` (a `generated.*` class). The bridge layer should encapsulate `Df*`; this hands the raw Diplomat handle out.
-- `providers/RustCatalogProvider.java:48` — `handle()` returns `DfRustCatalogProvider`.
-- `providers/RustTableProvider.java:46` — `handle()` returns `DfRustTableProvider`.
+### Public constructors taking internal types — **DEFERRED**
+Same cross-package constraint as above. `DataFrame(DataFrameBridge)`,
+`PhysicalExpr(PhysicalExprBridge)`, `LogicalPlanBuilder(LogicalPlanBuilderBridge)`, and the 40+
+`LogicalPlan$*` records all have public constructors taking Bridge parameters because they're
+constructed from packages other than their own. The ArchUnit rule for this was scoped out (see
+task #14 in the todo list).
 
-### Public constructors taking internal types
-Rule 5 of the encapsulation section ("Constructors taking internal types are package-private"). Verify these are package-private even though the parameter type is:
+### Open-coded `LogicalExprList` encoding — **DONE**
+- `bridge.rs:680` — `DfExprBytes::from_exprs` now delegates to `crate::table::encode_exprs` (which
+  was promoted from `pub(crate)`). The empty-slice short-circuit in `encode_exprs` now applies
+  uniformly.
 
-- `DataFrame.java:56` — public ctor takes `DataFrameBridge`.
-- `PhysicalExpr.java:36` — public ctor takes `PhysicalExprBridge`.
-- `LogicalPlanBuilder.java:33` — public ctor takes `LogicalPlanBuilderBridge`.
+### Open-coded `FFI_ArrowSchema` export — **NOT A VIOLATION**
+- `file_format.rs:87` and `file_source.rs:74` were flagged as needing `export_schema_to`.
+  Re-evaluation: both of those sites construct an `FFI_ArrowSchema` on the Rust stack and pass the
+  address to Java for *Java to read from*. There is no `std::ptr::write` and no Java-allocated
+  address; `export_schema_to` is for the opposite direction. Left as-is.
 
-The bridges are currently `public` (see above), so external code can in fact reach these. Fixing the bridge visibility would close the loophole; making the ctor package-private is the orthogonal fix.
+### Manual upcall plumbing where helpers exist — **PARTIAL**
+- `udaf.rs:134-138` (`accumulator()`) still builds an `ErrorBuffer` directly. This is acceptable
+  per the rules doc (similar to `stream.rs`); not changed in this pass.
 
-### Open-coded `LogicalExprList` encoding
-- `bridge.rs:681` — `DfExprBytes::from_exprs()` constructs `DefaultLogicalExtensionCodec` + `serialize_exprs` + `LogicalExprList { ... }.encode_to_vec()` directly. There is now a `encode_exprs()` helper in `table.rs` for exactly this — bridge should call it (and `from_exprs` in turn becomes a one-liner). Also note `from_exprs` is missing the empty-slice short-circuit that `encode_exprs` has.
-
-### Open-coded `FFI_ArrowSchema` export
-- `file_format.rs:87` — `FFI_ArrowSchema::try_from(self.schema.as_ref())` + manual `std::ptr::write` instead of `export_schema_to`.
-- `file_source.rs:74` — `FFI_ArrowSchema::try_from(schema)` + manual `std::ptr::write` instead of `export_schema_to`.
-
-The rule explicitly says: **"Always use this helper [`export_schema_to`] in any bridge method that exports a schema to a Java-allocated address — do not open-code the pattern."** `udf_common.rs::export_field_as_ffi_schema` is OK because it returns the `FFI_ArrowSchema` rather than writing it to a Java-allocated address — different use case. The earlier draft also flagged `var_provider.rs:75`; that site allocates an empty `FFI_ArrowSchema` for *Java to write into* (Java→Rust import direction), not an export, so it is not a violation.
-
-### Manual upcall plumbing where helpers exist
-- `udaf.rs:134-138` — `accumulator()` builds an `ErrorBuffer` directly, calls `accumulator_create`, branches on `acc_id < 0`. This is the shape of `do_counted_upcall` (returns `usize`, ID semantics aside). Could either widen the helper or wrap it. Low impact since stream.rs is similarly excused.
-
-### Inconsistent string conversion
-- `flight_sql_test_server.rs:178` — `std::str::from_utf8(name)?` directly instead of `diplomat_str(name)?`. Minor; one-line change.
+### Inconsistent string conversion — **DONE**
+- `flight_sql_test_server.rs:178` now calls `crate::diplomat_util::diplomat_str(name)` instead of
+  `std::str::from_utf8(name)`.
 
 ## Duplication
 
-Patterns repeated across many files that should be extracted into shared helpers. Listed by impact.
+### 1. Arrow C Data Interface size constants — **DONE**
+Hoisted to `FfiArrowConstants` (`ARROW_SCHEMA_SIZE`, `ARROW_ARRAY_SIZE`, `WRAPPED_ARRAY_SIZE`).
+The five adapter classes now reference the constants rather than redeclaring them.
 
-### 1. Arrow C Data Interface size constants (5 redeclarations)
-`ARROW_SCHEMA_SIZE = 72`, `ARROW_ARRAY_SIZE = 80`, `WRAPPED_ARRAY_SIZE = 152` are private static constants in:
-- `DfScalarUDFAdapter.java:23-26`
-- `DfAggregateUDFAdapter.java:30-32`
-- `DfRecordBatchReaderAdapter.java:104-106`
-- `DfFileSourceAdapter.java:23`
-- `DfVarProviderAdapter.java:24`
+### 2. Field import/export helpers — **DONE**
+Extracted `importFieldFromSegment`, `importFieldArray`, `importFieldFromAddress`,
+`exportFieldToAddress` (and friends) to a new package-private `FfiSchemaUtil` class. Removed the
+duplicate copies from `DfScalarUDFAdapter` and `DfAggregateUDFAdapter`.
 
-Hoist into `NativeUtil` (or a new `FfiArrowConstants`) as package-private constants.
+### 3. Release-callback nullification idiom — **DONE**
+`FfiSchemaUtil` now exposes:
+- `importSchemaFromSegment(BufferAllocator, MemorySegment)` and `…FromAddress`
+- `importArrayFromSegment(BufferAllocator, MemorySegment)`
+- `copySchemaToAddress(MemorySegment, long)` / `copyArrayToAddress(...)` for the export
+  direction
+- `importFieldArray` / `exportFieldToAddress` / `importFieldFromAddress` for the wrapped-Field
+  pattern
 
-### 2. Field import/export helpers (full duplication across two adapters, ~120 lines)
-`importFieldFromSegment`, `importFieldArray`, `importFieldFromAddress`, `exportFieldToAddress` are defined privately and **identically** in both `DfScalarUDFAdapter.java` (lines 205-263) and `DfAggregateUDFAdapter.java` (lines 285-324). They wrap a `Field` in a single-field `Schema`, copy `FFI_ArrowSchema` 72 bytes, and clear the source release callback. Extract to a package-private helper class (e.g. `FfiSchemaUtil`) or to `NativeUtil`.
+Adapter classes (`DfFileSourceAdapter`, `DfVarProviderAdapter`, `DfScalarUDFAdapter`,
+`DfAggregateUDFAdapter`, `DfRecordBatchReaderAdapter`) all use the helpers.
 
-### 3. Release-callback nullification idiom (~13 sites)
-The `copyFrom(...)` + `segment.set(ValueLayout.ADDRESS, 56|64, MemorySegment.NULL)` pattern appears in:
-- `DfFileSourceAdapter.java:53`
-- `DfScalarUDFAdapter.java:108-109, 152-153, 238, 261`
-- `DfVarProviderAdapter.java:70`
-- `DfAggregateUDFAdapter.java:274-275, 308, 322`
-- `DfRecordBatchReaderAdapter.java:71, 81`
+### 4. `Linker` + `lib.find().orElseThrow()` + `downcallHandle()` boilerplate — **DONE**
+Added `NativeUtil.createDowncallHandle(String, FunctionDescriptor)`; both `NativeUtil`'s own
+static block and `DfTableAdapter` use it (was 4 lines each, now 1 line per handle).
 
-Two helpers — `importSchemaFromSegment(srcSegment)` and `importArrayFromSegment(srcSegment)` — would encapsulate the offset constants (56 vs 64) and the copy+nullify pattern. The auto-memory note about offset 56 vs 64 confusion (`CLAUDE.md` was wrong about offset 64 for ArrowSchema) is exactly the kind of footgun a helper would prevent.
+### 5. Bridge `DfError` → `DataFusionException` conversion — **PARTIAL**
+Added `BridgeUtil.unwrap(String, Supplier<T>)` and the `Runnable` overload. Refactored
+`LogicalPlanBuilderBridge` end-to-end as the exemplar; the other 5–6 bridge classes still use the
+old inline `try { ... } catch (DfError e) { ... }` pattern. Migrating those is straightforward
+follow-up work.
 
-### 4. UDF/UDAF trait method overlap
-`DfScalarUdfTrait` and `DfAggregateUdfTrait` in `bridge.rs` share four identical method signatures: `name_raw`, `volatility`, `return_field`, `coerce_types`. If Diplomat supports trait composition this could be a shared base; otherwise at minimum the docstrings should be deduplicated or kept in sync via comments.
+### 6. `DfStringArray` try-with-resources iteration — **DONE**
+Added `BridgeUtil.toList(DfStringArray)`. `SessionContextBridge.toStringList` was removed in favor
+of the helper. `SessionConfigBridge.options()` (key/value zip) and `TaskContextBridge.toHandleMap`
+(name→handle map) have different shapes and stay as-is.
 
-### 5. Boilerplate `Linker` + `lib.find().orElseThrow()` + `downcallHandle()` setup
-Repeated in `NativeUtil.java:31-60` (8 handles) and `DfTableAdapter.java:52-68` (3 handles, for the `DfLazyRecordBatchStream_*` symbols). A small helper `createDowncallHandle(String name, FunctionDescriptor)` would compress each from 4 lines to 1.
-
-### 6. Bridge `DfError` → `DataFusionException` conversion
-The documented pattern (`try (e) { throw new DataFusionException(e.toDisplay()); }`) is implemented inline in 50+ methods across all bridge classes, often via a helper called `NativeDataFusionError` rather than `DataFusionException` (which deviates from the rule's documented snippet). Worth either:
-- updating the rule to reflect the actual `NativeDataFusionError` wrapper, OR
-- introducing a single `BridgeUtil.unwrap(Supplier<T>)` helper that all sites use.
-
-### 7. `DfStringArray` try-with-resources iteration in bridges
-Inline `try (DfStringArray names = ...) { for (...) names.get(i, ...); }` blocks in `SessionConfigBridge.java:43`, `SessionContextBridge.java:613/620/632`, `TaskContextBridge.java:60/67`. Could be a `BridgeUtil.toList(DfStringArray)` helper analogous to `NativeUtil.fromRawStringArray` for the upcall side.
-
-### 8. `DfExprBytes` byte-extraction idiom
-Repeated `Arena.ofConfined()` + `arena.allocate(len)` + `exprBytes.copyTo(addr, len)` + `toArray(JAVA_BYTE)` blocks in `LiteralGuaranteeBridge.java:107` (private `readExprBytes`), `LogicalPlanBridge.java:426` (private `readRawBytes`, used at 133/172/408/418), and `SessionContextBridge.java:256-263` (inline). Promote `readRawBytes` to a shared package-private helper.
+### 7. `DfExprBytes` byte-extraction idiom — **DONE**
+Added `BridgeUtil.readBytes(DfExprBytes)`. `LogicalPlanBridge.readRawBytes`,
+`LiteralGuaranteeBridge.readExprBytes`, and `SessionContextBridge.parseSqlExpr` all delegate to it
+now.
 
 ## Things that look like violations but aren't
 
-- **`DfScalarUDFAdapter.java:153`** — clearing offset 64 (private_data) on an `ArrowSchema` during *export to Rust*. The auto-memory entry "Arrow C Data Interface: Release vs Private_data Offsets" explicitly notes this is acceptable in the export direction because `ArrowSchema.close()` does not call the release callback. Not a bug.
-- **`duckdb_factory.rs::RustDuckDbMode`** — one agent flagged this as missing `#[diplomat::enum_convert]`, but the attribute is present at line 17.
-- **`table.rs:131` `result_buf = vec![0i32; result_cap]`** — sized to `filters.len()`, not a hardcoded cap. The discriminant *encoding* is the violation, not the buffer size.
+- **`DfScalarUDFAdapter.java:153`** — clearing offset 64 (private_data) on an `ArrowSchema` during
+  *export to Rust*. The auto-memory entry "Arrow C Data Interface: Release vs Private_data
+  Offsets" explicitly notes this is acceptable in the export direction because
+  `ArrowSchema.close()` does not call the release callback. Encapsulated in
+  `FfiSchemaUtil.copySchemaToAddress` with a comment; not a bug.
+- **`duckdb_factory.rs::RustDuckDbMode`** — one agent flagged this as missing
+  `#[diplomat::enum_convert]`, but the attribute is present at line 17.
+- **`table.rs:131` `result_buf = vec![0i32; result_cap]`** — gone, replaced by the
+  `DfFilterPushdownList` opaque.
 
-## ArchUnit gaps
+## ArchUnit additions
 
-`DiplomatEncapsulationTest` enforces rules 2/3/4 of the encapsulation section (no `java.lang.foreign` in public API, no `MemorySegment` in signatures, `NativeLoader` confined). It does **not** enforce:
-- Rule 5 (constructors taking internal types must be package-private).
-- "Bridge classes are package-private."
-- "Public API classes do not return Diplomat-generated `Df*` types."
+`DiplomatEncapsulationTest` previously enforced rules 2/3/4 of the encapsulation section. Added:
 
-Adding ArchUnit rules for these would have caught several of the violations above.
+- **Rule 5** — `publicApiMethodsShouldNotReturnGeneratedTypes`: public API classes (i.e., not
+  `*Bridge` / `*Adapter` / `*Ffi` / `generated.*`) must not return Diplomat-generated `Df*` types.
+  `RustCatalogProvider` / `RustTableProvider` are listed as known carve-outs.
+
+The "constructors taking internal types must be package-private" rule was prototyped but rejected
+— it flagged ~50 cases (most of them auto-generated record canonical constructors for
+`LogicalPlan`'s sealed-interface variants), virtually all of which require cross-package
+restructuring to fix. Tracked in the deferred task #3.
+
+`UTILITY_CLASS_NAMES` (the set of classes considered internal helpers) was extended with
+`BridgeUtil`, `FfiSchemaUtil`, and `FfiArrowConstants`.

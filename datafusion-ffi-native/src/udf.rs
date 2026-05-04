@@ -1,8 +1,8 @@
-use crate::bridge::ffi::{DfScalarUdfTrait, DfStringArray};
-use crate::udf_common::{
-    export_field_as_ffi_schema, export_field_refs_as_ffi_schemas, upcall_coerce_types,
-    upcall_return_field, volatility_from_i32,
+use crate::arrow_ffi_util::{
+    export_arrays_as_ffi, export_field_as_ffi_schema, export_field_refs_as_ffi_schemas,
 };
+use crate::bridge::ffi::{DfScalarUdfTrait, DfStringArray};
+use crate::udf_common::{upcall_coerce_types, upcall_return_field, volatility_from_df};
 use crate::upcall_utils::{do_upcall, ErrorBuffer};
 use arrow::array::StructArray;
 use arrow::datatypes::{DataType, FieldRef};
@@ -28,7 +28,7 @@ impl<T: DfScalarUdfTrait> ForeignDfUdf<T> {
             .into_iter()
             .next()
             .unwrap_or_else(|| "unknown_udf".to_string());
-        let volatility = volatility_from_i32(inner.volatility());
+        let volatility = volatility_from_df(inner.volatility());
         let signature = Signature::variadic_any(volatility);
 
         Self {
@@ -108,7 +108,7 @@ impl<T: DfScalarUdfTrait + 'static> ScalarUDFImpl for ForeignDfUdf<T> {
             .collect();
 
         let num_args = arrays.len();
-        let ffi_pairs = crate::udf_common::export_arrays_as_ffi(&arrays)?;
+        let ffi_pairs = export_arrays_as_ffi(&arrays)?;
         let args_addr = ffi_pairs.as_ptr() as usize;
 
         let ffi_arg_schemas = export_field_refs_as_ffi_schemas(&args.arg_fields)?;

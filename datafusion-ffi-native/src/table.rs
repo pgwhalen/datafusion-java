@@ -2,7 +2,7 @@ use crate::bridge::ffi::DfTableTrait;
 use crate::execution_plan::ffi::DfExecutionPlan;
 use crate::bridge::{ffi::DfLazyRecordBatchStream, ffi::DfStringArray, LazyStreamState};
 use crate::bridge::{import_schema, ExecutionPlanBridge, TableProviderBridge};
-use crate::upcall_utils::{do_counted_upcall, do_returning_upcall, ErrorBuffer};
+use crate::upcall_utils::{do_returning_upcall, ErrorBuffer};
 use arrow::datatypes::Schema as ArrowSchema;
 use async_trait::async_trait;
 use datafusion::catalog::TableProvider;
@@ -18,8 +18,13 @@ use std::any::Any;
 use std::fmt;
 use std::sync::Arc;
 
-/// Serialize expressions to protobuf bytes. Returns an empty Vec for empty input.
-fn encode_exprs(exprs: &[Expr]) -> datafusion::error::Result<Vec<u8>> {
+/// Serialize `&[Expr]` to protobuf `LogicalExprList` bytes for handing across the FFI boundary
+/// as a single `&[u8]` slice. Returns an empty `Vec` for empty input.
+///
+/// **Always use this** instead of open-coding `DefaultLogicalExtensionCodec` + `serialize_exprs`
+/// + `LogicalExprList { ... }.encode_to_vec()` — it centralizes the empty-slice short-circuit
+/// and ensures the codec is consistent everywhere.
+pub(crate) fn encode_exprs(exprs: &[Expr]) -> datafusion::error::Result<Vec<u8>> {
     if exprs.is_empty() {
         return Ok(Vec::new());
     }
@@ -67,9 +72,9 @@ impl<T: DfTableTrait + 'static> TableProvider for ForeignDfTable<T> {
 
     fn table_type(&self) -> TableType {
         match self.inner.table_type() {
-            1 => TableType::View,
-            2 => TableType::Temporary,
-            _ => TableType::Base,
+            crate::bridge::ffi::DfTableType::Base => TableType::Base,
+            crate::bridge::ffi::DfTableType::View => TableType::View,
+            crate::bridge::ffi::DfTableType::Temporary => TableType::Temporary,
         }
     }
 
@@ -128,27 +133,28 @@ impl<T: DfTableTrait + 'static> TableProvider for ForeignDfTable<T> {
         let owned_filters: Vec<Expr> = filters.iter().map(|f| (*f).clone()).collect();
         let filter_bytes = encode_exprs(&owned_filters)?;
 
-        // Result buffer for i32 discriminants
-        let result_cap = filters.len();
-        let mut result_buf = vec![0i32; result_cap];
-        let result_addr = result_buf.as_mut_ptr() as usize;
-
-        let count = do_counted_upcall("Java supports_filters_pushdown failed", |err: &ErrorBuffer| {
-            self.inner.supports_filters_pushdown(
-                filter_bytes.as_ptr() as usize,
-                filter_bytes.len(),
-                result_addr,
-                result_cap,
-                err.addr(),
-                err.cap(),
-            )
-        })?;
-        Ok(result_buf[..count]
+        let list = do_returning_upcall::<crate::bridge::ffi::DfFilterPushdownList>(
+            "Java supports_filters_pushdown failed",
+            Box::new(|err: &ErrorBuffer| {
+                self.inner.supports_filters_pushdown(
+                    filter_bytes.as_ptr() as usize,
+                    filter_bytes.len(),
+                    err.addr(),
+                    err.cap(),
+                )
+            }),
+        )?;
+        Ok(list
+            .items
             .iter()
-            .map(|&d| match d {
-                2 => TableProviderFilterPushDown::Exact,
-                1 => TableProviderFilterPushDown::Inexact,
-                _ => TableProviderFilterPushDown::Unsupported,
+            .map(|d| match d {
+                crate::bridge::ffi::DfFilterPushdown::Exact => TableProviderFilterPushDown::Exact,
+                crate::bridge::ffi::DfFilterPushdown::Inexact => {
+                    TableProviderFilterPushDown::Inexact
+                }
+                crate::bridge::ffi::DfFilterPushdown::Unsupported => {
+                    TableProviderFilterPushDown::Unsupported
+                }
             })
             .collect())
     }
@@ -177,17 +183,16 @@ impl<T: DfTableTrait + 'static> TableProvider for ForeignDfTable<T> {
         };
         let stream_ptr = Box::into_raw(Box::new(lazy_stream)) as usize;
 
-        // Convert InsertOp to i32 discriminant
-        let insert_op_i32: i32 = match insert_op {
-            InsertOp::Append => 0,
-            InsertOp::Overwrite => 1,
-            InsertOp::Replace => 2,
+        let df_insert_op = match insert_op {
+            InsertOp::Append => crate::bridge::ffi::DfInsertOp::Append,
+            InsertOp::Overwrite => crate::bridge::ffi::DfInsertOp::Overwrite,
+            InsertOp::Replace => crate::bridge::ffi::DfInsertOp::Replace,
         };
 
         let plan = do_returning_upcall::<DfExecutionPlan>(
             "Java insert_into callback failed",
             Box::new(|err: &ErrorBuffer| {
-                self.inner.insert_into(session_addr, stream_ptr, insert_op_i32, err.addr(), err.cap())
+                self.inner.insert_into(session_addr, stream_ptr, df_insert_op, err.addr(), err.cap())
             }),
         )?;
         let arc: Arc<dyn ExecutionPlanBridge> = Arc::from(plan.0);

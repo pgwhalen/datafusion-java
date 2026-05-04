@@ -11,7 +11,20 @@ import java.util.List;
 import org.apache.arrow.datafusion.generated.DfStringArray;
 
 /**
- * Utility class for adapter helpers used by Diplomat-generated trait adapters (Df*Adapter classes).
+ * Adapter-side FFM helpers used by {@code Df*Adapter} classes that implement Diplomat trait
+ * upcalls. Scoped to the <em>raw {@code long} address</em> side of the FFI boundary: each method
+ * works with addresses or raw pointers handed in by Rust during a trait callback, plus the
+ * downcall-handle plumbing needed to talk back to Rust.
+ *
+ * <p>This is distinct from:
+ *
+ * <ul>
+ *   <li>{@code BridgeUtil} ({@code common} package, public) — bridge-side helpers that work with
+ *       Diplomat-generated <em>opaque types</em> ({@link DfStringArray}, {@code DfExprBytes},
+ *       {@code DfError}) returned by downcalls.
+ *   <li>{@link ArrowFfiUtil} — Arrow C Data Interface struct transfer (constants, copy +
+ *       clear-release for {@code FFI_ArrowSchema} / {@code FFI_ArrowArray}).
+ * </ul>
  */
 final class NativeUtil {
 
@@ -27,37 +40,42 @@ final class NativeUtil {
   private static final MethodHandle DIPLOMAT_BUFFER_WRITE_DESTROY;
 
   static {
-    var lib = NativeLoader.get();
-    var linker = Linker.nativeLinker();
     STRING_ARRAY_LEN =
-        linker.downcallHandle(
-            lib.find("datafusion_DfStringArray_len").orElseThrow(),
+        createDowncallHandle(
+            "datafusion_DfStringArray_len",
             FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
     STRING_ARRAY_GET =
-        linker.downcallHandle(
-            lib.find("datafusion_DfStringArray_get").orElseThrow(),
+        createDowncallHandle(
+            "datafusion_DfStringArray_get",
             FunctionDescriptor.ofVoid(
                 ValueLayout.ADDRESS, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
     STRING_ARRAY_DESTROY =
-        linker.downcallHandle(
-            lib.find("datafusion_DfStringArray_destroy").orElseThrow(),
-            FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
+        createDowncallHandle(
+            "datafusion_DfStringArray_destroy", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
     DIPLOMAT_BUFFER_WRITE_CREATE =
-        linker.downcallHandle(
-            lib.find("diplomat_buffer_write_create").orElseThrow(),
+        createDowncallHandle(
+            "diplomat_buffer_write_create",
             FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.JAVA_LONG));
     DIPLOMAT_BUFFER_WRITE_GET_BYTES =
-        linker.downcallHandle(
-            lib.find("diplomat_buffer_write_get_bytes").orElseThrow(),
+        createDowncallHandle(
+            "diplomat_buffer_write_get_bytes",
             FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
     DIPLOMAT_BUFFER_WRITE_LEN =
-        linker.downcallHandle(
-            lib.find("diplomat_buffer_write_len").orElseThrow(),
+        createDowncallHandle(
+            "diplomat_buffer_write_len",
             FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
     DIPLOMAT_BUFFER_WRITE_DESTROY =
-        linker.downcallHandle(
-            lib.find("diplomat_buffer_write_destroy").orElseThrow(),
-            FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
+        createDowncallHandle(
+            "diplomat_buffer_write_destroy", FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
+  }
+
+  /**
+   * Resolve a native symbol and bind a downcall handle to it. Throws {@link
+   * java.util.NoSuchElementException} (via {@code orElseThrow}) if the symbol is missing.
+   */
+  static MethodHandle createDowncallHandle(String name, FunctionDescriptor descriptor) {
+    return Linker.nativeLinker()
+        .downcallHandle(NativeLoader.get().find(name).orElseThrow(), descriptor);
   }
 
   private NativeUtil() {}
