@@ -2,7 +2,6 @@ package org.apache.arrow.datafusion;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.FunctionDescriptor;
-import java.lang.foreign.Linker;
 import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
@@ -18,7 +17,11 @@ import org.apache.arrow.datafusion.catalog.ScanArgs;
 import org.apache.arrow.datafusion.catalog.Session;
 import org.apache.arrow.datafusion.catalog.TableProvider;
 import org.apache.arrow.datafusion.generated.DfExecutionPlan;
+import org.apache.arrow.datafusion.generated.DfFilterPushdown;
+import org.apache.arrow.datafusion.generated.DfFilterPushdownList;
+import org.apache.arrow.datafusion.generated.DfInsertOp;
 import org.apache.arrow.datafusion.generated.DfTableTrait;
+import org.apache.arrow.datafusion.generated.DfTableType;
 import org.apache.arrow.datafusion.logical_expr.ColumnAssignment;
 import org.apache.arrow.datafusion.logical_expr.Expr;
 import org.apache.arrow.datafusion.logical_expr.InsertOp;
@@ -48,19 +51,17 @@ public final class DfTableAdapter implements DfTableTrait {
   private static final MethodHandle LAZY_STREAM_NEXT;
 
   static {
-    var lib = NativeLoader.get();
-    var linker = Linker.nativeLinker();
     LAZY_STREAM_DESTROY =
-        linker.downcallHandle(
-            lib.find("datafusion_DfLazyRecordBatchStream_destroy").orElseThrow(),
+        NativeUtil.createDowncallHandle(
+            "datafusion_DfLazyRecordBatchStream_destroy",
             FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
     LAZY_STREAM_SCHEMA_TO =
-        linker.downcallHandle(
-            lib.find("datafusion_DfLazyRecordBatchStream_schema_to").orElseThrow(),
+        NativeUtil.createDowncallHandle(
+            "datafusion_DfLazyRecordBatchStream_schema_to",
             FunctionDescriptor.of(LAZY_STREAM_RESULT, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG));
     LAZY_STREAM_NEXT =
-        linker.downcallHandle(
-            lib.find("datafusion_DfLazyRecordBatchStream_next").orElseThrow(),
+        NativeUtil.createDowncallHandle(
+            "datafusion_DfLazyRecordBatchStream_next",
             FunctionDescriptor.of(
                 LAZY_STREAM_RESULT,
                 ValueLayout.ADDRESS,
@@ -103,11 +104,11 @@ public final class DfTableAdapter implements DfTableTrait {
   }
 
   @Override
-  public int tableType() {
+  public DfTableType tableType() {
     return switch (provider.tableType()) {
-      case BASE -> 0;
-      case VIEW -> 1;
-      case TEMPORARY -> 2;
+      case BASE -> DfTableType.BASE;
+      case VIEW -> DfTableType.VIEW;
+      case TEMPORARY -> DfTableType.TEMPORARY;
     };
   }
 
@@ -170,13 +171,8 @@ public final class DfTableAdapter implements DfTableTrait {
   }
 
   @Override
-  public int supportsFiltersPushdown(
-      long filtersAddr,
-      long filtersLen,
-      long resultAddr,
-      long resultCap,
-      long errorAddr,
-      long errorCap) {
+  public long supportsFiltersPushdown(
+      long filtersAddr, long filtersLen, long errorAddr, long errorCap) {
     try {
       // Deserialize filters from raw byte buffer
       byte[] filterBytes = NativeUtil.readBytes(filtersAddr, filtersLen);
@@ -188,28 +184,25 @@ public final class DfTableAdapter implements DfTableTrait {
       // Call provider
       List<TableProviderFilterPushDown> results = provider.supportsFiltersPushdown(filterExprs);
 
-      // Write i32 discriminants to result buffer
-      int count = (int) Math.min(results.size(), resultCap);
-      MemorySegment resultMem = MemorySegment.ofAddress(resultAddr).reinterpret((long) count * 4);
-      for (int i = 0; i < count; i++) {
-        int disc =
-            switch (results.get(i)) {
-              case UNSUPPORTED -> 0;
-              case INEXACT -> 1;
-              case EXACT -> 2;
-            };
-        resultMem.setAtIndex(ValueLayout.JAVA_INT, i, disc);
+      DfFilterPushdownList list = DfFilterPushdownList.newEmpty();
+      for (TableProviderFilterPushDown r : results) {
+        list.push(
+            switch (r) {
+              case UNSUPPORTED -> DfFilterPushdown.UNSUPPORTED;
+              case INEXACT -> DfFilterPushdown.INEXACT;
+              case EXACT -> DfFilterPushdown.EXACT;
+            });
       }
-      return count;
+      return list.toRawPtr();
     } catch (Exception e) {
       Errors.writeException(errorAddr, errorCap, e, fullStackTrace);
-      return -1;
+      return 0;
     }
   }
 
   @Override
   public long insertInto(
-      long sessionAddr, long inputStreamPtr, int insertOp, long errorAddr, long errorCap) {
+      long sessionAddr, long inputStreamPtr, DfInsertOp insertOp, long errorAddr, long errorCap) {
     MemorySegment streamHandle = MemorySegment.ofAddress(inputStreamPtr);
     boolean streamClosed = false;
     try {
@@ -265,12 +258,11 @@ public final class DfTableAdapter implements DfTableTrait {
           new SendableRecordBatchStreamBridge(adapter, allocator);
       SendableRecordBatchStream stream = new SendableRecordBatchStream(bridge);
 
-      // Convert insert op discriminant
       InsertOp op =
           switch (insertOp) {
-            case 1 -> InsertOp.OVERWRITE;
-            case 2 -> InsertOp.REPLACE;
-            default -> InsertOp.APPEND;
+            case APPEND -> InsertOp.APPEND;
+            case OVERWRITE -> InsertOp.OVERWRITE;
+            case REPLACE -> InsertOp.REPLACE;
           };
 
       Session session = new Session(allocator);

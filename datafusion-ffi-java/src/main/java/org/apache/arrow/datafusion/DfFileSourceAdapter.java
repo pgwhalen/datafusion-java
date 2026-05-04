@@ -1,7 +1,5 @@
 package org.apache.arrow.datafusion;
 
-import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -20,8 +18,6 @@ import org.apache.arrow.vector.types.pojo.Schema;
  * interface for FFI callbacks.
  */
 final class DfFileSourceAdapter implements DfFileSourceTrait {
-  private static final long ARROW_SCHEMA_SIZE = 72;
-
   private final FileSource source;
   private final BufferAllocator allocator;
   private final boolean fullStackTrace;
@@ -44,13 +40,7 @@ final class DfFileSourceAdapter implements DfFileSourceTrait {
     try {
       // Import schema from FFI address
       Schema schema;
-      try (ArrowSchema ffiSchema = ArrowSchema.allocateNew(allocator)) {
-        MemorySegment dest =
-            MemorySegment.ofAddress(ffiSchema.memoryAddress()).reinterpret(ARROW_SCHEMA_SIZE);
-        MemorySegment src = MemorySegment.ofAddress(schemaAddr).reinterpret(ARROW_SCHEMA_SIZE);
-        dest.copyFrom(src);
-        // Clear release callback (offset 56) in Rust source so Rust's Drop is a no-op.
-        src.set(ValueLayout.ADDRESS, 56, MemorySegment.NULL);
+      try (ArrowSchema ffiSchema = ArrowFfiUtil.importSchemaFromAddress(allocator, schemaAddr)) {
         schema = Data.importSchema(allocator, ffiSchema, null);
       }
 

@@ -1,68 +1,26 @@
-//! Shared helpers for UDF and UDAF FFI implementations.
+//! UDF / UDAF upcall plumbing built on top of the Arrow C Data Interface helpers in
+//! `arrow_ffi_util`. These helpers are specialized to the field-and-type-shaped trait methods
+//! shared by `ScalarUDFImpl` and `AggregateUDFImpl` (`return_field`, `coerce_types`, …); they
+//! combine the upcall-error pattern from `upcall_utils` with the Arrow-FFI export/import idioms.
 
+use crate::arrow_ffi_util::{
+    export_field_refs_as_ffi_schemas, export_types_as_ffi_schemas, import_field_from_ffi_schema,
+};
 use crate::upcall_utils::{do_counted_upcall, do_upcall, ErrorBuffer};
-use arrow::array::ArrayRef;
-use arrow::datatypes::{DataType, Field, FieldRef, Schema as ArrowSchema};
-use arrow::ffi::{to_ffi, FFI_ArrowArray, FFI_ArrowSchema};
+use arrow::datatypes::{DataType, FieldRef};
+use arrow::ffi::FFI_ArrowSchema;
 use datafusion::common::{DataFusionError, Result as DFResult, ScalarValue};
 use datafusion::logical_expr::Volatility;
 use prost::Message;
 use std::sync::Arc;
 
-/// Map integer volatility (0=Immutable, 1=Stable, 2=Volatile) to `Volatility`.
-pub(crate) fn volatility_from_i32(v: i32) -> Volatility {
+/// Map a Diplomat `DfVolatility` to `Volatility`.
+pub(crate) fn volatility_from_df(v: crate::bridge::ffi::DfVolatility) -> Volatility {
     match v {
-        1 => Volatility::Stable,
-        2 => Volatility::Volatile,
-        _ => Volatility::Immutable,
+        crate::bridge::ffi::DfVolatility::Immutable => Volatility::Immutable,
+        crate::bridge::ffi::DfVolatility::Stable => Volatility::Stable,
+        crate::bridge::ffi::DfVolatility::Volatile => Volatility::Volatile,
     }
-}
-
-/// Export a single field as an `FFI_ArrowSchema`, wrapped in a parent Schema (format "+s")
-/// so the Java side can import it uniformly via `Data.importSchema`.
-pub(crate) fn export_field_as_ffi_schema(field: &Field) -> DFResult<FFI_ArrowSchema> {
-    let schema = ArrowSchema::new(vec![field.clone()]);
-    FFI_ArrowSchema::try_from(&schema)
-        .map_err(|e| DataFusionError::External(format!("Failed to export field: {}", e).into()))
-}
-
-/// Export a list of field refs as a vector of `FFI_ArrowSchema`s.
-pub(crate) fn export_field_refs_as_ffi_schemas(
-    fields: &[FieldRef],
-) -> DFResult<Vec<FFI_ArrowSchema>> {
-    fields
-        .iter()
-        .map(|f| export_field_as_ffi_schema(f.as_ref()))
-        .collect()
-}
-
-/// Export a list of data types as `FFI_ArrowSchema`s by wrapping each in an anonymous field.
-pub(crate) fn export_types_as_ffi_schemas(types: &[DataType]) -> DFResult<Vec<FFI_ArrowSchema>> {
-    types
-        .iter()
-        .map(|dt| export_field_as_ffi_schema(&Field::new("", dt.clone(), true)))
-        .collect()
-}
-
-/// Import a `Field` from an `FFI_ArrowSchema` (unwrapping the Schema wrapper).
-pub(crate) fn import_field_from_ffi_schema(ffi: &FFI_ArrowSchema) -> DFResult<Field> {
-    let schema = ArrowSchema::try_from(ffi)
-        .map_err(|e| DataFusionError::External(format!("Failed to import field: {}", e).into()))?;
-    Ok(schema.field(0).clone())
-}
-
-/// Export Arrow arrays as `(FFI_ArrowArray, FFI_ArrowSchema)` pairs for FFI.
-pub(crate) fn export_arrays_as_ffi(
-    arrays: &[ArrayRef],
-) -> DFResult<Vec<(FFI_ArrowArray, FFI_ArrowSchema)>> {
-    arrays
-        .iter()
-        .map(|array| {
-            to_ffi(&array.to_data()).map_err(|e| {
-                DataFusionError::External(format!("Failed to export array: {}", e).into())
-            })
-        })
-        .collect()
 }
 
 /// Perform a "return_field"-style upcall: pass arg fields, receive a single field.

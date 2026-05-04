@@ -1,9 +1,6 @@
 package org.apache.arrow.datafusion.physical_expr;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import java.lang.foreign.Arena;
-import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -12,6 +9,7 @@ import org.apache.arrow.datafusion.Location;
 import org.apache.arrow.datafusion.ScalarValueProtoConverter;
 import org.apache.arrow.datafusion.Span;
 import org.apache.arrow.datafusion.Spans;
+import org.apache.arrow.datafusion.common.BridgeUtil;
 import org.apache.arrow.datafusion.common.Column;
 import org.apache.arrow.datafusion.common.DataFusionError;
 import org.apache.arrow.datafusion.common.NativeDataFusionError;
@@ -103,18 +101,10 @@ public final class LiteralGuaranteeBridge {
     }
   }
 
-  /** Extract bytes from a DfExprBytes opaque using the Diplomat pattern. */
+  /** Extract bytes from a DfExprBytes opaque (closes the source). */
   private static byte[] readExprBytes(DfExprBytes exprBytes) {
     try (exprBytes) {
-      long len = exprBytes.len();
-      if (len == 0) {
-        return new byte[0];
-      }
-      try (Arena arena = Arena.ofConfined()) {
-        MemorySegment buf = arena.allocate(len);
-        exprBytes.copyTo(buf.address(), len);
-        return buf.toArray(ValueLayout.JAVA_BYTE);
-      }
+      return BridgeUtil.toBytes(exprBytes);
     }
   }
 }

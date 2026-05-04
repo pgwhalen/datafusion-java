@@ -1,16 +1,31 @@
 #[diplomat::bridge]
 #[diplomat::abi_rename = "datafusion_{0}"]
 pub mod ffi {
+    /// Emission type of an `ExecutionPlan`.
+    #[allow(dead_code)] // Variants constructed from Java via Diplomat FFI
+    pub enum DfEmissionType {
+        Incremental,
+        Final,
+        Both,
+    }
+
+    /// Boundedness of an `ExecutionPlan`'s input.
+    #[allow(dead_code)] // Variants constructed from Java via Diplomat FFI
+    pub enum DfBoundedness {
+        Bounded,
+        Unbounded,
+    }
+
     /// Execution plan trait: returns properties and executes partitions.
     pub trait DfExecutionPlanTrait {
         /// Returns FFI_ArrowSchema address for this plan's output schema.
         fn schema_address(&self) -> usize;
         /// Returns number of output partitions.
         fn output_partitioning(&self) -> i32;
-        /// Returns emission type: 0=Incremental, 1=Final, 2=Both.
-        fn emission_type(&self) -> i32;
-        /// Returns boundedness: 0=Bounded, 1=Unbounded.
-        fn boundedness(&self) -> i32;
+        /// Returns the emission type of this plan.
+        fn emission_type(&self) -> DfEmissionType;
+        /// Returns the boundedness of this plan.
+        fn boundedness(&self) -> DfBoundedness;
         /// Returns DfRecordBatchReader raw ptr, or 0 on error (check error buffer).
         /// task_ctx_addr is a raw pointer to a Box<DfTaskContext> that Java takes
         /// ownership of and must close. It is non-zero for the lifetime of the call.
@@ -68,15 +83,15 @@ impl<T: DfExecutionPlanTrait> ForeignDfPlan<T> {
         // Build properties from trait callbacks
         let partitions = inner.output_partitioning();
         let emission = match inner.emission_type() {
-            1 => EmissionType::Final,
-            2 => EmissionType::Both,
-            _ => EmissionType::Incremental,
+            self::ffi::DfEmissionType::Incremental => EmissionType::Incremental,
+            self::ffi::DfEmissionType::Final => EmissionType::Final,
+            self::ffi::DfEmissionType::Both => EmissionType::Both,
         };
         let bounded = match inner.boundedness() {
-            1 => Boundedness::Unbounded {
+            self::ffi::DfBoundedness::Bounded => Boundedness::Bounded,
+            self::ffi::DfBoundedness::Unbounded => Boundedness::Unbounded {
                 requires_infinite_memory: false,
             },
-            _ => Boundedness::Bounded,
         };
 
         let eq_props =

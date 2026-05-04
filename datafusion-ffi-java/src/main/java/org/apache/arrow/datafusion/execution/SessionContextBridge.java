@@ -1,8 +1,6 @@
 package org.apache.arrow.datafusion.execution;
 
 import java.lang.foreign.Arena;
-import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -19,6 +17,7 @@ import org.apache.arrow.datafusion.DfVarProviderAdapter;
 import org.apache.arrow.datafusion.ExprProtoConverter;
 import org.apache.arrow.datafusion.catalog.CatalogProvider;
 import org.apache.arrow.datafusion.catalog.TableProvider;
+import org.apache.arrow.datafusion.common.BridgeUtil;
 import org.apache.arrow.datafusion.common.DataFusionError;
 import org.apache.arrow.datafusion.common.NativeDataFusionError;
 import org.apache.arrow.datafusion.config.ConfigOptions;
@@ -254,13 +253,8 @@ public final class SessionContextBridge implements AutoCloseable {
 
       try (DfArrowSchema dfSchema = DfArrowSchema.fromAddress(ffiSchema.memoryAddress())) {
         try (DfExprBytes exprBytes = dfCtx.parseSqlExpr(sql, dfSchema)) {
-          long len = exprBytes.len();
-          try (Arena arena = Arena.ofConfined()) {
-            MemorySegment buf = arena.allocate(len);
-            exprBytes.copyTo(buf.address(), len);
-            byte[] protoBytes = buf.toArray(ValueLayout.JAVA_BYTE);
-            return ExprProtoConverter.fromProtoBytes(protoBytes).get(0);
-          }
+          byte[] protoBytes = BridgeUtil.toBytes(exprBytes);
+          return ExprProtoConverter.fromProtoBytes(protoBytes).get(0);
         }
       }
     } catch (DfError e) {
@@ -611,14 +605,14 @@ public final class SessionContextBridge implements AutoCloseable {
 
   List<String> catalogNames() {
     try (DfStringArray names = dfCtx.catalogNames()) {
-      return toStringList(names);
+      return BridgeUtil.toList(names);
     }
   }
 
   public List<String> catalogSchemaNames(String catalogName) {
     try {
       try (DfStringArray names = dfCtx.catalogSchemaNames(catalogName)) {
-        return toStringList(names);
+        return BridgeUtil.toList(names);
       }
     } catch (DfError e) {
       throw new NativeDataFusionError(e);
@@ -630,25 +624,13 @@ public final class SessionContextBridge implements AutoCloseable {
   public List<String> catalogTableNames(String catalogName, String schemaName) {
     try {
       try (DfStringArray names = dfCtx.catalogTableNames(catalogName, schemaName)) {
-        return toStringList(names);
+        return BridgeUtil.toList(names);
       }
     } catch (DfError e) {
       throw new NativeDataFusionError(e);
     } catch (Exception e) {
       throw new DataFusionError("Failed to get table names", e);
     }
-  }
-
-  private static List<String> toStringList(DfStringArray arr) {
-    int len = (int) arr.len();
-    if (len == 0) {
-      return List.of();
-    }
-    List<String> result = new ArrayList<>(len);
-    for (int i = 0; i < len; i++) {
-      result.add(arr.get(i));
-    }
-    return List.copyOf(result);
   }
 
   public boolean catalogTableExists(String catalogName, String schemaName, String tableName) {

@@ -17,7 +17,6 @@ pub mod ffi {
         TransactionIsolationLevel,
     };
     use datafusion_proto::logical_plan::from_proto::{parse_exprs, parse_sorts};
-    use datafusion_proto::logical_plan::to_proto::serialize_exprs;
     use datafusion_proto::logical_plan::{AsLogicalPlan, DefaultLogicalExtensionCodec};
     use datafusion_proto::protobuf::{LogicalExprList, LogicalPlanNode, SortExprNodeCollection};
     use diplomat_runtime::{DiplomatStr, DiplomatStrSlice, DiplomatWrite};
@@ -67,18 +66,10 @@ pub mod ffi {
         Ok(SessionConfig::from_string_hash_map(&settings)?)
     }
 
-    /// Write an Arrow schema as `FFI_ArrowSchema` to a Java-provided address.
-    /// Returns an error if `out_addr` is 0.
-    fn export_schema_to(schema: &ArrowSchema, out_addr: usize) -> Result<(), Box<DfError>> {
-        if out_addr == 0 {
-            return Err("Null output address".into());
-        }
-        let ffi_schema = FFI_ArrowSchema::try_from(schema)?;
-        unsafe {
-            std::ptr::write(out_addr as *mut FFI_ArrowSchema, ffi_schema);
-        }
-        Ok(())
-    }
+    // `export_schema_to` and other Arrow C Data Interface helpers live in
+    // `crate::arrow_ffi_util`. Re-imported here so existing call sites
+    // (`export_schema_to(...)`) keep resolving without a prefix.
+    use crate::arrow_ffi_util::export_schema_to;
 
     // ============================================================================
     // Diplomat enums
@@ -124,6 +115,30 @@ pub mod ffi {
     pub enum DfVarType {
         System,
         UserDefined,
+    }
+
+    /// Volatility of a scalar / aggregate UDF.
+    #[allow(dead_code)] // Variants constructed from Java via Diplomat FFI
+    pub enum DfVolatility {
+        Immutable,
+        Stable,
+        Volatile,
+    }
+
+    /// DataFusion `TableType`.
+    #[allow(dead_code)] // Variants constructed from Java via Diplomat FFI
+    pub enum DfTableType {
+        Base,
+        View,
+        Temporary,
+    }
+
+    /// `TableProviderFilterPushDown` decision returned by `supports_filters_pushdown`.
+    #[allow(dead_code)] // Variants constructed from Java via Diplomat FFI
+    pub enum DfFilterPushdown {
+        Unsupported,
+        Inexact,
+        Exact,
     }
 
     /// Discriminant for Statement sub-variants.
@@ -241,8 +256,8 @@ pub mod ffi {
         /// Returns a raw pointer to a `DfStringArray` containing a single element: the function
         /// name. Rust takes ownership and reclaims it via `DfStringArray::take_from_raw`.
         fn name_raw(&self) -> usize;
-        /// Returns volatility: 0=Immutable, 1=Stable, 2=Volatile.
-        fn volatility(&self) -> i32;
+        /// Returns the volatility of this UDF.
+        fn volatility(&self) -> DfVolatility;
         /// Compute return field from arg types. Writes FFI_ArrowSchema to out_schema_addr.
         fn return_field(
             &self,
@@ -286,8 +301,8 @@ pub mod ffi {
         /// Returns a raw pointer to a `DfStringArray` containing a single element: the function
         /// name. Rust takes ownership and reclaims it via `DfStringArray::take_from_raw`.
         fn name_raw(&self) -> usize;
-        /// Returns volatility: 0=Immutable, 1=Stable, 2=Volatile.
-        fn volatility(&self) -> i32;
+        /// Returns the volatility of this UDAF.
+        fn volatility(&self) -> DfVolatility;
         /// Compute return field from arg types. Writes FFI_ArrowSchema to out_schema_addr.
         fn return_field(
             &self,
@@ -399,8 +414,8 @@ pub mod ffi {
     pub trait DfTableTrait {
         /// Returns FFI_ArrowSchema address for this table's schema.
         fn schema_address(&self) -> usize;
-        /// Returns table type: 0=BASE, 1=VIEW, 2=TEMPORARY.
-        fn table_type(&self) -> i32;
+        /// Returns the table type.
+        fn table_type(&self) -> DfTableType;
         /// Scan with session handle, protobuf-encoded filters, projection indices, limit,
         /// and error buffer. Returns DfExecutionPlan raw ptr, or 0 on error.
         fn scan(
@@ -414,23 +429,21 @@ pub mod ffi {
             error_addr: usize,
             error_cap: usize,
         ) -> usize;
-        /// Returns count of FilterPushDown discriminants written to result_addr,
-        /// or -1 on error (check error buffer).
+        /// Returns a raw pointer to a `DfFilterPushdownList` (Rust takes ownership),
+        /// or 0 on error (check error buffer).
         fn supports_filters_pushdown(
             &self,
             filters_addr: usize,
             filters_len: usize,
-            result_addr: usize,
-            result_cap: usize,
             error_addr: usize,
             error_cap: usize,
-        ) -> i32;
+        ) -> usize;
         /// Insert data into this table.
         fn insert_into(
             &self,
             session_addr: usize,
             input_stream_ptr: usize,
-            insert_op: i32,
+            insert_op: DfInsertOp,
             error_addr: usize,
             error_cap: usize,
         ) -> usize;
@@ -679,10 +692,7 @@ pub mod ffi {
 
         /// Construct from logical expressions, serialized as protobuf `LogicalExprList`.
         fn from_exprs(exprs: &[Expr]) -> Result<Box<DfExprBytes>, Box<DfError>> {
-            let codec = DefaultLogicalExtensionCodec {};
-            let serialized = serialize_exprs(exprs, &codec)?;
-            let proto_list = LogicalExprList { expr: serialized };
-            Ok(DfExprBytes::from_bytes(proto_list.encode_to_vec()))
+            Ok(DfExprBytes::from_bytes(crate::table::encode_exprs(exprs)?))
         }
 
         /// Construct an empty `DfExprBytes` (no data).
@@ -739,6 +749,34 @@ pub mod ffi {
         pub fn to_raw_ptr(&mut self) -> usize {
             let strings = std::mem::take(&mut self.strings);
             let boxed = Box::new(DfStringArray { strings });
+            Box::into_raw(boxed) as usize
+        }
+    }
+
+    /// Opaque list of `DfFilterPushdown` decisions. Built on the Java side and
+    /// returned to Rust as a raw pointer (Rust takes ownership and reads the
+    /// items in order).
+    #[diplomat::opaque]
+    pub struct DfFilterPushdownList {
+        pub(crate) items: Vec<DfFilterPushdown>,
+    }
+
+    impl DfFilterPushdownList {
+        /// Create an empty list (for use in trait callbacks).
+        pub fn new_empty() -> Box<DfFilterPushdownList> {
+            Box::new(DfFilterPushdownList { items: Vec::new() })
+        }
+
+        /// Append a decision to this list.
+        pub fn push(&mut self, item: DfFilterPushdown) {
+            self.items.push(item);
+        }
+
+        /// Transfer ownership as a raw pointer. The caller must consume this
+        /// (e.g. via `Box::from_raw`) to avoid leaking memory.
+        pub fn to_raw_ptr(&mut self) -> usize {
+            let items = std::mem::take(&mut self.items);
+            let boxed = Box::new(DfFilterPushdownList { items });
             Box::into_raw(boxed) as usize
         }
     }
