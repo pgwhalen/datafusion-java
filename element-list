@@ -1,0 +1,15 @@
+org.apache.arrow.datafusion
+org.apache.arrow.datafusion.catalog
+org.apache.arrow.datafusion.common
+org.apache.arrow.datafusion.config
+org.apache.arrow.datafusion.dataframe
+org.apache.arrow.datafusion.datasource
+org.apache.arrow.datafusion.execution
+org.apache.arrow.datafusion.logical_expr
+org.apache.arrow.datafusion.physical_expr
+org.apache.arrow.datafusion.physical_plan
+org.apache.arrow.datafusion.providers
+org.apache.arrow.datafusion.providers.flight
+org.apache.arrow.datafusion.providers.mysql
+org.apache.arrow.datafusion.providers.postgres
+org.apache.arrow.datafusion.providers.sqlite
