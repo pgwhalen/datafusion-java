@@ -551,7 +551,7 @@ public final class SessionContext implements AutoCloseable {
     fields.addAll(udf.argFields());
     Schema signatureSchema = new Schema(fields);
     byte[] signatureBytes = serializeSchemaIpc(signatureSchema);
-    registerScalarUdf(nativeHandle, name, signatureBytes, volatility.code(), impl);
+    registerScalarUdf(nativeHandle, name, signatureBytes, volatility.code, impl);
   }
 
   /**

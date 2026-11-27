@@ -581,7 +581,7 @@ public final class DataFrame implements AutoCloseable {
   public DataFrame join(DataFrame right, JoinType type, String[] leftCols, String[] rightCols) {
     checkJoinArgs(right, type, leftCols, rightCols);
     return new DataFrame(
-        joinDataFrame(nativeHandle, right.nativeHandle, type.code(), leftCols, rightCols, null));
+        joinDataFrame(nativeHandle, right.nativeHandle, type.code, leftCols, rightCols, null));
   }
 
   /**
@@ -605,7 +605,7 @@ public final class DataFrame implements AutoCloseable {
       throw new IllegalArgumentException("join filter must be non-null");
     }
     return new DataFrame(
-        joinDataFrame(nativeHandle, right.nativeHandle, type.code(), leftCols, rightCols, filter));
+        joinDataFrame(nativeHandle, right.nativeHandle, type.code, leftCols, rightCols, filter));
   }
 
   /**
@@ -646,8 +646,7 @@ public final class DataFrame implements AutoCloseable {
     if (right.nativeHandle == 0) {
       throw new IllegalStateException("right DataFrame is closed or already collected");
     }
-    return new DataFrame(
-        joinOnDataFrame(nativeHandle, right.nativeHandle, type.code(), predicates));
+    return new DataFrame(joinOnDataFrame(nativeHandle, right.nativeHandle, type.code, predicates));
   }
 
   private void checkJoinArgs(

@@ -48,13 +48,20 @@ public enum JoinType {
   LEFT_MARK((byte) 8),
   RIGHT_MARK((byte) 9);
 
-  private final byte code;
+  /** Stable byte code for the JNI boundary. Package-private so it stays out of the public API. */
+  final byte code;
 
   JoinType(byte code) {
     this.code = code;
   }
 
-  /** Stable byte code for FFI. */
+  /**
+   * Stable byte code for FFI.
+   *
+   * @deprecated JNI implementation detail with no DataFusion counterpart; will be removed from the
+   *     public API.
+   */
+  @Deprecated(since = "0.2.0", forRemoval = true)
   public byte code() {
     return code;
   }
