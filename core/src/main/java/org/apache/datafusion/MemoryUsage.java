@@ -30,6 +30,9 @@ package org.apache.datafusion;
  * SessionContext#memoryUsage()} for the precise definition of what is and is not counted.
  *
  * <p>Instances are immutable.
+ *
+ * <p>Java-specific: DataFusion has no equivalent type. {@code currentBytes} corresponds to {@code
+ * MemoryPool::reserved}; the peak is tracked on the Java binding's side.
  */
 public final class MemoryUsage {
   private final long currentBytes;

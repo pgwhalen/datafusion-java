@@ -88,6 +88,9 @@ public final class SessionContext implements AutoCloseable {
    * <p>The bytes must be a serialized {@code datafusion.LogicalPlanNode} (see {@code
    * org.apache.datafusion.protobuf.LogicalPlanNode}).
    *
+   * <p>Java-specific: Rust has no {@code SessionContext::from_proto}; upstream decodes plans with
+   * the {@code datafusion-proto} crate (e.g. {@code logical_plan_from_bytes}).
+   *
    * @throws RuntimeException if the bytes are not a valid {@code LogicalPlanNode} or if logical
    *     planning fails.
    */
@@ -118,6 +121,9 @@ public final class SessionContext implements AutoCloseable {
    * builds that vendor {@code protoc} via {@code cmake}) to enable it. If invoked against a native
    * binary built without the feature, this method throws {@link RuntimeException} pointing at the
    * flag.
+   *
+   * <p>Java-specific: upstream exposes this as the {@code datafusion-substrait} crate's {@code
+   * from_substrait_plan} function rather than a {@code SessionContext} method.
    *
    * @throws IllegalArgumentException if {@code planBytes} is {@code null}.
    * @throws IllegalStateException if this context is closed.
@@ -160,6 +166,9 @@ public final class SessionContext implements AutoCloseable {
    * are released as the plan unwinds, so a query that runs to completion typically returns {@code
    * currentBytes} to ~0 even if the result set is large.
    *
+   * <p>Java-specific: Rust has no {@code SessionContext::memory_usage}; upstream reads {@code
+   * MemoryPool::reserved} from the session's {@code RuntimeEnv}.
+   *
    * @throws IllegalStateException if this context is closed.
    * @throws RuntimeException if the native side has not registered a tracker for this handle
    *     (should not happen in practice -- tracker registration is done by the constructor).
@@ -190,6 +199,9 @@ public final class SessionContext implements AutoCloseable {
    * <p>If invoked against a native binary built without the feature, this method throws {@link
    * RuntimeException} with a message pointing at the rebuild command.
    *
+   * <p>Java-specific: Rust has no equivalent on {@code SessionContext}; the values come from {@code
+   * tokio-metrics}.
+   *
    * @throws IllegalStateException if this context is closed.
    * @throws RuntimeException if the native crate was built without the {@code runtime-metrics}
    *     feature.
@@ -206,6 +218,8 @@ public final class SessionContext implements AutoCloseable {
   /**
    * Return the Arrow {@link Schema} of a registered table. Transferred via Arrow IPC; no {@link
    * org.apache.arrow.memory.BufferAllocator} is required because a schema carries no buffer data.
+   *
+   * <p>Java-specific: in Rust the equivalent is {@code ctx.table(name).await?.schema()}.
    *
    * @throws RuntimeException if {@code tableName} is not registered in this context.
    */
@@ -232,6 +246,9 @@ public final class SessionContext implements AutoCloseable {
    * SessionContextBuilder#memoryLimit(long, double)} and {@link
    * SessionContextBuilder#tempDirectory(String)} setters at construction time instead. Round-trip
    * support for the runtime subtree is tracked as a follow-up.
+   *
+   * <p>Java-specific: Rust has no per-key getter; options are read from {@code
+   * state().config().options()}.
    *
    * @return the current value as a string, or {@code null} if the key is recognised but has no
    *     value set and no default.

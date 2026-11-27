@@ -106,6 +106,9 @@ public final class SessionContextBuilder {
    * <p>Mutually exclusive with {@link #tempDirectory(String)} — the combination throws at {@link
    * #build()} time. {@link #maxTempDirectorySize(long)} is allowed alongside this setter but is a
    * no-op (no directory to cap).
+   *
+   * <p>Java-specific shortcut for Rust's {@code
+   * DiskManagerBuilder::with_mode(DiskManagerMode::Disabled)}.
    */
   public SessionContextBuilder disableSpill() {
     this.spillDisabled = true;
@@ -175,6 +178,8 @@ public final class SessionContextBuilder {
    * enable_*_dynamic_filter_pushdown} flags, so a per-operator override must come after the
    * umbrella).
    *
+   * <p>Java-specific: Rust's {@code ConfigOptions} has no bulk setter.
+   *
    * @throws IllegalArgumentException if any key or value in {@code entries} is {@code null}.
    */
   public SessionContextBuilder setOptions(LinkedHashMap<String, String> entries) {
@@ -196,6 +201,8 @@ public final class SessionContextBuilder {
    * any upstream setter's side effects. If you do need order — see the {@link
    * #setOptions(LinkedHashMap)} overload, which the compiler will resolve to automatically when you
    * pass a {@code LinkedHashMap}.
+   *
+   * <p>Java-specific: Rust's {@code ConfigOptions} has no bulk setter.
    *
    * @throws IllegalArgumentException if any key or value in {@code entries} is {@code null}.
    */

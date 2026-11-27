@@ -30,6 +30,8 @@ package org.apache.datafusion;
  *
  * <p>Requires the {@code runtime-metrics} Cargo feature on the native crate, plus {@code
  * RUSTFLAGS="--cfg tokio_unstable"} at build time.
+ *
+ * <p>Java-specific: DataFusion has no equivalent type.
  */
 public final class RuntimeStats {
   private final int numWorkers;
