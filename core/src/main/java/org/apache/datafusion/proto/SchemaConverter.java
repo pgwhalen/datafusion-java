@@ -40,6 +40,10 @@ import datafusion_common.DatafusionCommon;
  * <p>Supports the primitive Arrow types this project's tests exercise (Bool, signed/unsigned Int
  * 8..64, Float32/64, Utf8, Utf8View, LargeUtf8, Date32, Decimal128). Anything else raises {@link
  * UnsupportedOperationException} with a message naming the offending type.
+ *
+ * <p>Java-specific helper. On the Rust side the equivalent conversions are the {@code
+ * datafusion-proto-common} {@code TryFrom} impls between {@code Schema} and {@code
+ * protobuf::Schema}.
  */
 public final class SchemaConverter {
 

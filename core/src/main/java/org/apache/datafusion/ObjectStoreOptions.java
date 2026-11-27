@@ -51,6 +51,12 @@ import org.apache.datafusion.protobuf.S3Options;
  *       lookup-vs-base-URL collisions in DataFusion's registry. Register one HTTP store per
  *       scheme+host and let SQL paths carry the rest.
  * </ul>
+ *
+ * <p>Java-specific: no single Rust type corresponds to this class. It wraps the {@code
+ * object_store} crate's {@code AmazonS3Builder}, {@code GoogleCloudStorageBuilder} and {@code
+ * HttpBuilder}. The {@link #s3()}, {@link #gcs()} and {@link #http(String)} factories and the
+ * {@code url(...)} builder setters are Java-specific; in Rust the URL is the key passed to {@code
+ * RuntimeEnv::register_object_store}.
  */
 public abstract sealed class ObjectStoreOptions
     permits ObjectStoreOptions.S3, ObjectStoreOptions.Gcs, ObjectStoreOptions.Http {

@@ -39,6 +39,8 @@ import java.nio.file.Path;
  * java.nio.file.attribute.FileAttribute[])}, which is mode 0700 on POSIX and user-private under the
  * default Windows {@code TMP}. Keeping the directory private prevents another user on the host from
  * planting a same-named library for the JVM to pick up.
+ *
+ * <p>Java-specific: loads the JNI library and has no DataFusion counterpart.
  */
 public final class NativeLibraryLoader {
 

@@ -36,6 +36,8 @@ import org.apache.arrow.vector.types.pojo.Schema;
  *
  * <p>As {@link TableProvider} grows additional methods in the future, this class will provide
  * defaults so existing callers keep working without changes.
+ *
+ * <p>Java-specific convenience with no DataFusion counterpart.
  */
 public final class SimpleTableProvider implements TableProvider {
 

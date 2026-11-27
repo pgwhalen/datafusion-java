@@ -233,6 +233,8 @@ public final class DataFrame implements AutoCloseable {
   /**
    * Take the first {@code fetch} rows. Equivalent to {@link #limit(int, int)} with {@code skip =
    * 0}. The receiver remains usable and must still be closed independently.
+   *
+   * <p>Java-specific convenience: Rust has only {@code limit(skip, fetch)}.
    */
   public DataFrame limit(int fetch) {
     return limit(0, fetch);
@@ -520,6 +522,8 @@ public final class DataFrame implements AutoCloseable {
    * Repartition this DataFrame using a round-robin scheme across {@code numPartitions} output
    * partitions. The receiver remains usable and must still be closed independently.
    *
+   * <p>Java-specific: Rust spells this {@code repartition(Partitioning::RoundRobinBatch(n))}.
+   *
    * @throws IllegalArgumentException if {@code numPartitions <= 0}.
    * @throws RuntimeException if the underlying repartition plan rejects the request.
    */
@@ -538,6 +542,8 @@ public final class DataFrame implements AutoCloseable {
    * partitions. v1 supports column-name keys only; expression keys are deferred until the Java
    * binding gains an {@code Expr} builder. The receiver remains usable and must still be closed
    * independently.
+   *
+   * <p>Java-specific: Rust spells this {@code repartition(Partitioning::Hash(exprs, n))}.
    *
    * @throws IllegalArgumentException if {@code numPartitions <= 0}, {@code columns} is {@code null}
    *     or empty, or any element of {@code columns} is {@code null}.
