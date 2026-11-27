@@ -59,13 +59,13 @@ class TableProviderScanArgsTest {
 
   /** A selective source, not a SQL evaluator: only integer id equality/ranges are supported. */
   private static class SelectiveSource implements TableProvider {
-    final FilterPushdown capability;
+    final TableProviderFilterPushDown capability;
     final List<ScanArgs> requests = Collections.synchronizedList(new ArrayList<>());
     final List<Integer> idsRead = Collections.synchronizedList(new ArrayList<>());
     final AtomicInteger streams = new AtomicInteger();
     final List<Integer> partitions = Collections.synchronizedList(new ArrayList<>());
 
-    SelectiveSource(FilterPushdown capability) {
+    SelectiveSource(TableProviderFilterPushDown capability) {
       this.capability = capability;
     }
 
@@ -80,9 +80,10 @@ class TableProviderScanArgsTest {
     }
 
     @Override
-    public List<FilterPushdown> supportsFiltersPushdown(List<LogicalExprNode> filters) {
+    public List<TableProviderFilterPushDown> supportsFiltersPushdown(
+        List<LogicalExprNode> filters) {
       return filters.stream()
-          .map(filter -> supported(filter) ? capability : FilterPushdown.UNSUPPORTED)
+          .map(filter -> supported(filter) ? capability : TableProviderFilterPushDown.UNSUPPORTED)
           .toList();
     }
 
@@ -111,7 +112,7 @@ class TableProviderScanArgsTest {
     ArrowReader read(ScanArgs request, BufferAllocator allocator) {
       streams.incrementAndGet();
       IntStream selected = IntStream.rangeClosed(1, 4);
-      if (capability == FilterPushdown.EXACT) {
+      if (capability == TableProviderFilterPushDown.EXACT) {
         for (LogicalExprNode filter : request.filters()) {
           var binary = filter.getBinaryExpr();
           var literal = binary.getOperands(1).getLiteral();
@@ -170,7 +171,7 @@ class TableProviderScanArgsTest {
 
   @Test
   void exactLookupIsPlannedWithoutReadingAndProjectsAtTheSource() throws Exception {
-    var source = new SelectiveSource(TableProvider.FilterPushdown.EXACT);
+    var source = new SelectiveSource(TableProviderFilterPushDown.EXACT);
     try (var allocator = new RootAllocator();
         var context = new SessionContext()) {
       context.registerTable("lookup", source);
@@ -193,9 +194,9 @@ class TableProviderScanArgsTest {
 
   @ParameterizedTest
   @EnumSource(
-      value = TableProvider.FilterPushdown.class,
+      value = TableProviderFilterPushDown.class,
       names = {"INEXACT", "UNSUPPORTED"})
-  void residualFilterRunsBeforeLimit(TableProvider.FilterPushdown capability) throws Exception {
+  void residualFilterRunsBeforeLimit(TableProviderFilterPushDown capability) throws Exception {
     var source = new SelectiveSource(capability);
     try (var allocator = new RootAllocator();
         var context = new SessionContext()) {
@@ -205,7 +206,7 @@ class TableProviderScanArgsTest {
       }
       assertTrue(source.requests.stream().allMatch(r -> r.limit().isEmpty()));
       assertEquals(List.of(1, 2, 3, 4), source.idsRead);
-      if (capability == TableProvider.FilterPushdown.UNSUPPORTED) {
+      if (capability == TableProviderFilterPushDown.UNSUPPORTED) {
         assertTrue(source.requests.stream().allMatch(r -> r.filters().isEmpty()));
       } else {
         assertTrue(source.requests.stream().anyMatch(r -> !r.filters().isEmpty()));
@@ -215,7 +216,7 @@ class TableProviderScanArgsTest {
 
   @Test
   void exactFilterAllowsLimitPushdown() throws Exception {
-    var source = new SelectiveSource(TableProvider.FilterPushdown.EXACT);
+    var source = new SelectiveSource(TableProviderFilterPushDown.EXACT);
     try (var allocator = new RootAllocator();
         var context = new SessionContext()) {
       context.registerTable("source", source);
@@ -268,7 +269,7 @@ class TableProviderScanArgsTest {
 
   @Test
   void emptyProjectionPreservesRowsForCountStar() throws Exception {
-    var source = new SelectiveSource(TableProvider.FilterPushdown.EXACT);
+    var source = new SelectiveSource(TableProviderFilterPushDown.EXACT);
     try (var allocator = new RootAllocator();
         var context = new SessionContext()) {
       context.registerTable("source", source);
@@ -282,7 +283,7 @@ class TableProviderScanArgsTest {
 
   @Test
   void independentPlannedScansKeepTheirOwnFilterAndProjection() throws Exception {
-    var source = new SelectiveSource(TableProvider.FilterPushdown.EXACT);
+    var source = new SelectiveSource(TableProviderFilterPushDown.EXACT);
     try (var allocator = new RootAllocator();
         var context = new SessionContext()) {
       context.registerTable("source", source);
@@ -300,7 +301,7 @@ class TableProviderScanArgsTest {
   @Test
   void sourceCanRejectAnUnboundedAccessPathDuringPlanning() {
     var source =
-        new SelectiveSource(TableProvider.FilterPushdown.EXACT) {
+        new SelectiveSource(TableProviderFilterPushDown.EXACT) {
           @Override
           public ExecutionPlan scanWithArgs(ScanArgs request) {
             if (request.filters().isEmpty()) {
@@ -329,9 +330,10 @@ class TableProviderScanArgsTest {
   @Test
   void malformedFilterCapabilitiesFailWithoutOpeningAStream() {
     var source =
-        new SelectiveSource(TableProvider.FilterPushdown.EXACT) {
+        new SelectiveSource(TableProviderFilterPushDown.EXACT) {
           @Override
-          public List<FilterPushdown> supportsFiltersPushdown(List<LogicalExprNode> filters) {
+          public List<TableProviderFilterPushDown> supportsFiltersPushdown(
+              List<LogicalExprNode> filters) {
             return List.of();
           }
         };

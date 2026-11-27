@@ -46,16 +46,6 @@ import org.apache.datafusion.protobuf.LogicalExprNode;
  * #scanWithArgs(ScanArgs)} may instead produce the requested projected schema.
  */
 public interface TableProvider {
-  /** DataFusion's per-filter pushdown contract. */
-  enum FilterPushdown {
-    /** The source does not apply this filter; DataFusion keeps it above the scan. */
-    UNSUPPORTED,
-    /** The source prunes candidates; DataFusion also applies the filter to the returned rows. */
-    INEXACT,
-    /** The source completely applies the filter with DataFusion-compatible semantics. */
-    EXACT
-  }
-
   /** The fixed schema of this table. Called once, at registration time. */
   Schema schema();
 
@@ -90,7 +80,7 @@ public interface TableProvider {
    * An inexact filter must never discard a matching row. Expressions are generated protobuf
    * messages; source-specific access-path decisions remain in the provider.
    */
-  default List<FilterPushdown> supportsFiltersPushdown(List<LogicalExprNode> filters) {
-    return Collections.nCopies(filters.size(), FilterPushdown.UNSUPPORTED);
+  default List<TableProviderFilterPushDown> supportsFiltersPushdown(List<LogicalExprNode> filters) {
+    return Collections.nCopies(filters.size(), TableProviderFilterPushDown.UNSUPPORTED);
   }
 }

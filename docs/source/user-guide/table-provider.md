@@ -139,7 +139,7 @@ Return `UNSUPPORTED` for expression shapes you do not recognize so DataFusion
 evaluates them. When upgrading the binding, recompile your provider and rerun
 its pushdown tests against the new version.
 
-`supportsFiltersPushdown` returns one `FilterPushdown` value per expression,
+`supportsFiltersPushdown` returns one `TableProviderFilterPushDown` value per expression,
 in input order:
 
 - `UNSUPPORTED`: leave evaluation to DataFusion; the filter is not sent to
