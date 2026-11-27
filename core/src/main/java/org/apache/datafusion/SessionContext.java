@@ -36,7 +36,7 @@ import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.Schema;
 
 /**
- * A DataFusion session context.
+ * A DataFusion session context. Mirrors DataFusion's {@code SessionContext}.
  *
  * <p>Instances are <strong>not thread-safe</strong>. Concurrent calls to any of {@link #sql},
  * {@link #registerParquet}, or {@link #close} from different threads can produce a use-after-free

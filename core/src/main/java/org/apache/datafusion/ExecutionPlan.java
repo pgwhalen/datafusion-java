@@ -30,6 +30,8 @@ import org.apache.arrow.vector.ipc.ArrowReader;
  * buffers must use the supplied allocator or a child of it. DataFusion owns and closes the reader.
  *
  * <p>This is a Java-backed scan, not an API for arbitrary child-consuming physical operators.
+ * Mirrors the leaf-node subset of DataFusion's {@code ExecutionPlan} trait; methods such as {@code
+ * properties} and {@code children} are not exposed.
  */
 @FunctionalInterface
 public interface ExecutionPlan {

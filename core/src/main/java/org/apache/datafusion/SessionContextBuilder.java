@@ -32,6 +32,10 @@ import org.apache.datafusion.protobuf.SessionOptions;
 /**
  * Builder for a configured {@link SessionContext}. Each setter is optional; unset fields leave the
  * DataFusion default in place.
+ *
+ * <p>Java-specific: DataFusion has no single builder for this. The setters combine DataFusion's
+ * {@code SessionConfig}, {@code RuntimeEnvBuilder} and {@code SessionStateBuilder}, and {@link
+ * #build()} corresponds to {@code SessionContext::new_with_state}.
  */
 public final class SessionContextBuilder {
   private Integer batchSize;
