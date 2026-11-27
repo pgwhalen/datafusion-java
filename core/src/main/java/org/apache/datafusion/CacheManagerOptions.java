@@ -27,7 +27,8 @@ import org.apache.datafusion.protobuf.ListFilesCacheOptionsProto;
 /**
  * Configuration for DataFusion's built-in {@code CacheManager}. Pass an instance to {@link
  * SessionContextBuilder#cacheManager(CacheManagerOptions)} to turn on any of the three
- * upstream-provided caches at session construction time.
+ * upstream-provided caches at session construction time. Mirrors DataFusion's {@code
+ * CacheManagerConfig}.
  *
  * <p>The three caches are independent; calling one setter does not affect the others. A setter that
  * is never called leaves the upstream default in place — so existing callers that don't touch this
