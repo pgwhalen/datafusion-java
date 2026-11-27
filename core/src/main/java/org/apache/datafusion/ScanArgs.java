@@ -20,13 +20,15 @@
 package org.apache.datafusion;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
 
 import org.apache.datafusion.protobuf.LogicalExprNode;
 
 /**
- * A physical scan request using DataFusion's projection, expression and limit semantics.
+ * A physical scan request using DataFusion's projection, expression and limit semantics. Mirrors
+ * DataFusion's {@code ScanArgs}.
  *
  * <p>Projection indices refer to the registered table schema. An absent projection means all
  * columns; a present empty list means no columns (for example, {@code COUNT(*)}), not no rows.
@@ -38,11 +40,59 @@ import org.apache.datafusion.protobuf.LogicalExprNode;
  * DataFusion retains responsibility for deciding whether a limit can safely cross a residual
  * filter. Limits outside the non-negative Java {@code long} range are not forwarded; DataFusion
  * still applies the query's limit.
+ *
+ * <p>Like the Rust struct, whose fields are private, this is a final class rather than a record so
+ * that fields can be added later without breaking callers. Rust's {@code statistics_requests} is
+ * not exposed yet.
  */
-public record ScanArgs(
-    Optional<List<Integer>> projection, List<LogicalExprNode> filters, OptionalLong limit) {
-  public ScanArgs {
-    projection = projection.map(List::copyOf);
-    filters = List.copyOf(filters);
+public final class ScanArgs {
+  private final Optional<List<Integer>> projection;
+  private final List<LogicalExprNode> filters;
+  private final OptionalLong limit;
+
+  public ScanArgs(
+      Optional<List<Integer>> projection, List<LogicalExprNode> filters, OptionalLong limit) {
+    this.projection = projection.map(List::copyOf);
+    this.filters = List.copyOf(filters);
+    this.limit = limit;
+  }
+
+  /** Column indices to read, or empty to read all columns. */
+  public Optional<List<Integer>> projection() {
+    return projection;
+  }
+
+  /** Filters the source may apply; see {@link TableProvider#supportsFiltersPushdown}. */
+  public List<LogicalExprNode> filters() {
+    return filters;
+  }
+
+  /** Planner-supplied row limit, if any. */
+  public OptionalLong limit() {
+    return limit;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (!(o instanceof ScanArgs)) {
+      return false;
+    }
+    ScanArgs other = (ScanArgs) o;
+    return projection.equals(other.projection)
+        && filters.equals(other.filters)
+        && Objects.equals(limit, other.limit);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(projection, filters, limit);
+  }
+
+  @Override
+  public String toString() {
+    return "ScanArgs[projection=" + projection + ", filters=" + filters + ", limit=" + limit + "]";
   }
 }
