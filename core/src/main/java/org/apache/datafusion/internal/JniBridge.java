@@ -38,6 +38,7 @@ import org.apache.datafusion.ScalarFunction;
 import org.apache.datafusion.ScalarFunctionArgs;
 import org.apache.datafusion.ScanArgs;
 import org.apache.datafusion.TableProvider;
+import org.apache.datafusion.TableProviderFilterPushDown;
 import org.apache.datafusion.protobuf.LogicalExprNode;
 import org.apache.datafusion.protobuf.TableScanOptionsProto;
 
@@ -175,7 +176,7 @@ public final class JniBridge {
   /** Report per-expression capabilities using the native adapter's closed numeric contract. */
   public static int[] supportsTableFilterPushdown(TableProvider provider, byte[][] filterProtos)
       throws InvalidProtocolBufferException {
-    List<TableProvider.FilterPushdown> capabilities =
+    List<TableProviderFilterPushDown> capabilities =
         provider.supportsFiltersPushdown(parseFilters(filterProtos));
     if (capabilities == null || capabilities.size() != filterProtos.length) {
       throw new IllegalArgumentException(
